@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800;900&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,500;1,600&family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-cinzel: 'Cinzel', serif;
+  --font-playfair: 'Playfair Display', Georgia, serif;
+  --font-poppins: 'Poppins', system-ui, sans-serif;
+  --font-devanagari: 'Noto Sans Devanagari', sans-serif;
+
+  /* DevSutra Exact Colors */
+  --color-primary-maroon: #7B2635;
+  --color-deep-maroon: #652735;
+  --color-saffron: #D97724;
+  --color-antique-gold: #C49A45;
+  --color-ivory-cream: #FFF8EC;
+  --color-soft-beige: #EDE0CB;
+  --color-deep-brown: #382820;
+
+  --background: #FFF8EC;
+  --foreground: #382820;
+}
+
+body {
+  color: var(--color-deep-brown);
+  background: var(--color-ivory-cream);
+  font-family: var(--font-poppins);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, .font-heading {
+  font-family: var(--font-playfair);
+}
+
+.font-brand {
+  font-family: var(--font-cinzel);
+}
+
+/* Subtle Traditional Indian Kolam / Mandala Pattern */
+.bg-sacred-pattern {
+  background-color: #FFF8EC;
+  background-image: radial-gradient(#C49A45 0.75px, transparent 0.75px), radial-gradient(#7B2635 0.75px, #FFF8EC 0.75px);
+  background-size: 30px 30px;
+  background-position: 0 0, 15px 15px;
+  background-opacity: 0.05;
+}
+
+/* Subtle Gold Border Accent */
+.border-gold-accent {
+  border-image: linear-gradient(to right, #C49A45, #EDE0CB, #C49A45) 1;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #FFF8EC;
+}
+::-webkit-scrollbar-thumb {
+  background: #EDE0CB;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #C49A45;
+}

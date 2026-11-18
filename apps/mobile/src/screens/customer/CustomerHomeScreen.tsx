@@ -1,0 +1,1392 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  RefreshControl,
+  Dimensions,
+  Platform,
+  StatusBar,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { colors } from '../../theme/colors';
+import { useAuth } from '../../context/AuthContext';
+import { useCart } from '../../context/CartContext';
+import { api } from '../../api/client';
+import { Puja, PanditProfile, Booking } from '../../types';
+import {
+  APP_IMAGES,
+  SPEEDY_PUJA_CATALOG,
+  CatalogPujaItem,
+} from '../../theme/culturalAssets';
+import { KundaliModal } from '../../components/common/KundaliModal';
+import { ReviewRatingModal } from '../../components/common/ReviewRatingModal';
+import { formatStandardDate, formatStandardTime } from '../../utils/dateUtils';
+
+const { width } = Dimensions.get('window');
+
+interface CustomerHomeScreenProps {
+  onNavigatePujaDetail: (puja: Puja) => void;
+  onNavigatePanditDetail: (pandit: PanditProfile) => void;
+  onNavigateCategory: (categoryName: string) => void;
+  onNavigateStore: () => void;
+  onNavigateCart: () => void;
+  onNavigateExplore: () => void;
+  onNavigateNotifications?: () => void;
+  onNavigateWallet?: () => void;
+  onNavigateBookings?: () => void;
+  onOpenDrawer?: () => void;
+  onSelectCity: () => void;
+  selectedCity?: string;
+}
+
+export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
+  onNavigatePujaDetail,
+  onNavigatePanditDetail,
+  onNavigateCategory,
+  onNavigateStore,
+  onNavigateCart,
+  onNavigateExplore,
+  onNavigateNotifications,
+  onNavigateWallet,
+  onNavigateBookings,
+  onOpenDrawer,
+  onSelectCity,
+  selectedCity = 'Pune',
+}) => {
+  const { user } = useAuth();
+  const { itemCount } = useCart();
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Platform.OS === 'android'
+    ? (StatusBar.currentHeight || 28) + 8
+    : Math.max(insets.top, 20) + 6;
+
+  const [featuredPandits, setFeaturedPandits] = useState<PanditProfile[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showKundaliModal, setShowKundaliModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [upcomingBooking, setUpcomingBooking] = useState<Booking | null>(null);
+
+  const [reviewsList, setReviewsList] = useState([
+    {
+      id: 'rev-1',
+      name: 'राहुल देशमुख',
+      city: 'कोथरूड, पुणे',
+      rating: 5,
+      date: '१६ नोव्हेंबर २०२६',
+      puja: 'गृहप्रवेश व वास्तु शांती',
+      comment: 'गृहप्रवेश व वास्तु शांती अतिशय शास्त्रोक्त पद्धतीने झाली. गुरुजी वेळेवर आले व सर्व पूजा सामग्री १००% शुद्ध होती.',
+    },
+    {
+      id: 'rev-2',
+      name: 'स्नेहा कुलकर्णी',
+      city: 'ठाणे, मुंबई',
+      rating: 5,
+      date: '१२ नोव्हेंबर २०२६',
+      puja: 'सत्यनारायण महापूजा',
+      comment: 'सत्यनारायण पूजेची कथा व अभिषेक खूप प्रसन्न वातावरणात पार पडला. शीरा महाप्रसाद व मांडणी अतिशय सुंदर होती.',
+    },
+    {
+      id: 'rev-3',
+      name: 'महेश जोशी',
+      city: 'गंगापूर रोड, नाशिक',
+      rating: 5,
+      date: '०८ नोव्हेंबर २०२६',
+      puja: 'रुद्राभिषेक व महामृत्युंजय',
+      comment: 'रुद्राभिषेक विधी खूप भक्तिमय झाला. गुरुजींचे संस्कृत मंत्रोच्चार अतिशय स्पष्ट व प्रभावी होते. PujaConnect ची सेवा उत्तम आहे.',
+    },
+  ]);
+
+  const loadData = async () => {
+    try {
+      const panditsRes = await api.getPandits({ city: selectedCity });
+      if (panditsRes && panditsRes.length > 0) {
+        setFeaturedPandits(panditsRes.slice(0, 5));
+      }
+      const myBookings = await api.getMyBookings();
+      if (myBookings && myBookings.length > 0) {
+        const active = myBookings.find(
+          (b) => b.status === 'CONFIRMED' || b.status === 'PENDING'
+        );
+        setUpcomingBooking(active || myBookings[0]);
+      }
+    } catch (e) {
+      console.warn('Error loading data:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [selectedCity]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
+
+  const handlePujaCardPress = (item: CatalogPujaItem) => {
+    const puja: Puja = {
+      id: item.id,
+      categoryId: item.category,
+      title: item.name,
+      slug: item.id,
+      description: item.description,
+      basePrice: item.price,
+      durationMinutes: parseInt(item.duration) || 120,
+    };
+    onNavigatePujaDetail(puja);
+  };
+
+  return (
+    <View style={styles.safe}>
+      {/* Top Header - Exact Speedy Pandit Style */}
+      <View style={[styles.topHeader, { paddingTop: headerPaddingTop }]}>
+        {/* Left Hamburger Drawer Menu */}
+        <TouchableOpacity style={styles.menuBtn} onPress={onOpenDrawer} activeOpacity={0.7}>
+          <View style={styles.hamburgerContainer}>
+            <View style={styles.hamburgerBar} />
+            <View style={styles.hamburgerBar} />
+            <View style={styles.hamburgerBar} />
+          </View>
+        </TouchableOpacity>
+
+        {/* Center City Selector with Red Location Pin */}
+        <TouchableOpacity style={styles.citySelector} onPress={onSelectCity} activeOpacity={0.7}>
+          <Ionicons name="location" size={17} color={colors.primary} />
+          <Text style={styles.cityText}>{selectedCity}</Text>
+          <Ionicons name="chevron-down" size={14} color={colors.primary} />
+        </TouchableOpacity>
+
+        {/* Right Notification Bell */}
+        <TouchableOpacity style={styles.bellBtn} onPress={onNavigateNotifications} activeOpacity={0.7}>
+          <Ionicons name="notifications-outline" size={24} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Search Bar Prompt */}
+        <TouchableOpacity style={styles.searchBar} activeOpacity={0.9} onPress={onNavigateExplore}>
+          <Ionicons name="search" size={18} color="#8C7A70" style={{ marginRight: 8 }} />
+          <Text style={styles.searchPlaceholder}>Search Puja / पूजेचा शोध घ्या...</Text>
+        </TouchableOpacity>
+
+        {/* Active / Upcoming Puja Booking Card */}
+        {upcomingBooking && (
+          <TouchableOpacity
+            style={styles.upcomingBookingCard}
+            activeOpacity={0.88}
+            onPress={onNavigateBookings}
+          >
+            <View style={styles.upcomingHeader}>
+              <View style={styles.upcomingBadge}>
+                <Ionicons name="checkmark-circle" size={14} color="#166534" />
+                <Text style={styles.upcomingBadgeText}>आपली आगामी पूजा (CONFIRMED)</Text>
+              </View>
+              <Text style={styles.upcomingRef}>Ref: #{upcomingBooking.id.slice(0, 8).toUpperCase()}</Text>
+            </View>
+
+            <View style={styles.upcomingBody}>
+              <View style={styles.upcomingIconCircle}>
+                <Ionicons name="flame" size={22} color={colors.primary} />
+              </View>
+              <View style={styles.upcomingTextCol}>
+                <Text style={styles.upcomingPujaTitle}>
+                  {upcomingBooking.puja?.title || 'पवित्र वैदिक पूजा'}
+                </Text>
+                <Text style={styles.upcomingPanditName}>
+                  पुरोहित: {upcomingBooking.panditProfile?.fullName || 'आचार्य देवेंद्र शास्त्री'}
+                </Text>
+                <Text style={styles.upcomingDateTime}>
+                  📅 {formatStandardDate(upcomingBooking.pujaDate || upcomingBooking.bookingDate)} • ⏰ {formatStandardTime(upcomingBooking.pujaTimeSlot || upcomingBooking.timeSlot)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.upcomingActionRow}>
+              <Text style={styles.upcomingActionText}>माझ्या पूजा डॅशबोर्डवर जा (View Booking)</Text>
+              <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Authentic Indian Vedic Ritual Hero Banner */}
+        <View style={styles.heroBannerContainer}>
+          <View style={styles.heroBannerCard}>
+            <Image
+              source={APP_IMAGES.familyBanner}
+              style={styles.heroBackgroundImage}
+              resizeMode="cover"
+            />
+            <View style={styles.heroOverlay} />
+
+            <View style={styles.heroContentBlock}>
+              <View style={styles.heroPill}>
+                <Ionicons name="sparkles" size={12} color="#FFE26B" />
+                <Text style={styles.heroPillText}>वैदिक संकल्प व अनुष्ठान</Text>
+              </View>
+
+              <Text style={styles.heroTitleMain}>घर बसल्या अनुभवा</Text>
+              <Text style={styles.heroTitleSub}>पवित्र पूजा व शांती विधी</Text>
+
+              <Text style={styles.heroFeaturePoints}>
+                • गुरुकुल प्रमाणित पुरोहित  • १००% शुद्ध पूजा सामग्री
+              </Text>
+
+              <TouchableOpacity
+                style={styles.heroCtaBtn}
+                activeOpacity={0.85}
+                onPress={onNavigateExplore}
+              >
+                <Text style={styles.heroCtaBtnText}>पूजा बुक करा (Book Pandit)</Text>
+                <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* 3 Quick Category Chips - Speedy Pandit Style */}
+        <View style={styles.categoryChipsRow}>
+          {/* 1. Regular Puja */}
+          <TouchableOpacity
+            style={styles.categoryChip}
+            activeOpacity={0.8}
+            onPress={() => onNavigateCategory('Regular Puja')}
+          >
+            <Ionicons name="home-outline" size={22} color={colors.primary} />
+            <Text style={styles.categoryChipText}>Regular Puja</Text>
+          </TouchableOpacity>
+
+          {/* 2. Festive Puja */}
+          <TouchableOpacity
+            style={styles.categoryChip}
+            activeOpacity={0.8}
+            onPress={() => onNavigateCategory('Festive Puja')}
+          >
+            <Ionicons name="sparkles-outline" size={22} color={colors.primary} />
+            <Text style={styles.categoryChipText}>Festive Puja</Text>
+          </TouchableOpacity>
+
+          {/* 3. All Hawan */}
+          <TouchableOpacity
+            style={styles.categoryChip}
+            activeOpacity={0.8}
+            onPress={() => onNavigateCategory('All Hawan')}
+          >
+            <Ionicons name="flame-outline" size={22} color={colors.primary} />
+            <Text style={styles.categoryChipText}>All Hawan</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* This Month's Trending Pujas */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionHeaderTitle}>This Month’s Trending Pujas</Text>
+          <TouchableOpacity onPress={onNavigateExplore}>
+            <Text style={styles.viewAllText}>View All</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Trending Pujas Horizontal Scroll */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.trendingScroll}
+        >
+          {SPEEDY_PUJA_CATALOG.slice(0, 5).map((puja) => (
+            <TouchableOpacity
+              key={puja.id}
+              style={styles.trendingCard}
+              activeOpacity={0.85}
+              onPress={() => handlePujaCardPress(puja)}
+            >
+              <View style={styles.trendingImageContainer}>
+                <Image source={puja.image} style={styles.trendingImage} resizeMode="cover" />
+                {puja.discount && (
+                  <View style={styles.trendingDiscountBadge}>
+                    <Text style={styles.trendingDiscountText}>{puja.discount}</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.trendingCardContent}>
+                <Text style={styles.trendingCategory}>{puja.category}</Text>
+                <Text style={styles.trendingTitle} numberOfLines={1}>
+                  {puja.name}
+                </Text>
+                <View style={styles.trendingPriceRow}>
+                  <Text style={styles.trendingCurrentPrice}>{puja.price}/-</Text>
+                  {puja.originalPrice > puja.price && (
+                    <Text style={styles.trendingOriginalPrice}>{puja.originalPrice}/-</Text>
+                  )}
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Puja Mudra Balance Reminder Banner */}
+        <TouchableOpacity
+          style={styles.mudraBanner}
+          activeOpacity={0.85}
+          onPress={onNavigateWallet}
+        >
+          <Image
+            source={APP_IMAGES.devsutraMudra}
+            style={styles.mudraBannerIcon}
+            resizeMode="contain"
+          />
+          <View style={styles.mudraBannerTextCol}>
+            <Text style={styles.mudraBannerTitle}>Puja Mudra Wallet (पूजा मुद्रा)</Text>
+            <Text style={styles.mudraBannerDesc}>
+              You have 300 Puja Mudras (₹300) available to redeem.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+        </TouchableOpacity>
+
+        {/* Vedic Janam Kundali Card - Interactive Kundali Search */}
+        <View style={styles.kundaliCardContainer}>
+          <View style={styles.kundaliCard}>
+            <View style={styles.kundaliContent}>
+              <View style={styles.kundaliBadgeRow}>
+                <Ionicons name="sparkles" size={13} color="#FFE26B" />
+                <Text style={styles.kundaliBadgeText}>Vedic Jyotish Shastra</Text>
+              </View>
+              <Text style={styles.kundaliTitle}>आपली जन्म कुंडली तपासा</Text>
+              <Text style={styles.kundaliDesc}>
+                रास, लग्न, नक्षत्र, मांगलिक दोष आणि भाग्यशाली रत्न शोधा — संपूर्ण मोफत!
+              </Text>
+              <TouchableOpacity
+                style={styles.kundaliCtaBtn}
+                activeOpacity={0.85}
+                onPress={() => setShowKundaliModal(true)}
+              >
+                <Ionicons name="planet" size={16} color={colors.primary} />
+                <Text style={styles.kundaliCtaText}>मोफत कुंडली पहा (Get Kundali)</Text>
+                <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.kundaliIconWrapper}>
+              <View style={styles.kundaliCircleIcon}>
+                <Text style={styles.kundaliOm}>ॐ</Text>
+                <Text style={styles.kundaliSubIconText}>कुंडली</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Verified Vedic Pandits in Your City */}
+        <View style={[styles.sectionHeaderRow, { marginTop: 20 }]}>
+          <View>
+            <Text style={styles.sectionHeaderTitle}>Verified Vedic Pandits</Text>
+            <Text style={styles.sectionHeaderSubtitle}>Available Purohits in {selectedCity}</Text>
+          </View>
+          <TouchableOpacity onPress={onNavigateExplore}>
+            <Text style={styles.viewAllText}>View All</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.panditsScroll}
+        >
+          {featuredPandits.length > 0 ? (
+            featuredPandits.map((pandit) => (
+              <TouchableOpacity
+                key={pandit.id}
+                style={styles.panditCard}
+                activeOpacity={0.85}
+                onPress={() => onNavigatePanditDetail(pandit)}
+              >
+                <Image
+                  source={APP_IMAGES.panditRameshwar}
+                  style={styles.panditAvatar}
+                  resizeMode="cover"
+                />
+                <View style={styles.panditBadgeRow}>
+                  <Ionicons name="checkmark-circle" size={12} color="#15803D" />
+                  <Text style={styles.panditVerifiedText}>Vedic Certified</Text>
+                </View>
+                <Text style={styles.panditName} numberOfLines={1}>
+                  {pandit.fullName}
+                </Text>
+                <Text style={styles.panditExp}>{pandit.experienceYears || 15}+ Yrs Exp</Text>
+                <Text style={styles.panditPrice}>₹{pandit.basePrice || 2100} Dakshina</Text>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.fallbackPanditsRow}>
+              {[
+                { name: 'Pt. Rameshwar Shastri', exp: '22+ Yrs', img: APP_IMAGES.panditRameshwar },
+                { name: 'Pt. Vidyadhar Joshi', exp: '18+ Yrs', img: APP_IMAGES.panditVidyadhar },
+                { name: 'Acharya Anant Dixit', exp: '25+ Yrs', img: APP_IMAGES.panditAnant },
+              ].map((p, idx) => (
+                <View key={idx} style={styles.panditCard}>
+                  <Image source={p.img} style={styles.panditAvatar} resizeMode="cover" />
+                  <View style={styles.panditBadgeRow}>
+                    <Ionicons name="checkmark-circle" size={12} color="#15803D" />
+                    <Text style={styles.panditVerifiedText}>Vedic Certified</Text>
+                  </View>
+                  <Text style={styles.panditName} numberOfLines={1}>
+                    {p.name}
+                  </Text>
+                  <Text style={styles.panditExp}>{p.exp} Experience</Text>
+                  <Text style={styles.panditPrice}>Verified Purohit</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Puja Samagri Store Banner */}
+        <TouchableOpacity
+          style={styles.storeCtaBanner}
+          activeOpacity={0.85}
+          onPress={onNavigateStore}
+        >
+          <View style={styles.storeCtaContent}>
+            <Text style={styles.storeCtaTag}>100% PURE & CONSECRATED</Text>
+            <Text style={styles.storeCtaTitle}>Complete Puja Samagri Kits</Text>
+            <Text style={styles.storeCtaDesc}>
+              Pure Cow Ghee, Brass Kalash, Havan Samidha, and Consecrated Kits.
+            </Text>
+            <View style={styles.storeCtaBtn}>
+              <Text style={styles.storeCtaBtnText}>Explore Samagri Store</Text>
+              <Ionicons name="arrow-forward" size={12} color="#FFFFFF" />
+            </View>
+          </View>
+          <Image
+            source={APP_IMAGES.brassThali}
+            style={styles.storeCtaImage}
+            resizeMode="cover"
+          />
+        </TouchableOpacity>
+
+        {/* Customer Reviews & Devotee Testimonials */}
+        <View style={styles.reviewsSection}>
+          <View style={styles.reviewsHeaderRow}>
+            <View>
+              <Text style={styles.reviewsTitle}>भक्तांचे अनुभव व रेटिंग्ज</Text>
+              <Text style={styles.reviewsSubtitle}>Verified Customer Reviews & Feedback</Text>
+            </View>
+            <View style={styles.ratingBadgePill}>
+              <Ionicons name="star" size={13} color="#FFFFFF" />
+              <Text style={styles.ratingBadgePillText}>४.९ ★ (१०k+)</Text>
+            </View>
+          </View>
+
+          {/* Rate Experience Button */}
+          <TouchableOpacity
+            style={styles.giveRatingBtn}
+            activeOpacity={0.85}
+            onPress={() => setShowReviewModal(true)}
+          >
+            <Ionicons name="create-outline" size={16} color={colors.primary} />
+            <Text style={styles.giveRatingBtnText}>आपला पूजेचा अनुभव शेअर करा (Rate Puja)</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+          </TouchableOpacity>
+
+          {/* Horizontal Review Cards */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.reviewsScroll}
+          >
+            {reviewsList.map((rev) => (
+              <View key={rev.id} style={styles.reviewCard}>
+                <View style={styles.reviewCardTop}>
+                  <View style={styles.reviewerAvatar}>
+                    <Text style={styles.reviewerInitial}>{rev.name[0]}</Text>
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={styles.reviewerName}>{rev.name}</Text>
+                    <Text style={styles.reviewerCity}>{rev.city}</Text>
+                  </View>
+                  <View style={styles.reviewStars}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <Ionicons key={s} name="star" size={12} color="#EAB308" />
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.reviewPujaTag}>
+                  <Ionicons name="checkmark-done" size={11} color="#15803D" />
+                  <Text style={styles.reviewPujaText}>{rev.puja}</Text>
+                </View>
+
+                <Text style={styles.reviewComment} numberOfLines={3}>
+                  "{rev.comment}"
+                </Text>
+                <Text style={styles.reviewDate}>{rev.date}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Authentic Devotional Trust Footer */}
+        <View style={styles.trustFooter}>
+          <Text style={styles.footerBrand}>PujaConnect (पुजाकनेक्ट)</Text>
+          <Text style={styles.footerTagline}>अस्सल भारतीय वैदिक परंपरा • आपल्या दारी</Text>
+
+          {/* 3 Pillars */}
+          <View style={styles.footerPillars}>
+            <View style={styles.pillarItem}>
+              <View style={styles.pillarIcon}>
+                <Ionicons name="school" size={20} color={colors.gold} />
+              </View>
+              <Text style={styles.pillarTitle}>गुरुकुल प्रमाणित</Text>
+              <Text style={styles.pillarDesc}>वेदाभ्यासी पुरोहित</Text>
+            </View>
+
+            <View style={styles.pillarItem}>
+              <View style={styles.pillarIcon}>
+                <Ionicons name="sparkles" size={20} color={colors.gold} />
+              </View>
+              <Text style={styles.pillarTitle}>१००% शुद्ध सामग्री</Text>
+              <Text style={styles.pillarDesc}>पवित्र होम-हवन किट</Text>
+            </View>
+
+            <View style={styles.pillarItem}>
+              <View style={styles.pillarIcon}>
+                <Ionicons name="time" size={20} color={colors.gold} />
+              </View>
+              <Text style={styles.pillarTitle}>वेळेवर सेवा</Text>
+              <Text style={styles.pillarDesc}>मुहूर्तावर आगमन</Text>
+            </View>
+          </View>
+
+          {/* Support Line */}
+          <View style={styles.footerContactRow}>
+            <Ionicons name="call-outline" size={15} color="#D4A373" />
+            <Text style={styles.footerContactText}>भक्त हेल्पलाइन: +91 98220 12345 (24x7 Seva)</Text>
+          </View>
+
+          <Text style={styles.copyrightText}>
+            © 2026 PujaConnect Technologies Pvt. Ltd. सर्व हक्क सुरक्षित.
+          </Text>
+        </View>
+      </ScrollView>
+
+      {/* Kundali Search & Calculator Modal */}
+      <KundaliModal
+        visible={showKundaliModal}
+        onClose={() => setShowKundaliModal(false)}
+        onBookPuja={() => onNavigateCategory('Regular Puja')}
+      />
+
+      {/* Review & Rating Modal */}
+      <ReviewRatingModal
+        visible={showReviewModal}
+        onClose={() => setShowReviewModal(false)}
+        onSubmitSuccess={(newRev) => {
+          setReviewsList((prev) => [
+            {
+              id: 'rev-' + Date.now(),
+              name: newRev.authorName,
+              city: 'पुणे',
+              rating: newRev.rating,
+              date: 'आज',
+              puja: 'पूजा विधी',
+              comment: newRev.comment,
+            },
+            ...prev,
+          ]);
+        }}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: '#FFF8EC', // Warm cream background
+  },
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: '#FFF8EC',
+  },
+  menuBtn: {
+    padding: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 36,
+    width: 36,
+  },
+  hamburgerContainer: {
+    justifyContent: 'space-between',
+    height: 16,
+    width: 22,
+  },
+  hamburgerBar: {
+    width: 22,
+    height: 2.5,
+    backgroundColor: colors.primary,
+    borderRadius: 2,
+  },
+  citySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  cityText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  bellBtn: {
+    padding: 6,
+    height: 36,
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  searchPlaceholder: {
+    fontSize: 13,
+    color: '#8C7A70',
+  },
+  heroBannerContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  heroBannerCard: {
+    position: 'relative',
+    height: 165,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#7B2635',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  heroBackgroundImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  heroOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(70, 18, 28, 0.76)',
+  },
+  heroContentBlock: {
+    position: 'relative',
+    zIndex: 2,
+    padding: 16,
+    height: '100%',
+    justifyContent: 'space-between',
+  },
+  heroPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  heroPillText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#FFE26B',
+  },
+  heroTitleMain: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#F5EBD7',
+  },
+  heroTitleSub: {
+    fontSize: 19,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    marginTop: 2,
+    letterSpacing: 0.3,
+  },
+  heroFeaturePoints: {
+    fontSize: 11,
+    color: '#FFE9D4',
+    fontWeight: '500',
+  },
+  heroCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 18,
+    gap: 6,
+    marginTop: 4,
+  },
+  heroCtaBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  categoryChipsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 10,
+  },
+  categoryChip: {
+    flex: 1,
+    backgroundColor: '#F5EBE1', // Soft beige matching screenshot
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  categoryChipText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: colors.primary,
+    textAlign: 'center',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  sectionHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  sectionHeaderSubtitle: {
+    fontSize: 11,
+    color: '#8C7A70',
+    marginTop: 1,
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  trendingScroll: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    gap: 12,
+  },
+  trendingCard: {
+    width: 175,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  trendingImageContainer: {
+    width: '100%',
+    height: 120,
+    position: 'relative',
+  },
+  trendingImage: {
+    width: '100%',
+    height: '100%',
+  },
+  trendingDiscountBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  trendingDiscountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  trendingCardContent: {
+    padding: 10,
+  },
+  trendingCategory: {
+    fontSize: 10,
+    color: '#8C7A70',
+    marginBottom: 2,
+  },
+  trendingTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+    marginBottom: 4,
+  },
+  trendingPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  trendingCurrentPrice: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  trendingOriginalPrice: {
+    fontSize: 11,
+    color: '#8C7A70',
+    textDecorationLine: 'line-through',
+  },
+  mudraBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#EDE0CB',
+    gap: 12,
+  },
+  mudraBannerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
+  mudraBannerTextCol: {
+    flex: 1,
+  },
+  mudraBannerTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  mudraBannerDesc: {
+    fontSize: 11,
+    color: '#735C50',
+    marginTop: 2,
+  },
+  kundaliCardContainer: {
+    marginHorizontal: 16,
+    marginTop: 14,
+  },
+  kundaliCard: {
+    flexDirection: 'row',
+    backgroundColor: '#7B2635',
+    borderRadius: 14,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  kundaliContent: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  kundaliBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  kundaliBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFE26B',
+  },
+  kundaliTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  kundaliDesc: {
+    fontSize: 11,
+    color: '#F5EBD7',
+    lineHeight: 15,
+    marginBottom: 10,
+  },
+  kundaliCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFE26B',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    gap: 6,
+  },
+  kundaliCtaText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  kundaliIconWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kundaliCircleIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1.5,
+    borderColor: '#FFE26B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kundaliOm: {
+    fontSize: 22,
+    color: '#FFE26B',
+    fontWeight: '900',
+  },
+  kundaliSubIconText: {
+    fontSize: 9,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  panditsScroll: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    gap: 12,
+  },
+  fallbackPanditsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  panditCard: {
+    width: 135,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  panditAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginBottom: 8,
+  },
+  panditBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  panditVerifiedText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  panditName: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: colors.primary,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  panditExp: {
+    fontSize: 10,
+    color: '#8C7A70',
+    marginBottom: 4,
+  },
+  panditPrice: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  storeCtaBanner: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    backgroundColor: '#382820',
+    borderRadius: 12,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    alignItems: 'center',
+  },
+  storeCtaContent: {
+    flex: 1.3,
+    padding: 14,
+  },
+  storeCtaTag: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.gold,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  storeCtaTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  storeCtaDesc: {
+    fontSize: 10.5,
+    color: '#EDE0CB',
+    lineHeight: 14,
+    marginBottom: 8,
+  },
+  storeCtaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    gap: 4,
+  },
+  storeCtaBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  storeCtaImage: {
+    flex: 1,
+    height: 120,
+  },
+  // Upcoming Booking Card Styles
+  upcomingBookingCard: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  upcomingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0FDF4',
+    paddingBottom: 6,
+  },
+  upcomingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
+  },
+  upcomingBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  upcomingRef: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  upcomingBody: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  upcomingIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF8EC',
+    borderWidth: 1,
+    borderColor: '#EFE2CE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upcomingTextCol: {
+    flex: 1,
+  },
+  upcomingPujaTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.primary,
+    marginBottom: 2,
+  },
+  upcomingPanditName: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+    marginBottom: 3,
+  },
+  upcomingDateTime: {
+    fontSize: 11.5,
+    color: '#1E293B',
+    fontWeight: '700',
+  },
+  upcomingActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    gap: 4,
+  },
+  upcomingActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  // Reviews Section
+  reviewsSection: {
+    marginTop: 24,
+    paddingHorizontal: 16,
+  },
+  reviewsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  reviewsTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  reviewsSubtitle: {
+    fontSize: 11,
+    color: '#8C7A70',
+    marginTop: 1,
+  },
+  ratingBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#B45309',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  ratingBadgePillText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  giveRatingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF0D9',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  giveRatingBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  reviewsScroll: {
+    paddingRight: 16,
+    gap: 12,
+  },
+  reviewCard: {
+    width: 250,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#EFE2CE',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  reviewCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  reviewerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#7B2635',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewerInitial: {
+    color: '#FFE26B',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  reviewerName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  reviewerCity: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  reviewStars: {
+    flexDirection: 'row',
+    gap: 1,
+  },
+  reviewPujaTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 3,
+    marginBottom: 6,
+  },
+  reviewPujaText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  reviewComment: {
+    fontSize: 11,
+    color: '#334155',
+    lineHeight: 16,
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  reviewDate: {
+    fontSize: 9.5,
+    color: '#94A3B8',
+  },
+  // Trust Footer Styles
+  trustFooter: {
+    marginTop: 30,
+    backgroundColor: '#2A1A14',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  footerBrand: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFE26B',
+    marginBottom: 2,
+  },
+  footerTagline: {
+    fontSize: 11,
+    color: '#E2D5C3',
+    marginBottom: 18,
+  },
+  footerPillars: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    paddingBottom: 16,
+  },
+  pillarItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  pillarIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  pillarTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+    textAlign: 'center',
+  },
+  pillarDesc: {
+    fontSize: 9.5,
+    color: '#D4A373',
+    textAlign: 'center',
+  },
+  footerContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  footerContactText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFE26B',
+  },
+  copyrightText: {
+    fontSize: 10,
+    color: '#9E8E84',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+});

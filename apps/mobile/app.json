@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "PujaConnect",
+    "slug": "pujaconnect",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.pujaconnect.app"
+    },
+    "androidStatusBar": {
+      "barStyle": "dark-content",
+      "backgroundColor": "#FFF8EC"
+    },
+    "extra": {
+      "apiUrl": "https://funny-eggs-hunt.loca.lt/api/v1",
+      "eas": {
+        "projectId": "8b3f728b-bfb4-4ca4-94b6-be5138250db0"
+      }
+    }
+  }
+}

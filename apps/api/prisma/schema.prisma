@@ -1,0 +1,489 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  PANDIT
+  ADMIN
+  SUPPORT
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum BookingStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  RAZORPAY
+  CASH
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model User {
+  id              String           @id @default(uuid()) @db.Uuid
+  email           String           @unique
+  passwordHash    String
+  phoneNumber     String?          @unique
+  role            Role             @default(CUSTOMER)
+  isActive        Boolean          @default(true)
+  isDeleted       Boolean          @default(false)
+  deletedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  customerProfile CustomerProfile?
+  panditProfile   PanditProfile?
+  notifications   Notification[]
+  supportTickets  SupportTicket[]
+  assignedTickets SupportTicket[]  @relation("AssignedAgent")
+  reviewsGiven    Review[]         @relation("CustomerReviews")
+
+  @@index([email])
+  @@index([role])
+}
+
+model CustomerProfile {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @unique @db.Uuid
+  firstName   String
+  lastName    String
+  avatarUrl   String?
+  city        String?
+  state       String?
+  pincode     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses   Address[]
+  bookings    Booking[]
+  orders      Order[]
+  cart        Cart?
+}
+
+model PanditProfile {
+  id                 String             @id @default(uuid()) @db.Uuid
+  userId             String             @unique @db.Uuid
+  fullName           String
+  avatarUrl          String?
+  experienceYears    Int                @default(1)
+  languages          String[]
+  specializations    String[]
+  city               String
+  state              String
+  serviceAreas       String[]
+  bio                String?
+  basePrice          Decimal?           @db.Decimal(10, 2)
+  verificationStatus VerificationStatus @default(PENDING)
+  rejectionReason    String?
+  averageRating      Decimal            @default(0.0) @db.Decimal(3, 2)
+  totalReviews       Int                @default(0)
+  isAvailable        Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents          PanditDocument[]
+  services           PanditService[]
+  availabilities     Availability[]
+  bookings           Booking[]
+  reviewsReceived    Review[]           @relation("PanditReviews")
+
+  @@index([city])
+  @@index([verificationStatus])
+}
+
+model PanditDocument {
+  id              String        @id @default(uuid()) @db.Uuid
+  panditProfileId String        @db.Uuid
+  documentType    String
+  documentNumber  String?
+  fileUrl         String
+  isVerified      Boolean       @default(false)
+  verifiedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  panditProfile   PanditProfile @relation(fields: [panditProfileId], references: [id], onDelete: Cascade)
+}
+
+model PujaCategory {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pujas       Puja[]
+}
+
+model Puja {
+  id              String          @id @default(uuid()) @db.Uuid
+  categoryId      String          @db.Uuid
+  title           String
+  slug            String          @unique
+  description     String
+  basePrice       Decimal         @db.Decimal(10, 2)
+  samagriPrice    Decimal         @default(0.00) @db.Decimal(10, 2)
+  durationMinutes Int             @default(60)
+  requiredPandits Int             @default(1)
+  languages       String[]
+  requiredSamagri String[]
+  imageUrl        String?
+  isActive        Boolean         @default(true)
+  isDeleted       Boolean         @default(false)
+  deletedAt       DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  category        PujaCategory    @relation(fields: [categoryId], references: [id])
+  panditServices  PanditService[]
+  bookings        Booking[]
+
+  @@index([categoryId])
+  @@index([slug])
+}
+
+model PanditService {
+  id              String        @id @default(uuid()) @db.Uuid
+  panditProfileId String        @db.Uuid
+  pujaId          String        @db.Uuid
+  customPrice     Decimal?      @db.Decimal(10, 2)
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  panditProfile   PanditProfile @relation(fields: [panditProfileId], references: [id], onDelete: Cascade)
+  puja            Puja          @relation(fields: [pujaId], references: [id], onDelete: Cascade)
+
+  @@unique([panditProfileId, pujaId])
+}
+
+model Availability {
+  id              String        @id @default(uuid()) @db.Uuid
+  panditProfileId String        @db.Uuid
+  dayOfWeek       DayOfWeek?
+  specificDate    DateTime?     @db.Date
+  startTime       String        // HH:mm format, e.g. "09:00"
+  endTime         String        // HH:mm format, e.g. "18:00"
+  isBooked        Boolean       @default(false)
+  isRecurring     Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  panditProfile   PanditProfile @relation(fields: [panditProfileId], references: [id], onDelete: Cascade)
+
+  @@index([panditProfileId, specificDate])
+}
+
+model Address {
+  id                String          @id @default(uuid()) @db.Uuid
+  customerProfileId String          @db.Uuid
+  fullName          String
+  phoneNumber       String
+  addressLine1      String
+  addressLine2      String?
+  landmark          String?
+  city              String
+  state             String
+  pincode           String
+  isDefault         Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  customerProfile   CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+  orders            Order[]
+}
+
+model Booking {
+  id                  String        @id @default(uuid()) @db.Uuid
+  bookingNumber       String        @unique
+  customerProfileId   String        @db.Uuid
+  panditProfileId     String        @db.Uuid
+  pujaId              String        @db.Uuid
+  pujaDate            DateTime      @db.Date
+  pujaTimeSlot        String
+  pujaLanguage        String
+  venueAddress        String
+  city                String
+  pincode             String
+  includeSamagri      Boolean       @default(false)
+  pujaFee             Decimal       @db.Decimal(10, 2)
+  samagriFee          Decimal       @default(0.00) @db.Decimal(10, 2)
+  platformFee         Decimal       @default(0.00) @db.Decimal(10, 2)
+  discountAmount      Decimal       @default(0.00) @db.Decimal(10, 2)
+  totalAmount         Decimal       @db.Decimal(10, 2)
+  status              BookingStatus @default(PENDING)
+  specialInstructions String?
+  cancellationReason  String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  customerProfile     CustomerProfile @relation(fields: [customerProfileId], references: [id])
+  panditProfile       PanditProfile   @relation(fields: [panditProfileId], references: [id])
+  puja                Puja            @relation(fields: [pujaId], references: [id])
+  bookingItems        BookingItem[]
+  payments            Payment[]
+  reviews             Review[]
+  supportTickets      SupportTicket[]
+
+  @@index([bookingNumber])
+  @@index([customerProfileId])
+  @@index([panditProfileId, pujaDate])
+  @@index([status])
+}
+
+model BookingItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  bookingId   String   @db.Uuid
+  itemType    String   // "PUJA", "SAMAGRI_KIT", "EXTRA_PANDIT"
+  name        String
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  totalPrice  Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id                String        @id @default(uuid()) @db.Uuid
+  paymentNumber     String        @unique
+  bookingId         String?       @db.Uuid
+  orderId           String?       @db.Uuid
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("INR")
+  paymentMethod     PaymentMethod @default(RAZORPAY)
+  paymentStatus     PaymentStatus @default(PENDING)
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  razorpaySignature String?
+  metadata          Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  booking           Booking?      @relation(fields: [bookingId], references: [id])
+  order             Order?        @relation(fields: [orderId], references: [id])
+
+  @@index([paymentNumber])
+  @@index([razorpayOrderId])
+  @@index([paymentStatus])
+}
+
+model Product {
+  id            String      @id @default(uuid()) @db.Uuid
+  name          String
+  slug          String      @unique
+  description   String
+  category      String
+  price         Decimal     @db.Decimal(10, 2)
+  discountPrice Decimal?    @db.Decimal(10, 2)
+  stockQuantity Int         @default(0)
+  images        String[]
+  isActive      Boolean     @default(true)
+  isDeleted     Boolean     @default(false)
+  deletedAt     DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+
+  @@index([category])
+  @@index([slug])
+}
+
+model Cart {
+  id                String          @id @default(uuid()) @db.Uuid
+  customerProfileId String          @unique @db.Uuid
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  customerProfile   CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+  items             CartItem[]
+}
+
+model CartItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  cartId    String   @db.Uuid
+  productId String   @db.Uuid
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId])
+}
+
+model Order {
+  id                String          @id @default(uuid()) @db.Uuid
+  orderNumber       String          @unique
+  customerProfileId String          @db.Uuid
+  shippingAddressId String          @db.Uuid
+  subtotal          Decimal         @db.Decimal(10, 2)
+  taxAmount         Decimal         @default(0.00) @db.Decimal(10, 2)
+  shippingFee       Decimal         @default(0.00) @db.Decimal(10, 2)
+  discountAmount    Decimal         @default(0.00) @db.Decimal(10, 2)
+  totalAmount       Decimal         @db.Decimal(10, 2)
+  status            OrderStatus     @default(PENDING)
+  trackingNumber    String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  customerProfile   CustomerProfile @relation(fields: [customerProfileId], references: [id])
+  shippingAddress   Address         @relation(fields: [shippingAddressId], references: [id])
+  orderItems        OrderItem[]
+  payments          Payment[]
+
+  @@index([orderNumber])
+  @@index([customerProfileId])
+  @@index([status])
+}
+
+model OrderItem {
+  id         String   @id @default(uuid()) @db.Uuid
+  orderId    String   @db.Uuid
+  productId  String   @db.Uuid
+  quantity   Int      @default(1)
+  unitPrice  Decimal  @db.Decimal(10, 2)
+  totalPrice Decimal  @db.Decimal(10, 2)
+  createdAt  DateTime @default(now())
+
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id])
+}
+
+model Review {
+  id              String        @id @default(uuid()) @db.Uuid
+  bookingId       String        @db.Uuid
+  customerId      String        @db.Uuid
+  panditProfileId String        @db.Uuid
+  rating          Int           // 1 to 5
+  comment         String?
+  isPublished     Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  booking         Booking       @relation(fields: [bookingId], references: [id])
+  customer        User          @relation("CustomerReviews", fields: [customerId], references: [id])
+  panditProfile   PanditProfile @relation("PanditReviews", fields: [panditProfileId], references: [id])
+
+  @@index([panditProfileId])
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  title     String
+  message   String
+  type      String   // "BOOKING", "PAYMENT", "SYSTEM", "ORDER"
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+model SupportTicket {
+  id           String         @id @default(uuid()) @db.Uuid
+  ticketNumber String         @unique
+  userId       String         @db.Uuid
+  assignedToId String?        @db.Uuid
+  bookingId    String?        @db.Uuid
+  subject      String
+  description  String
+  status       TicketStatus   @default(OPEN)
+  priority     TicketPriority @default(MEDIUM)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user         User           @relation(fields: [userId], references: [id])
+  assignedTo   User?          @relation("AssignedAgent", fields: [assignedToId], references: [id])
+  booking      Booking?       @relation(fields: [bookingId], references: [id])
+
+  @@index([ticketNumber])
+  @@index([userId])
+  @@index([status])
+}
+
+model Coupon {
+  id             String    @id @default(uuid()) @db.Uuid
+  code           String    @unique
+  discountPct    Decimal?  @db.Decimal(5, 2)
+  discountAmount Decimal?  @db.Decimal(10, 2)
+  minSpend       Decimal?  @db.Decimal(10, 2)
+  maxDiscount    Decimal?  @db.Decimal(10, 2)
+  validFrom      DateTime
+  validUntil     DateTime
+  usageLimit     Int?
+  timesUsed      Int       @default(0)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([code])
+}

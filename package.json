@@ -1,0 +1,23 @@
+{
+  "name": "pujaconnect-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DevSutra - Independent Online Puja Booking, Pandit Marketplace and Puja Samagri E-commerce Platform",
+  "scripts": {
+    "dev": "pnpm --parallel run dev",
+    "start": "pnpm --parallel run dev",
+    "start:dev": "pnpm --filter @pujaconnect/api start:dev",
+    "dev:api": "pnpm --filter @pujaconnect/api start:dev",
+    "start:api": "pnpm --filter @pujaconnect/api start:dev",
+    "dev:web": "pnpm --filter @pujaconnect/web dev",
+    "start:web": "pnpm --filter @pujaconnect/web dev",
+    "build": "pnpm --recursive run build",
+    "build:web": "pnpm --filter @pujaconnect/web build",
+    "build:api": "pnpm --filter @pujaconnect/api build",
+    "build:shared": "pnpm --filter @pujaconnect/shared build",
+    "prisma:generate": "pnpm --filter @pujaconnect/api prisma:generate"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
