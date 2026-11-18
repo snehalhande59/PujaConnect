@@ -13,6 +13,9 @@ import {
   FEATURED_PANDITS_DATA,
   PUJA_SAMAGRI_STORE_DATA,
   FESTIVAL_SPECIALS_DATA,
+  NEXT_30_DAYS_PANCHANG,
+  POPULAR_SERVICES_WEB,
+  PILGRIMAGE_CITIES_WEB,
 } from '@/lib/cultural-images';
 import {
   Search,
@@ -42,6 +45,11 @@ import {
   Smartphone,
   QrCode,
   Download,
+  Zap,
+  Home,
+  Heart,
+  MessageCircle,
+  Gift,
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -57,6 +65,24 @@ export default function HomePage() {
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
+
+  // Smart Booking Bar State (Matching Reference Image 2)
+  const [smartLocation, setSmartLocation] = useState('Pune');
+  const [smartService, setSmartService] = useState('satyanarayan-puja');
+  const [smartDate, setSmartDate] = useState('2026-11-18');
+
+  const handleFindPandits = () => {
+    router.push(`/pandits?city=${encodeURIComponent(smartLocation)}&service=${encodeURIComponent(smartService)}`);
+  };
+
+  const handleBook30Min = () => {
+    router.push(`/booking?urgent=true&city=${encodeURIComponent(smartLocation)}&service=${encodeURIComponent(smartService)}&date=${encodeURIComponent(smartDate)}`);
+  };
+
+  const handleWhatsAppBooking = () => {
+    const text = encodeURIComponent(`Namaste PujaConnect! I want to book a Pandit for ${smartService || 'Puja'} in ${smartLocation} on ${smartDate}. Please connect me with a Gurukul Pandit.`);
+    window.open(`https://wa.me/919822012345?text=${text}`, '_blank');
+  };
 
   // Filter Pandits based on selected city & language
   const filteredPandits = FEATURED_PANDITS_DATA.filter((pandit) => {
@@ -287,51 +313,436 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 3. Popular Hindu Ceremonies Quick Categories (Matching User Reference Image 2) */}
-      <section className="py-12 bg-ivory border-b border-beige">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-xl mx-auto mb-8">
-            <h2 className="text-2xl sm:text-3xl font-heading font-bold text-brown">
-              Popular Hindu Ceremonies
-            </h2>
-            <p className="text-xs sm:text-sm text-brown/70 font-sans mt-1">
-              Select category to discover traditional pujas and havans
-            </p>
+      {/* 3. Smart Booking Bar & Popular Services (Matching Reference Image 2) */}
+      <section className="relative -mt-8 z-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Floating Smart Booking Card */}
+        <div className="bg-white rounded-3xl shadow-2xl border border-gold/40 p-6 sm:p-8 backdrop-blur-xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-6 border-b border-beige">
+            {/* Location Field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-brown/80">
+                <MapPin className="w-4 h-4 text-amber-600" />
+                <span>Location</span>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Enter your location..."
+                  value={smartLocation}
+                  onChange={(e) => setSmartLocation(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-beige bg-ivory/50 text-xs font-medium text-brown focus:outline-none focus:border-amber-600 focus:bg-white transition"
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setSmartLocation('Pune, Maharashtra')}
+                  className="text-maroon font-semibold hover:underline flex items-center gap-1"
+                >
+                  <MapPin className="w-3 h-3 text-saffron" />
+                  <span>Use Current Location</span>
+                </button>
+                <span className="text-brown/50">City, locality or pincode</span>
+              </div>
+            </div>
+
+            {/* Service Field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-brown/80">
+                <Flame className="w-4 h-4 text-amber-600" />
+                <span>Service</span>
+              </div>
+              <select
+                value={smartService}
+                onChange={(e) => setSmartService(e.target.value)}
+                aria-label="Select service"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-beige bg-ivory/50 text-xs font-semibold text-brown focus:outline-none focus:border-amber-600 focus:bg-white transition cursor-pointer"
+              >
+                <option value="satyanarayan-puja">Satyanarayan Puja (सत्यनारायण)</option>
+                <option value="griha-pravesh-puja">Griha Pravesh Puja (गृह प्रवेश)</option>
+                <option value="vastu-shanti">Vaastu Shanti Puja (वास्तु शांति)</option>
+                <option value="rudrabhishek">Maha Rudrabhishek (रुद्राभिषेक)</option>
+                <option value="ganesh-puja">Ganpati Hawan (गणेश हवन)</option>
+                <option value="lakshmi-puja">Lakshmi Puja (महालक्ष्मी पूजन)</option>
+                <option value="wedding-ceremony">Wedding Ceremony (विवाह संस्कार)</option>
+              </select>
+              <p className="text-[11px] text-brown/50">Choose a service</p>
+            </div>
+
+            {/* Date Field */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-brown/80">
+                <Calendar className="w-4 h-4 text-amber-600" />
+                <span>Date</span>
+              </div>
+              <input
+                type="date"
+                value={smartDate}
+                onChange={(e) => setSmartDate(e.target.value)}
+                aria-label="Select date"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-beige bg-ivory/50 text-xs font-semibold text-brown focus:outline-none focus:border-amber-600 focus:bg-white transition cursor-pointer"
+              />
+              <p className="text-[11px] text-brown/50">Choose your preferred date</p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl mx-auto font-sans">
-            <Link
-              href="/pujas?category=regular"
-              className="p-6 rounded-2xl bg-white border border-beige hover:border-gold/60 shadow-sm hover:shadow-sacred text-center group transition flex flex-col items-center"
+          {/* 3 Smart Action Buttons (Matching Image 2) */}
+          <div className="pt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Button 1: Find Pandits */}
+            <button
+              type="button"
+              onClick={handleFindPandits}
+              className="w-full py-3 px-5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-bold text-xs sm:text-sm shadow-md hover:shadow-lg transition flex items-center justify-center gap-2.5 font-sans"
             >
-              <div className="w-14 h-14 rounded-2xl bg-gold/15 flex items-center justify-center text-maroon group-hover:scale-110 transition-transform mb-3">
-                <Flame className="w-7 h-7 text-saffron" />
-              </div>
-              <h3 className="font-heading font-bold text-base text-maroon">Regular Puja</h3>
-              <p className="text-xs text-brown/70 mt-1">Vaastu Shanti, Satya Narayan, Griha Pravesh</p>
-            </Link>
+              <Search className="w-4 h-4 text-white" />
+              <span>Find Pandits</span>
+            </button>
 
-            <Link
-              href="/pujas?category=festive"
-              className="p-6 rounded-2xl bg-white border border-beige hover:border-gold/60 shadow-sm hover:shadow-sacred text-center group transition flex flex-col items-center"
+            {/* Button 2: Book in 30 Min */}
+            <button
+              type="button"
+              onClick={handleBook30Min}
+              className="w-full py-3 px-5 rounded-xl bg-white hover:bg-amber-50 text-amber-700 border-2 border-amber-600 font-bold text-xs sm:text-sm shadow-sm hover:shadow transition flex items-center justify-center gap-2 font-sans"
             >
-              <div className="w-14 h-14 rounded-2xl bg-gold/15 flex items-center justify-center text-maroon group-hover:scale-110 transition-transform mb-3">
-                <Sparkles className="w-7 h-7 text-gold-600" />
-              </div>
-              <h3 className="font-heading font-bold text-base text-maroon">Festive Puja</h3>
-              <p className="text-xs text-brown/70 mt-1">Ganesh Sthapana, Diwali Lakshmi, Navratri</p>
-            </Link>
+              <Zap className="w-4 h-4 text-amber-600 fill-amber-600" />
+              <span>Book in 30 Min</span>
+            </button>
 
-            <Link
-              href="/pujas?category=hawan"
-              className="p-6 rounded-2xl bg-white border border-beige hover:border-gold/60 shadow-sm hover:shadow-sacred text-center group transition flex flex-col items-center"
+            {/* Button 3: Book via WhatsApp */}
+            <button
+              type="button"
+              onClick={handleWhatsAppBooking}
+              className="w-full py-3 px-5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-700 border-2 border-emerald-600 font-bold text-xs sm:text-sm shadow-sm hover:shadow transition flex items-center justify-center gap-2 font-sans"
             >
-              <div className="w-14 h-14 rounded-2xl bg-gold/15 flex items-center justify-center text-maroon group-hover:scale-110 transition-transform mb-3">
-                <Award className="w-7 h-7 text-maroon" />
-              </div>
-              <h3 className="font-heading font-bold text-base text-maroon">All Hawan</h3>
-              <p className="text-xs text-brown/70 mt-1">Ganpati Hawan, Dhanvantari, Navgraha Agni</p>
+              <MessageCircle className="w-4 h-4 text-emerald-600 fill-emerald-600" />
+              <span>Book via WhatsApp</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ✦ Popular Services ✦ (Matching Reference Image 2) */}
+        <div className="mt-8 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-gold/15 border border-gold/40 text-maroon text-xs font-bold tracking-wide mb-6">
+            <span className="text-amber-600">✦</span>
+            <span>Popular Services</span>
+            <span className="text-amber-600">✦</span>
+          </div>
+
+          {/* Popular Services Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+            {POPULAR_SERVICES_WEB.map((service) => (
+              <Link
+                key={service.id}
+                href={`/booking?service=${service.slug}&city=${encodeURIComponent(smartLocation)}`}
+                className="bg-white rounded-2xl p-4 border border-beige hover:border-gold shadow-sm hover:shadow-sacred transition flex flex-col items-center text-center group"
+              >
+                <div className="w-14 h-14 rounded-full bg-amber-50 group-hover:bg-amber-100 flex items-center justify-center border border-amber-200/80 mb-2.5 transition-transform group-hover:scale-110">
+                  {service.iconType === 'home' && <Home className="w-6 h-6 text-amber-600" />}
+                  {service.iconType === 'rings' && <Heart className="w-6 h-6 text-amber-600" />}
+                  {service.iconType === 'kalash' && <Flame className="w-6 h-6 text-amber-600" />}
+                  {service.iconType === 'om' && <span className="text-xl font-bold text-amber-700 font-devanagari">ॐ</span>}
+                  {service.iconType === 'ganesh' && <Sparkles className="w-6 h-6 text-amber-600" />}
+                  {service.iconType === 'lotus' && <Award className="w-6 h-6 text-amber-600" />}
+                </div>
+                <h4 className="font-heading font-bold text-xs sm:text-sm text-brown leading-tight">
+                  {service.name}
+                </h4>
+                <p className="text-[10px] text-maroon font-devanagari mt-0.5">
+                  {service.devanagariName}
+                </p>
+              </Link>
+            ))}
+          </div>
+
+          {/* Action Pills Below Grid */}
+          <div className="mt-6 flex items-center justify-center gap-4">
+            <Link
+              href="/pujas"
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-ivory border border-gold/60 text-maroon hover:bg-gold/15 text-xs font-bold transition shadow-sm"
+            >
+              <Gift className="w-3.5 h-3.5 text-saffron" />
+              <span>Pooja Packages</span>
             </Link>
+            <Link
+              href="/pujas"
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-white border border-beige text-brown/80 hover:text-maroon hover:border-gold text-xs font-semibold transition"
+            >
+              <span>View All Services</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {/* Pilgrimage Cities Strip (Matching Reference Image 2) */}
+          <div className="mt-6 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none justify-start sm:justify-center">
+            <span className="text-[11px] font-bold text-maroon bg-gold/20 px-3 py-1 rounded-full whitespace-nowrap shrink-0">
+              Popular Cities:
+            </span>
+            {PILGRIMAGE_CITIES_WEB.map((city) => (
+              <button
+                key={city}
+                type="button"
+                onClick={() => setSmartLocation(city)}
+                className={`text-[11px] px-3 py-1 rounded-full border transition whitespace-nowrap shrink-0 ${
+                  smartLocation === city
+                    ? 'bg-maroon text-ivory border-maroon font-semibold'
+                    : 'bg-white text-brown/70 border-beige hover:border-gold hover:text-brown'
+                }`}
+              >
+                {city}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 3B. Next 30 Days Panchang & Muhurat Recommendations (Matching Reference Image 1) */}
+      <section className="py-12 bg-ivory border-b border-beige">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-6">
+            <div>
+              <p className="text-xs sm:text-sm text-brown/70 font-sans">
+                Personalized recommendations based on today&apos;s Panchang.
+              </p>
+              <h3 className="text-2xl sm:text-3xl font-heading font-bold text-brown tracking-tight mt-0.5">
+                Next 30 Days Auspicious Muhurats & Tithis
+              </h3>
+            </div>
+            <Link
+              href="/muhurat"
+              className="mt-3 sm:mt-0 text-xs font-bold text-maroon hover:underline flex items-center gap-1 self-start sm:self-auto"
+            >
+              <Calendar className="w-4 h-4 text-saffron" />
+              <span>Full Month Calendar (नोव्हेंबर २०२६) →</span>
+            </Link>
+          </div>
+
+          {/* Horizontal Scrollable Panchang Cards Carousel */}
+          <div className="flex gap-4 overflow-x-auto pb-4 pt-1 scrollbar-none snap-x">
+            {NEXT_30_DAYS_PANCHANG.map((item) => (
+              <div
+                key={item.id}
+                className="w-48 sm:w-56 shrink-0 snap-start bg-white rounded-3xl border border-beige hover:border-gold/60 p-5 shadow-sm hover:shadow-sacred transition flex flex-col justify-between"
+              >
+                <div>
+                  {/* Top Circle Deity/Item Graphic */}
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200/80 mx-auto flex items-center justify-center mb-4 shadow-inner">
+                    {item.icon === 'kalash' && <Flame className="w-8 h-8 text-amber-600" />}
+                    {item.icon === 'diya' && <Flame className="w-8 h-8 text-amber-600" />}
+                    {item.icon === 'calendar' && <Calendar className="w-7 h-7 text-amber-600" />}
+                    {item.icon === 'om' && <span className="text-2xl font-bold text-amber-700 font-devanagari">ॐ</span>}
+                    {item.icon === 'lotus' && <Award className="w-8 h-8 text-amber-600" />}
+                    {item.icon === 'ganesh' && <Sparkles className="w-8 h-8 text-amber-600" />}
+                  </div>
+
+                  {/* Title & Description */}
+                  <div className="text-center">
+                    <h4 className="font-heading font-bold text-sm text-brown line-clamp-1">
+                      {item.name}
+                    </h4>
+                    <p className="text-[11px] font-devanagari text-maroon font-semibold mt-0.5">
+                      {item.devanagariName}
+                    </p>
+                    <p className="text-[11px] text-brown/60 leading-relaxed mt-2 line-clamp-2">
+                      {item.description}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Bottom Badge & Circular Orange Action Arrow Button */}
+                <div className="mt-4 pt-3 border-t border-beige/60 flex items-center justify-between">
+                  <span
+                    className={`text-[10px] px-2.5 py-1 rounded-full font-bold ${
+                      item.badgeType === 'recommended'
+                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                        : item.badgeType === 'today'
+                        ? 'bg-orange-100 text-orange-800 border border-orange-300'
+                        : item.badgeType === 'tomorrow'
+                        ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                        : 'bg-ivory text-brown/70 border border-beige'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+
+                  <Link
+                    href={`/booking?service=${item.pujaSlug}&date=${encodeURIComponent(item.dateStr)}&city=${encodeURIComponent(smartLocation)}`}
+                    className="w-8 h-8 rounded-full bg-amber-600 hover:bg-amber-700 text-white flex items-center justify-center shadow-md hover:scale-105 transition"
+                    title={`Book for ${item.name}`}
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 3C. Bhagavad Gita Sacred Shloka Banner (Matching User Uploaded Image) */}
+      <section className="bg-[#2B0F13] py-14 px-4 sm:px-6 lg:px-8 border-y-2 border-gold/40 text-center relative overflow-hidden">
+        <div className="relative max-w-4xl mx-auto space-y-3">
+          <p className="text-2xl sm:text-4xl md:text-5xl font-serif text-ivory tracking-wide font-devanagari font-bold drop-shadow-sm">
+            पत्रं पुष्पं फलं तोयं यो मे भक्त्या प्रयच्छति।
+          </p>
+          <p className="text-sm sm:text-lg text-amber-100/90 italic font-serif leading-relaxed pt-1">
+            &ldquo;The Divine accepts even the simplest offering when it is made with true devotion.&rdquo;
+          </p>
+          <p className="text-xs sm:text-sm text-gold-400 font-semibold tracking-widest uppercase pt-1">
+            — Bhagavad Gita (9.26)
+          </p>
+        </div>
+      </section>
+
+      {/* 3D. Samagran-Inspired Innovation: All-In-One Curated Puja Kits & Live e-Puja */}
+      <section className="py-16 bg-white border-b border-beige">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-10">
+            <div>
+              <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-maroon font-sans mb-1.5">
+                <Sparkles className="w-4 h-4 text-amber-600" />
+                <span>Samagran Ritual Excellence</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-heading font-bold text-brown tracking-tight">
+                All-In-One Sacred Puja Kits &amp; Live e-Puja
+              </h3>
+              <p className="mt-1 text-xs sm:text-sm text-brown/70 max-w-2xl font-sans">
+                100% pure sattvic samagri, certified Gangajal, organic herbs, and live video rituals with personal Gotra Sankalp.
+              </p>
+            </div>
+            <Link
+              href="/store"
+              className="mt-4 md:mt-0 inline-flex items-center gap-1.5 text-xs font-bold text-maroon hover:text-amber-700 transition"
+            >
+              <span>Explore Samagri Store →</span>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Feature 1: Pre-Packaged Puja Kits */}
+            <div className="bg-ivory/60 rounded-3xl p-6 border border-beige hover:border-gold/60 shadow-sm hover:shadow-sacred transition flex flex-col justify-between">
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mb-4">
+                  <ShoppingBag className="w-6 h-6 text-amber-700" />
+                </div>
+                <h4 className="font-heading font-bold text-base text-maroon">
+                  Pre-Packaged Vedic Puja Kits
+                </h4>
+                <p className="text-xs font-devanagari text-gold-700 font-semibold mt-0.5">
+                  विधीनुसार संपूर्ण साहित्य पेटी (Box)
+                </p>
+                <p className="text-xs text-brown/70 mt-2 leading-relaxed">
+                  Every ritual needs specific samagri. Our kits come curated with pure Desi Gir Cow Ghee, unbroken Akshata, Gangajal, authentic Havan herbs, and brass utensils.
+                </p>
+                <ul className="mt-3 space-y-1.5 text-[11px] text-brown/80">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Satyanarayan 54-Item Sacred Kit</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Griha Pravesh &amp; Vastu Kalash Box</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Navgraha &amp; Maha Rudrabhishek Set</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="mt-5 pt-4 border-t border-beige">
+                <Link
+                  href="/store"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-maroon text-ivory text-xs font-bold hover:bg-maroon-800 transition"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>Order Puja Kit</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+
+            {/* Feature 2: Live Online e-Puja */}
+            <div className="bg-ivory/60 rounded-3xl p-6 border border-beige hover:border-gold/60 shadow-sm hover:shadow-sacred transition flex flex-col justify-between">
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mb-4">
+                  <Eye className="w-6 h-6 text-amber-700" />
+                </div>
+                <h4 className="font-heading font-bold text-base text-maroon">
+                  Live Online e-Puja &amp; Sankalp
+                </h4>
+                <p className="text-xs font-devanagari text-gold-700 font-semibold mt-0.5">
+                  थेट व्हिडिओ ई-पूजा व गोत्र संकल्प
+                </p>
+                <p className="text-xs text-brown/70 mt-2 leading-relaxed">
+                  Living abroad or unable to host at home? Verified Gurukul Pandits perform authentic Shastric rituals via two-way HD video stream directly in your family&apos;s name.
+                </p>
+                <ul className="mt-3 space-y-1.5 text-[11px] text-brown/80">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Live 1-on-1 Personalized Sankalp</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Consecrated Temple Prasad Delivery</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Full HD Stream Recording Provided</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="mt-5 pt-4 border-t border-beige">
+                <Link
+                  href="/booking?online=true"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 text-white text-xs font-bold hover:from-amber-700 hover:to-amber-800 transition"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Book Online e-Puja</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+
+            {/* Feature 3: Smart Samagri Checklist & Dakshina Transparency */}
+            <div className="bg-ivory/60 rounded-3xl p-6 border border-beige hover:border-gold/60 shadow-sm hover:shadow-sacred transition flex flex-col justify-between">
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mb-4">
+                  <ShieldCheck className="w-6 h-6 text-amber-700" />
+                </div>
+                <h4 className="font-heading font-bold text-base text-maroon">
+                  Samagri Checklist &amp; Transparency
+                </h4>
+                <p className="text-xs font-devanagari text-gold-700 font-semibold mt-0.5">
+                  सामग्री यादी व १००% पारदर्शक दक्षिणा
+                </p>
+                <p className="text-xs text-brown/70 mt-2 leading-relaxed">
+                  Never worry about missing ritual items or surprise demands. We give you a clear split between what Panditji brings and what fresh kitchen items you keep ready.
+                </p>
+                <ul className="mt-3 space-y-1.5 text-[11px] text-brown/80">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Downloadable Printable PDF Checklist</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Fixed Fair Dakshina – Zero Demands</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>24x7 WhatsApp Preparation Support</span>
+                  </li>
+                </ul>
+              </div>
+              <div className="mt-5 pt-4 border-t border-beige">
+                <button
+                  type="button"
+                  onClick={handleWhatsAppBooking}
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-xs font-bold transition"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  <span>Get Samagri List on WhatsApp</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </section>

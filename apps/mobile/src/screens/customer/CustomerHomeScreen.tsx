@@ -10,6 +10,8 @@ import {
   Dimensions,
   Platform,
   StatusBar,
+  Linking,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +24,10 @@ import {
   APP_IMAGES,
   SPEEDY_PUJA_CATALOG,
   CatalogPujaItem,
+  NEXT_30_DAYS_PANCHANG,
+  POPULAR_SERVICES,
+  PILGRIMAGE_CITIES,
+  PanchangMuhuratItem,
 } from '../../theme/culturalAssets';
 import { KundaliModal } from '../../components/common/KundaliModal';
 import { ReviewRatingModal } from '../../components/common/ReviewRatingModal';
@@ -143,6 +149,32 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
     onNavigatePujaDetail(puja);
   };
 
+  const [bookingService, setBookingService] = useState('Satyanarayan Puja');
+  const [bookingDate, setBookingDate] = useState('19 Nov 2026');
+
+  const openWhatsAppCoordinator = () => {
+    const msg = encodeURIComponent(`नमस्कार! मला ${selectedCity} मध्ये ${bookingService} साठी पुरोहित बुक करायचे आहेत.`);
+    Linking.openURL(`https://wa.me/919822012345?text=${msg}`).catch(() => {
+      Alert.alert('WhatsApp', 'कृपया थेट संपर्क साधा: +91 98220 12345');
+    });
+  };
+
+  const handleBookIn30Min = () => {
+    Alert.alert(
+      '⚡ Book in 30 Min (तातडीने पुरोहित सेवा)',
+      `${selectedCity} मधील जवळचे प्रमाणित वैदिक पुरोहित ३० मिनिटांत आपल्या पत्त्यावर पोहोचू शकतात. त्वरित पूजा सुरू करा?`,
+      [
+        { text: 'रद्द करा', style: 'cancel' },
+        { text: 'तातडीने बुक करा', onPress: onNavigateExplore },
+      ]
+    );
+  };
+
+  const handlePanchangItemPress = (item: PanchangMuhuratItem) => {
+    const matched = SPEEDY_PUJA_CATALOG.find((p) => p.id === item.pujaId) || SPEEDY_PUJA_CATALOG[0];
+    handlePujaCardPress(matched);
+  };
+
   return (
     <View style={styles.safe}>
       {/* Top Header - Exact Speedy Pandit Style */}
@@ -254,6 +286,315 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+
+        {/* ------------------------------------------------------------- */}
+        {/* EXACT REFERENCE IMAGE 2: SMART LOCATION & BOOKING BAR */}
+        {/* ------------------------------------------------------------- */}
+        <View style={styles.smartBookingBox}>
+          {/* Top 3 Input Selectors */}
+          <View style={styles.smartInputsGrid}>
+            {/* 1. Location Selector */}
+            <TouchableOpacity
+              style={styles.smartInputCol}
+              activeOpacity={0.8}
+              onPress={onSelectCity}
+            >
+              <View style={styles.smartInputHeader}>
+                <Ionicons name="location" size={13} color="#EA580C" />
+                <Text style={styles.smartInputLabel}>Location</Text>
+              </View>
+              <View style={styles.smartInputBody}>
+                <Ionicons name="navigate-outline" size={15} color="#9A3412" style={{ marginRight: 4 }} />
+                <Text style={styles.smartInputVal} numberOfLines={1}>{selectedCity}, MH</Text>
+              </View>
+              <Text style={styles.smartInputHelper}>📍 Use Current Location</Text>
+            </TouchableOpacity>
+
+            {/* 2. Service Selector */}
+            <TouchableOpacity
+              style={styles.smartInputCol}
+              activeOpacity={0.8}
+              onPress={onNavigateExplore}
+            >
+              <View style={styles.smartInputHeader}>
+                <Ionicons name="flame" size={13} color="#EA580C" />
+                <Text style={styles.smartInputLabel}>Service</Text>
+              </View>
+              <View style={styles.smartInputBody}>
+                <Text style={styles.smartInputVal} numberOfLines={1}>{bookingService}</Text>
+                <Ionicons name="chevron-down" size={12} color="#9A3412" style={{ marginLeft: 2 }} />
+              </View>
+              <Text style={styles.smartInputHelper}>Choose a service</Text>
+            </TouchableOpacity>
+
+            {/* 3. Date Selector */}
+            <TouchableOpacity
+              style={styles.smartInputCol}
+              activeOpacity={0.8}
+              onPress={() => onNavigateCategory('Regular Puja')}
+            >
+              <View style={styles.smartInputHeader}>
+                <Ionicons name="calendar" size={13} color="#EA580C" />
+                <Text style={styles.smartInputLabel}>Date</Text>
+              </View>
+              <View style={styles.smartInputBody}>
+                <Ionicons name="calendar-outline" size={14} color="#9A3412" style={{ marginRight: 4 }} />
+                <Text style={styles.smartInputVal} numberOfLines={1}>{bookingDate}</Text>
+              </View>
+              <Text style={styles.smartInputHelper}>Choose your date</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* 3 Action Buttons Row: Find Pandits | Book in 30 Min | Book via WhatsApp */}
+          <View style={styles.smartActionsRow}>
+            {/* Action 1: Find Pandits (Primary Orange) */}
+            <TouchableOpacity
+              style={styles.findPanditsBtn}
+              activeOpacity={0.85}
+              onPress={onNavigateExplore}
+            >
+              <Ionicons name="search" size={15} color="#FFFFFF" />
+              <Text style={styles.findPanditsBtnText}>Find Pandits</Text>
+            </TouchableOpacity>
+
+            {/* Action 2: Book in 30 Min */}
+            <TouchableOpacity
+              style={styles.bookIn30Btn}
+              activeOpacity={0.85}
+              onPress={handleBookIn30Min}
+            >
+              <Ionicons name="flash" size={14} color="#EA580C" />
+              <Text style={styles.bookIn30BtnText}>Book in 30 Min</Text>
+            </TouchableOpacity>
+
+            {/* Action 3: Book via WhatsApp */}
+            <TouchableOpacity
+              style={styles.bookWhatsAppBtn}
+              activeOpacity={0.85}
+              onPress={openWhatsAppCoordinator}
+            >
+              <Ionicons name="logo-whatsapp" size={15} color="#16A34A" />
+              <Text style={styles.bookWhatsAppBtnText}>WhatsApp</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ------------------------------------------------------------- */}
+        {/* EXACT REFERENCE IMAGE 2: POPULAR SERVICES & CITIES */}
+        {/* ------------------------------------------------------------- */}
+        <View style={styles.popularServicesContainer}>
+          <View style={styles.popularTitleBadgeWrapper}>
+            <Text style={styles.popularTitleBadge}>✦ Popular Services / लोकप्रिय पूजा सेवा ✦</Text>
+          </View>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.popularServicesScroll}
+          >
+            {POPULAR_SERVICES.map((srv) => (
+              <TouchableOpacity
+                key={srv.id}
+                style={styles.popularServiceItem}
+                activeOpacity={0.8}
+                onPress={() => onNavigateCategory(srv.category)}
+              >
+                <View style={styles.popularIconCircle}>
+                  <Ionicons name={srv.iconName as any} size={24} color="#D97706" />
+                </View>
+                <Text style={styles.popularServiceName} numberOfLines={1}>{srv.name}</Text>
+                <Text style={styles.popularServiceDevanagari}>{srv.devanagariName}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Action Pills Row: Pooja Packages & View All Services */}
+          <View style={styles.servicePillsRow}>
+            <TouchableOpacity
+              style={styles.packagePill}
+              activeOpacity={0.8}
+              onPress={onNavigateStore}
+            >
+              <Ionicons name="gift-outline" size={13} color="#78350F" />
+              <Text style={styles.packagePillText}>Pooja Packages</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.viewAllPill}
+              activeOpacity={0.8}
+              onPress={onNavigateExplore}
+            >
+              <Text style={styles.viewAllPillText}>View All Services</Text>
+              <Ionicons name="chevron-forward" size={13} color="#9A3412" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Popular Cities Quick Scroll */}
+          <View style={styles.citiesScrollWrapper}>
+            <View style={styles.citiesBadgeLabel}>
+              <Text style={styles.citiesBadgeText}>Cities</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.citiesScroll}>
+              {PILGRIMAGE_CITIES.map((c, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={[styles.cityChip, c === selectedCity && styles.cityChipActive]}
+                  onPress={onSelectCity}
+                >
+                  <Text style={[styles.cityChipText, c === selectedCity && styles.cityChipTextActive]}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+
+        {/* ------------------------------------------------------------- */}
+        {/* EXACT REFERENCE IMAGE 1: NEXT 30 DAYS PANCHANG & MUHURAT */}
+        {/* ------------------------------------------------------------- */}
+        <View style={styles.panchangSection}>
+          <Text style={styles.panchangSubtitle}>
+            Personalized recommendations based on today&apos;s Panchang.
+          </Text>
+          <View style={styles.panchangHeaderRow}>
+            <View>
+              <Text style={styles.panchangTitle}>पुढील ३० दिवसांचे शुभ मुहूर्त व पंचांग</Text>
+              <Text style={styles.panchangEnTitle}>Upcoming 30 Days Sacred Muhurats & Pujas</Text>
+            </View>
+            <TouchableOpacity onPress={() => onNavigateCategory('Regular Puja')}>
+              <Text style={styles.panchangViewAll}>सर्व पहा &gt;</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Horizontal Panchang Cards with Exact Circular Action Buttons */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.panchangScroll}
+          >
+            {NEXT_30_DAYS_PANCHANG.map((item) => {
+              const isRecommended = item.badgeType === 'recommended';
+              const isToday = item.badgeType === 'today';
+              const isTomorrow = item.badgeType === 'tomorrow';
+
+              return (
+                <View key={item.id} style={styles.panchangCard}>
+                  {/* Top Circular Sacred Icon */}
+                  <View style={styles.panchangIconCircle}>
+                    {item.icon === 'kalash' && <Ionicons name="wine" size={28} color="#D97706" />}
+                    {item.icon === 'diya' && <Ionicons name="flame" size={28} color="#EA580C" />}
+                    {item.icon === 'calendar' && <Ionicons name="calendar" size={26} color="#B45309" />}
+                    {item.icon === 'lotus' && <Ionicons name="flower" size={28} color="#DB2777" />}
+                    {item.icon === 'ganesh' && <Ionicons name="sparkles" size={28} color="#EAB308" />}
+                  </View>
+
+                  {/* Card Title & Devanagari */}
+                  <Text style={styles.panchangCardTitle} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.panchangCardDevanagari}>{item.devanagariName}</Text>
+
+                  {/* Description */}
+                  <Text style={styles.panchangCardDesc} numberOfLines={2}>{item.description}</Text>
+
+                  {/* Bottom Auspicious Badge */}
+                  <View
+                    style={[
+                      styles.panchangBadge,
+                      isRecommended && styles.panchangBadgeRecommended,
+                      isToday && styles.panchangBadgeToday,
+                      isTomorrow && styles.panchangBadgeTomorrow,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.panchangBadgeText,
+                        isRecommended && styles.panchangBadgeTextRecommended,
+                        isToday && styles.panchangBadgeTextToday,
+                        isTomorrow && styles.panchangBadgeTextTomorrow,
+                      ]}
+                    >
+                      {item.badge}
+                    </Text>
+                  </View>
+
+                  {/* Circular Orange Arrow Action Button as in Screenshot 1 */}
+                  <TouchableOpacity
+                    style={styles.panchangCircleBtn}
+                    activeOpacity={0.85}
+                    onPress={() => handlePanchangItemPress(item)}
+                  >
+                    <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* ------------------------------------------------------------- */}
+        {/* EXACT REFERENCE IMAGE: BHAGAVAD GITA SACRED SHLOKA BANNER */}
+        {/* ------------------------------------------------------------- */}
+        <View style={styles.gitaShlokaBanner}>
+          <Text style={styles.gitaShlokaText}>
+            पत्रं पुष्पं फलं तोयं यो मे भक्त्या प्रयच्छति।
+          </Text>
+          <Text style={styles.gitaShlokaTranslation}>
+            &ldquo;The Divine accepts even the simplest offering when it is made with true devotion.&rdquo;
+          </Text>
+          <Text style={styles.gitaShlokaAuthor}>— Bhagavad Gita (9.26)</Text>
+        </View>
+
+        {/* ------------------------------------------------------------- */}
+        {/* SAMAGRAN-INSPIRED INNOVATION: ALL-IN-ONE PUJA KITS & E-PUJA */}
+        {/* ------------------------------------------------------------- */}
+        <View style={styles.samagranSection}>
+          <View style={styles.samagranHeader}>
+            <View>
+              <Text style={styles.samagranBadge}>✦ Samagran Vedic Excellence ✦</Text>
+              <Text style={styles.samagranTitle}>पवित्र पूजा किट्स आणि थेट ई-पूजा</Text>
+              <Text style={styles.samagranSubtitle}>Curated 100% Sattvic Kits &amp; Live Video Sankalp</Text>
+            </View>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.samagranScroll}>
+            {/* Kit 1 */}
+            <TouchableOpacity style={styles.samagranCard} activeOpacity={0.85} onPress={onNavigateExplore}>
+              <View style={[styles.samagranIconBox, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="basket-outline" size={24} color="#D97706" />
+              </View>
+              <Text style={styles.samagranCardTitle}>संपूर्ण पूजा किट पेटी</Text>
+              <Text style={styles.samagranCardSub}>Satyanarayan 54-Item Box</Text>
+              <Text style={styles.samagranCardDesc}>शुद्ध देशी गायीचे तूप, अक्षता, गंगाजळ, धूप व समिधा पेटी</Text>
+              <View style={styles.samagranCardAction}>
+                <Text style={styles.samagranActionText}>ऑर्डर करा &gt;</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Kit 2 */}
+            <TouchableOpacity style={styles.samagranCard} activeOpacity={0.85} onPress={() => handlePujaCardPress(SPEEDY_PUJA_CATALOG[0])}>
+              <View style={[styles.samagranIconBox, { backgroundColor: '#FFEDD5' }]}>
+                <Ionicons name="videocam-outline" size={24} color="#EA580C" />
+              </View>
+              <Text style={styles.samagranCardTitle}>थेट व्हिडिओ ई-पूजा</Text>
+              <Text style={styles.samagranCardSub}>Live NRI &amp; Outstation Sankalp</Text>
+              <Text style={styles.samagranCardDesc}>घरबसल्या HD लाईव्ह व्हिडिओवर वैयक्तिक गोत्र संकल्प व प्रसाद</Text>
+              <View style={styles.samagranCardAction}>
+                <Text style={styles.samagranActionText}>बुक करा &gt;</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Kit 3 */}
+            <TouchableOpacity style={styles.samagranCard} activeOpacity={0.85} onPress={openWhatsAppCoordinator}>
+              <View style={[styles.samagranIconBox, { backgroundColor: '#DCFCE7' }]}>
+                <Ionicons name="document-text-outline" size={24} color="#16A34A" />
+              </View>
+              <Text style={styles.samagranCardTitle}>सामग्री यादी (Checklist)</Text>
+              <Text style={styles.samagranCardSub}>Free WhatsApp PDF List</Text>
+              <Text style={styles.samagranCardDesc}>गुरुजी काय आणणार आणि यजमानांनी काय तयार ठेवायचे</Text>
+              <View style={styles.samagranCardAction}>
+                <Text style={styles.samagranActionText}>यादी मिळवा &gt;</Text>
+              </View>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
 
         {/* 3 Quick Category Chips - Speedy Pandit Style */}
@@ -1388,5 +1729,520 @@ const styles = StyleSheet.create({
     color: '#9E8E84',
     textAlign: 'center',
     marginTop: 4,
+  },
+  // -------------------------------------------------------------
+  // SMART BOOKING BOX (IMAGE 2)
+  // -------------------------------------------------------------
+  smartBookingBox: {
+    marginHorizontal: 14,
+    marginTop: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    shadowColor: '#EA580C',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  smartInputsGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  smartInputCol: {
+    flex: 1,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+    borderRadius: 10,
+    padding: 8,
+  },
+  smartInputHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  smartInputLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#9A3412',
+  },
+  smartInputBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  smartInputVal: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#431407',
+    flex: 1,
+  },
+  smartInputHelper: {
+    fontSize: 9,
+    color: '#C2410C',
+    fontWeight: '600',
+  },
+  smartActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  findPanditsBtn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EA580C',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+    shadowColor: '#EA580C',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  findPanditsBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  bookIn30Btn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#EA580C',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 5,
+  },
+  bookIn30BtnText: {
+    color: '#EA580C',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  bookWhatsAppBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#16A34A',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 4,
+  },
+  bookWhatsAppBtnText: {
+    color: '#16A34A',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  // -------------------------------------------------------------
+  // POPULAR SERVICES (IMAGE 2)
+  // -------------------------------------------------------------
+  popularServicesContainer: {
+    marginTop: 14,
+    marginHorizontal: 14,
+  },
+  popularTitleBadgeWrapper: {
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  popularTitleBadge: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#9A3412',
+    letterSpacing: 0.5,
+  },
+  popularServicesScroll: {
+    paddingRight: 10,
+    gap: 10,
+  },
+  popularServiceItem: {
+    width: 108,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  popularIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  popularServiceName: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 1,
+  },
+  popularServiceDevanagari: {
+    fontSize: 9.5,
+    color: '#9A3412',
+    textAlign: 'center',
+  },
+  servicePillsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 10,
+  },
+  packagePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 5,
+  },
+  packagePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  viewAllPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEDD5',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 3,
+  },
+  viewAllPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9A3412',
+  },
+
+  // Cities Quick Scroll
+  citiesScrollWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+  },
+  citiesBadgeLabel: {
+    backgroundColor: '#EA580C',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginRight: 6,
+  },
+  citiesBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  citiesScroll: {
+    gap: 6,
+  },
+  cityChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  cityChipActive: {
+    backgroundColor: '#EA580C',
+    borderColor: '#EA580C',
+  },
+  cityChipText: {
+    fontSize: 10.5,
+    color: '#7C2D12',
+    fontWeight: '600',
+  },
+  cityChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+
+  // -------------------------------------------------------------
+  // NEXT 30 DAYS PANCHANG (IMAGE 1)
+  // -------------------------------------------------------------
+  panchangSection: {
+    marginTop: 20,
+    marginHorizontal: 14,
+  },
+  panchangSubtitle: {
+    fontSize: 11,
+    color: '#9A3412',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  panchangHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  panchangTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  panchangEnTitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  panchangViewAll: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EA580C',
+  },
+  panchangScroll: {
+    paddingRight: 10,
+    gap: 12,
+    paddingBottom: 6,
+  },
+  panchangCard: {
+    width: 154,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    shadowColor: '#EA580C',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+    position: 'relative',
+  },
+  panchangIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  panchangCardTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  panchangCardDevanagari: {
+    fontSize: 10,
+    color: '#9A3412',
+    textAlign: 'center',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  panchangCardDesc: {
+    fontSize: 9.5,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 14,
+    marginBottom: 10,
+    minHeight: 28,
+  },
+  panchangBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  panchangBadgeRecommended: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  panchangBadgeToday: {
+    backgroundColor: '#FFEDD5',
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+  },
+  panchangBadgeTomorrow: {
+    backgroundColor: '#FFEDD5',
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+  },
+  panchangBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  panchangBadgeTextRecommended: {
+    color: '#D97706',
+  },
+  panchangBadgeTextToday: {
+    color: '#EA580C',
+  },
+  panchangBadgeTextTomorrow: {
+    color: '#EA580C',
+  },
+  panchangCircleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EA580C',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#EA580C',
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  gitaShlokaBanner: {
+    backgroundColor: '#2B0F13',
+    marginHorizontal: 16,
+    marginTop: 18,
+    marginBottom: 8,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#D4AF37',
+    alignItems: 'center',
+    shadowColor: '#2B0F13',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  gitaShlokaText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFF8E7',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    lineHeight: 24,
+  },
+  gitaShlokaTranslation: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    color: '#FEF3C7',
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: 18,
+  },
+  gitaShlokaAuthor: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#FBBF24',
+    letterSpacing: 1,
+    marginTop: 6,
+    textTransform: 'uppercase',
+  },
+  samagranSection: {
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  samagranHeader: {
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  samagranBadge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#EA580C',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  samagranTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  samagranSubtitle: {
+    fontSize: 11,
+    color: '#78716C',
+    marginTop: 1,
+  },
+  samagranScroll: {
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    gap: 12,
+  },
+  samagranCard: {
+    width: 200,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#F3E8E2',
+    shadowColor: '#5C4A42',
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    elevation: 2,
+    justifyContent: 'space-between',
+  },
+  samagranIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  samagranCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  samagranCardSub: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#D97706',
+    marginTop: 1,
+  },
+  samagranCardDesc: {
+    fontSize: 10,
+    color: '#5C4A42',
+    lineHeight: 14,
+    marginTop: 4,
+  },
+  samagranCardAction: {
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F5ECE5',
+    alignItems: 'flex-end',
+  },
+  samagranActionText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.primary,
   },
 });

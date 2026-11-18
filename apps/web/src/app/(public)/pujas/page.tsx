@@ -131,7 +131,7 @@ export default function PujasPage() {
                 <div className="pt-3 border-t border-beige flex items-center justify-between">
                   <div>
                     <span className="text-[10px] uppercase font-bold text-brown/50 block">Dakshina</span>
-                    <p className="text-sm font-bold text-maroon">₹{puja.startingDakshina.toLocaleString('en-IN')}</p>
+                    <p className="text-sm font-bold text-maroon">{puja.startingPriceNotice || '₹2,100/-'}</p>
                   </div>
 
                   <div className="flex items-center gap-2">

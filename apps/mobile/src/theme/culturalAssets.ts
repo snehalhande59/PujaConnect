@@ -270,27 +270,203 @@ export interface NotificationItem {
 export const NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'notif-1',
-    title: 'पुजाकनेक्ट परिवारात आपले सहर्ष स्वागत! आपल्या पहिल्या पूजेवर ₹३०० पूजा मुद्रा जमा करण्यात आल्या आहेत.',
-    date: '2026-11-18',
+    title: 'श्री सत्यनारायण पूजेचे बुकिंग यशस्वीरीत्या स्वीकारले गेले आहे. अधिकृत पुरोहित आपल्याशी लवकरच संपर्क करतील.',
+    date: '18 Nov 2026',
   },
   {
     id: 'notif-2',
-    title: 'शुभ मार्गशीर्ष मास: घरात सुख-शांतीसाठी महालक्ष्मी व सत्यनारायण पूजेचे शुभ मुहूर्त उपलब्ध आहेत.',
-    date: '2026-11-17',
+    title: 'आगामी कार्तिक एकादशी व तुलसी विवाह मुहूर्तासाठी पंडितजींचे पूर्व-बुकिंग सुरू झाले आहे.',
+    date: '17 Nov 2026',
   },
   {
     id: 'notif-3',
-    title: 'मोफत जन्म पत्रिका: आपली जन्म कुंडली तपासा, रास, नक्षत्र व मांगलिक दोषाचे विश्लेषण पहा.',
-    date: '2026-11-16',
+    title: 'नवीन वास्तु शांति व गृहप्रवेश विधी पॅकेज उपलब्ध — १००% शुद्ध हवन साहित्य आणि होम डिलिव्हरीसह.',
+    date: '15 Nov 2026',
   },
   {
     id: 'notif-4',
-    title: 'गुरुकुल प्रमाणित पुरोहित: आपल्या शहरात अनुभवी व वैदिक पंडितांची सेवा उपलब्ध आहे.',
-    date: '2026-11-14',
-  },
-  {
-    id: 'notif-5',
-    title: '१००% शुद्ध पूजा सामग्री: होम-हवन आणि पूजेसाठी आवश्यक सर्व पवित्र वस्तू घरपोच उपलब्ध.',
-    date: '2026-11-10',
+    title: 'आपल्या खात्यात ३०० स्पीड मुद्रा (₹३०० डिस्काउंट) जमा झाले आहेत.',
+    date: '14 Nov 2026',
   },
 ];
+
+export interface PanchangMuhuratItem {
+  id: string;
+  name: string;
+  devanagariName: string;
+  dateStr: string;
+  badge: string;
+  badgeType: 'recommended' | 'today' | 'tomorrow' | 'date';
+  icon: 'kalash' | 'diya' | 'calendar' | 'om' | 'lotus' | 'ganesh';
+  description: string;
+  pujaId: string;
+}
+
+export const NEXT_30_DAYS_PANCHANG: PanchangMuhuratItem[] = [
+  {
+    id: 'panchang-1',
+    name: 'Satyanarayana Puja',
+    devanagariName: 'सत्यनारायण महापूजा',
+    dateStr: 'शुभ मुहूर्त',
+    badge: '★ Recommended',
+    badgeType: 'recommended',
+    icon: 'kalash',
+    description: 'Popular family pooja for prosperity, peace & family harmony.',
+    pujaId: 'satyanarayan',
+  },
+  {
+    id: 'panchang-2',
+    name: 'Shukla Ashtami',
+    devanagariName: 'शुक्ल अष्टमी (दुर्गाष्टमी)',
+    dateStr: '18 Nov',
+    badge: 'Today • 18 Nov',
+    badgeType: 'today',
+    icon: 'diya',
+    description: 'Ashtami — monthly auspicious day; often dedicated to Maa Durga & Shiva.',
+    pujaId: 'rudrabhishek',
+  },
+  {
+    id: 'panchang-3',
+    name: 'Shukla Navami',
+    devanagariName: 'अक्षय आवळा नवमी',
+    dateStr: '19 Nov',
+    badge: 'Tomorrow • 19 Nov',
+    badgeType: 'tomorrow',
+    icon: 'calendar',
+    description: 'Navami — sacred ninth lunar day; many honor Lord Vishnu and nature.',
+    pujaId: 'satyanarayan',
+  },
+  {
+    id: 'panchang-4',
+    name: 'Karthika Ekadashi',
+    devanagariName: 'कार्तिक प्रबोधिनी एकादशी',
+    dateStr: '20 Nov',
+    badge: '20 Nov',
+    badgeType: 'date',
+    icon: 'calendar',
+    description: 'Prabodhini Ekadashi — awakening of Lord Vishnu, ending of Chaturmas.',
+    pujaId: 'lakshmi-puja',
+  },
+  {
+    id: 'panchang-5',
+    name: 'Shukla Ekadashi / Tulsi Vivah',
+    devanagariName: 'तुलसी विवाह प्रारंभ',
+    dateStr: '21 Nov',
+    badge: '21 Nov',
+    badgeType: 'date',
+    icon: 'calendar',
+    description: 'Ekadashi / Dwadashi — auspicious wedding of Tulsi Mata & Shaligram.',
+    pujaId: 'satyanarayan',
+  },
+  {
+    id: 'panchang-6',
+    name: 'Karthika Pradosham',
+    devanagariName: 'कार्तिक सोम/शनि प्रदोष',
+    dateStr: '22 Nov',
+    badge: '22 Nov',
+    badgeType: 'date',
+    icon: 'calendar',
+    description: 'Pradosh Vrat — dusk worship of Lord Shiva for peace and liberation.',
+    pujaId: 'rudrabhishek',
+  },
+  {
+    id: 'panchang-7',
+    name: 'Vaikuntha Chaturdashi',
+    devanagariName: 'वैकुंठ चतुर्दशी (हरि-हर)',
+    dateStr: '23 Nov',
+    badge: '23 Nov',
+    badgeType: 'date',
+    icon: 'diya',
+    description: 'Sacred midnight worship uniting Lord Shiva and Lord Vishnu.',
+    pujaId: 'rudrabhishek',
+  },
+  {
+    id: 'panchang-8',
+    name: 'Tripurari Purnima',
+    devanagariName: 'त्रिपुरारी पौर्णिमा (देव दिवाळी)',
+    dateStr: '24 Nov',
+    badge: '24 Nov',
+    badgeType: 'date',
+    icon: 'diya',
+    description: 'Dev Diwali — lighting 365 wicks & sacred deepotsav at temples.',
+    pujaId: 'satyanarayan',
+  },
+  {
+    id: 'panchang-9',
+    name: 'Margashirsha Guruvar',
+    devanagariName: 'मार्गशीर्ष महालक्ष्मी गुरुवार',
+    dateStr: '26 Nov',
+    badge: '26 Nov',
+    badgeType: 'date',
+    icon: 'lotus',
+    description: 'Mahalakshmi Vrat first Thursday for boundless wealth & harmony.',
+    pujaId: 'lakshmi-puja',
+  },
+  {
+    id: 'panchang-10',
+    name: 'Sankashti Chaturthi',
+    devanagariName: 'संकष्ट हर चतुर्थी व्रत',
+    dateStr: '28 Nov',
+    badge: '28 Nov',
+    badgeType: 'date',
+    icon: 'ganesh',
+    description: 'Monthly sacred Ganesh fast with evening moonrise arghya.',
+    pujaId: 'ganpati-hawan',
+  },
+  {
+    id: 'panchang-11',
+    name: 'Kalbhairav Jayanti',
+    devanagariName: 'कालभैरव अष्टमी जयंती',
+    dateStr: '02 Dec',
+    badge: '02 Dec',
+    badgeType: 'date',
+    icon: 'calendar',
+    description: 'Fierce avatar of Lord Shiva for complete protection from obstacles.',
+    pujaId: 'rudrabhishek',
+  },
+  {
+    id: 'panchang-12',
+    name: 'Utpanna Ekadashi',
+    devanagariName: 'उत्पन्ना एकादशी व्रत',
+    dateStr: '05 Dec',
+    badge: '05 Dec',
+    badgeType: 'date',
+    icon: 'calendar',
+    description: 'Birth of Goddess Ekadashi; divine protection of Lord Vishnu.',
+    pujaId: 'satyanarayan',
+  },
+  {
+    id: 'panchang-13',
+    name: 'Mokshada Ekadashi / Gita Jayanti',
+    devanagariName: 'मोक्षदा एकादशी • गीता जयंती',
+    dateStr: '19 Dec',
+    badge: '19 Dec',
+    badgeType: 'date',
+    icon: 'calendar',
+    description: 'Anniversary of Srimad Bhagavad Gita sermon by Lord Krishna.',
+    pujaId: 'satyanarayan',
+  },
+];
+
+export interface PopularServiceItem {
+  id: string;
+  name: string;
+  devanagariName: string;
+  iconName: string;
+  category: string;
+}
+
+export const POPULAR_SERVICES: PopularServiceItem[] = [
+  { id: 'griha-pravesh', name: 'Griha Pravesh', devanagariName: 'गृहप्रवेश पूजन', iconName: 'home-outline', category: 'Regular Puja' },
+  { id: 'marriage-puja', name: 'Wedding Ceremony', devanagariName: 'विवाह संस्कार', iconName: 'heart-outline', category: 'Sanskar' },
+  { id: 'satyanarayan', name: 'Satyanarayan Puja', devanagariName: 'सत्यनारायण पूजा', iconName: 'flame-outline', category: 'Regular Puja' },
+  { id: 'rudrabhishek', name: 'Rudrabhishek', devanagariName: 'रुद्राभिषेक', iconName: 'water-outline', category: 'Regular Puja' },
+  { id: 'ganpati-hawan', name: 'Ganesh Puja', devanagariName: 'गणेश हवन', iconName: 'sparkles-outline', category: 'All Hawan' },
+  { id: 'lakshmi-puja', name: 'Lakshmi Pooja', devanagariName: 'महालक्ष्मी पूजन', iconName: 'flower-outline', category: 'Festive Puja' },
+];
+
+export const PILGRIMAGE_CITIES = [
+  'Pune', 'Mumbai', 'Nashik', 'Varanasi', 'Ujjain', 'Mathura',
+  'Ayodhya', 'Haridwar', 'Puri', 'Rameswaram', 'Gangotri', 'Deoghar', 'Bengaluru'
+];
+
