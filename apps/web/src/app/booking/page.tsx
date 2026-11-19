@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import Navbar from '@/components/navbar/Navbar';
@@ -23,19 +24,65 @@ import {
   UserCheck,
 } from 'lucide-react';
 
-export default function BookingPage() {
+function BookingContent() {
+  const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(1);
 
   // Booking Form State
   const [selectedPujaSlug, setSelectedPujaSlug] = useState('griha-pravesh-puja');
-  const [pujaDate, setPujaDate] = useState('2026-11-28');
+  const [calMonthIndex, setCalMonthIndex] = useState<0 | 1>(0); // 0: Nov 2026, 1: Dec 2026
+  const [selectedDay, setSelectedDay] = useState(20);
+  const [pujaDate, setPujaDate] = useState('2026-11-20');
   const [timeSlot, setTimeSlot] = useState('09:30 AM (Shubh Choghadiya)');
+
+  // Initialize from searchParams
+  useEffect(() => {
+    const serviceParam = searchParams.get('service') || searchParams.get('puja') || searchParams.get('slug');
+    if (serviceParam) {
+      const match = POPULAR_PUJA_CATEGORIES_DATA.find(p => p.slug === serviceParam || p.name.toLowerCase().includes(serviceParam.toLowerCase()));
+      if (match) setSelectedPujaSlug(match.slug);
+    }
+    const cityParam = searchParams.get('city');
+    if (cityParam) setCity(cityParam);
+    const dateParam = searchParams.get('date');
+    if (dateParam && dateParam.includes('-')) {
+      setPujaDate(dateParam);
+      const parts = dateParam.split('-');
+      if (parts.length === 3) {
+        const d = parseInt(parts[2], 10);
+        if (!isNaN(d)) setSelectedDay(d);
+        if (parts[1] === '12') setCalMonthIndex(1);
+        else setCalMonthIndex(0);
+      }
+    }
+  }, [searchParams]);
+
+  // Custom Time AM/PM State
+  const [useCustomTime, setUseCustomTime] = useState(false);
+  const [customHour, setCustomHour] = useState('09');
+  const [customMinute, setCustomMinute] = useState('30');
+  const [customAmPm, setCustomAmPm] = useState<'AM' | 'PM'>('AM');
+
   const [addressLine, setAddressLine] = useState('Flat 402, Lotus Residency, Sector 62');
-  const [city, setCity] = useState('Delhi NCR');
-  const [pincode, setPincode] = useState('201301');
+  const [city, setCity] = useState('Pune');
+  const [pincode, setPincode] = useState('411005');
   const [selectedPanditId, setSelectedPanditId] = useState('pandit-1');
   const [includeSamagri, setIncludeSamagri] = useState(true);
   const [specialInstructions, setSpecialInstructions] = useState('');
+
+  const handleSelectDay = (day: number) => {
+    setSelectedDay(day);
+    const mStr = calMonthIndex === 0 ? '11' : '12';
+    const dStr = day < 10 ? `0${day}` : `${day}`;
+    setPujaDate(`2026-${mStr}-${dStr}`);
+  };
+
+  const handleApplyCustomTime = (h: string, m: string, ampm: 'AM' | 'PM') => {
+    setCustomHour(h);
+    setCustomMinute(m);
+    setCustomAmPm(ampm);
+    setTimeSlot(`${h}:${m} ${ampm} (Custom Devotee Muhurat)`);
+  };
 
   const selectedPuja =
     POPULAR_PUJA_CATEGORIES_DATA.find((p) => p.slug === selectedPujaSlug) ||
@@ -173,7 +220,7 @@ export default function BookingPage() {
                 </div>
               )}
 
-              {/* STEP 2: SELECT DATE & TIME */}
+              {/* STEP 2: INTERACTIVE VEDIC CALENDAR & AM/PM TIME SELECTOR */}
               {currentStep === 2 && (
                 <div className="space-y-6">
                   <div>
@@ -182,50 +229,262 @@ export default function BookingPage() {
                       Step 2: Select Auspicious Date & Muhurat
                     </h3>
                     <p className="text-xs text-brown/70 mt-1">
-                      Choose an auspicious day and shubh choghadiya for maximum spiritual merit.
+                      Choose an auspicious day from the Shastric calendar and pick preferred Choghadiya or custom AM/PM timing.
                     </p>
                   </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-brown mb-1.5">
-                        Puja Ceremony Date
-                      </label>
-                      <input
-                        type="date"
-                        value={pujaDate}
-                        onChange={(e) => setPujaDate(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl border border-beige bg-ivory text-xs text-brown font-sans focus:outline-none focus:ring-2 focus:ring-maroon"
-                      />
+                  {/* Auspicious Selected Banner */}
+                  <div className="p-4 bg-amber-50 rounded-2xl border border-amber-300 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-maroon">
+                        <Calendar className="w-5 h-5 text-amber-700" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wide">Selected Sacred Muhurat</p>
+                        <p className="text-sm font-bold text-maroon">{pujaDate} • {timeSlot}</p>
+                      </div>
+                    </div>
+                    <span className="px-3 py-1 rounded-full bg-maroon text-ivory text-xs font-bold">
+                      शुभ मुहूर्त
+                    </span>
+                  </div>
+
+                  {/* Interactive Month & Calendar Grid */}
+                  <div className="p-5 bg-white rounded-2xl border border-beige shadow-sm space-y-4">
+                    {/* Month Header Navigation */}
+                    <div className="flex items-center justify-between pb-3 border-b border-beige">
+                      <button
+                        type="button"
+                        onClick={() => setCalMonthIndex(0)}
+                        disabled={calMonthIndex === 0}
+                        className={`p-2 rounded-lg border border-beige hover:border-gold text-brown text-xs transition ${calMonthIndex === 0 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-ivory'}`}
+                      >
+                        ← Previous
+                      </button>
+                      <h4 className="font-heading font-bold text-base text-brown">
+                        {calMonthIndex === 0 ? '2026 November' : '2026 December'}
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setCalMonthIndex(1)}
+                        disabled={calMonthIndex === 1}
+                        className={`p-2 rounded-lg border border-beige hover:border-gold text-brown text-xs transition ${calMonthIndex === 1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-ivory'}`}
+                      >
+                        Next →
+                      </button>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-brown mb-1.5">
-                        Preferred Muhurat Timing Slot
-                      </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Day Names Row */}
+                    <div className="grid grid-cols-7 gap-1 text-center">
+                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+                        <span key={d} className="text-xs font-bold text-brown/60 py-1">
+                          {d}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Calendar Days Grid */}
+                    <div className="space-y-1.5">
+                      {(calMonthIndex === 0
+                        ? [
+                            [null, null, null, null, null, null, 1],
+                            [2, 3, 4, 5, 6, 7, 8],
+                            [9, 10, 11, 12, 13, 14, 15],
+                            [16, 17, 18, 19, 20, 21, 22],
+                            [23, 24, 25, 26, 27, 28, 29],
+                            [30, null, null, null, null, null, null],
+                          ]
+                        : [
+                            [null, 1, 2, 3, 4, 5, 6],
+                            [7, 8, 9, 10, 11, 12, 13],
+                            [14, 15, 16, 17, 18, 19, 20],
+                            [21, 22, 23, 24, 25, 26, 27],
+                            [28, 29, 30, 31, null, null, null],
+                          ]
+                      ).map((week, wIdx) => (
+                        <div key={`w-${wIdx}`} className="grid grid-cols-7 gap-1 text-center">
+                          {week.map((day, dIdx) => {
+                            if (day === null) {
+                              return <div key={`empty-${dIdx}`} className="h-10" />;
+                            }
+
+                            const isMuhurat = (calMonthIndex === 0
+                              ? [5, 8, 12, 18, 19, 20, 21, 23, 24, 26, 28]
+                              : [2, 5, 9, 11, 15, 19, 23, 27, 30]
+                            ).includes(day);
+                            const isSelected = selectedDay === day;
+                            const isToday = calMonthIndex === 0 && day === 19;
+
+                            return (
+                              <button
+                                type="button"
+                                key={`d-${day}`}
+                                onClick={() => handleSelectDay(day)}
+                                className={`h-10 rounded-xl relative flex items-center justify-center text-xs font-semibold transition ${
+                                  isSelected
+                                    ? 'bg-maroon text-ivory font-bold shadow-md scale-105'
+                                    : isToday
+                                    ? 'border-2 border-amber-600 text-amber-900 bg-amber-50/50'
+                                    : isMuhurat
+                                    ? 'hover:bg-amber-100/60 text-emerald-800 font-bold'
+                                    : 'hover:bg-ivory text-brown'
+                                }`}
+                              >
+                                <span>{day}</span>
+                                {isMuhurat && (
+                                  <span
+                                    className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${
+                                      isSelected ? 'bg-white' : 'bg-emerald-600'
+                                    }`}
+                                  />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-center gap-6 pt-2 text-[11px] text-brown/60 border-t border-beige">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" /> Auspicious Muhurat Day
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-amber-600 inline-block" /> Today
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Time Selector */}
+                  <div className="p-5 bg-white rounded-2xl border border-beige shadow-sm space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-heading font-bold text-sm text-brown">Preferred Timing & Muhurat</h4>
+                        <p className="text-[11px] text-brown/60">Choose a Vedic Choghadiya or customize exact AM/PM time</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setUseCustomTime(!useCustomTime)}
+                        className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 ${
+                          useCustomTime
+                            ? 'bg-maroon text-ivory border-maroon'
+                            : 'bg-ivory text-maroon border-gold hover:bg-gold/15'
+                        }`}
+                      >
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>{useCustomTime ? 'Vedic Choghadiya Presets' : 'Custom AM / PM Picker'}</span>
+                      </button>
+                    </div>
+
+                    {useCustomTime ? (
+                      /* Custom AM/PM Picker */
+                      <div className="p-4 bg-ivory rounded-xl border border-beige space-y-3">
+                        <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-beige">
+                          <span className="text-2xl font-mono font-bold text-maroon tracking-wider">
+                            {customHour}:{customMinute}
+                          </span>
+                          <div className="flex gap-1 bg-ivory p-1 rounded-lg border border-beige">
+                            <button
+                              type="button"
+                              onClick={() => handleApplyCustomTime(customHour, customMinute, 'AM')}
+                              className={`px-3 py-1 rounded text-xs font-bold transition ${
+                                customAmPm === 'AM' ? 'bg-maroon text-ivory' : 'text-brown hover:bg-beige'
+                              }`}
+                            >
+                              AM
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyCustomTime(customHour, customMinute, 'PM')}
+                              className={`px-3 py-1 rounded text-xs font-bold transition ${
+                                customAmPm === 'PM' ? 'bg-maroon text-ivory' : 'text-brown hover:bg-beige'
+                              }`}
+                            >
+                              PM
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[11px] font-semibold text-brown/80 block mb-1.5">Select Hour (तास):</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {['06', '07', '08', '09', '10', '11', '12', '01', '02', '03', '04', '05', '06', '07', '08'].map((h) => (
+                              <button
+                                type="button"
+                                key={`h-${h}`}
+                                onClick={() => handleApplyCustomTime(h, customMinute, customAmPm)}
+                                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                                  customHour === h
+                                    ? 'bg-maroon text-ivory'
+                                    : 'bg-white border border-beige hover:border-gold text-brown'
+                                }`}
+                              >
+                                {h}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[11px] font-semibold text-brown/80 block mb-1.5">Select Minute (मिनिटे):</span>
+                          <div className="flex gap-2">
+                            {['00', '15', '30', '45'].map((m) => (
+                              <button
+                                type="button"
+                                key={`m-${m}`}
+                                onClick={() => handleApplyCustomTime(customHour, m, customAmPm)}
+                                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
+                                  customMinute === m
+                                    ? 'bg-maroon text-ivory'
+                                    : 'bg-white border border-beige hover:border-gold text-brown'
+                                }`}
+                              >
+                                :{m}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Vedic Choghadiya Presets */
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         {[
-                          '06:30 AM (Brahma Muhurat)',
-                          '09:30 AM (Shubh Choghadiya)',
-                          '04:00 PM (Pradosh Kaal)',
-                          '06:30 PM (Sandhya Aarti)',
-                        ].map((slot) => (
+                          { slot: '06:30 AM (Brahma Muhurat)', desc: 'Gayatri, Hawan & Anushthan' },
+                          { slot: '08:30 AM (Shubh Choghadiya)', desc: 'Satyanarayan & Griha Pravesh' },
+                          { slot: '10:00 AM (Amrit Muhurat)', desc: 'Supreme health & prosperity' },
+                          { slot: '11:45 AM (Abhijit Muhurat)', desc: 'Vishnu blessed supreme muhurat' },
+                          { slot: '02:30 PM (Labh Choghadiya)', desc: 'Commerce & wealth accumulation' },
+                          { slot: '05:30 PM (Sandhya Godhuli)', desc: 'Evening lamp & Kuldevi aradhana' },
+                          { slot: '07:15 PM (Pradosh Kaal)', desc: 'Shiva Rudrabhishek oblation' },
+                        ].map((item) => (
                           <button
                             type="button"
-                            key={slot}
-                            onClick={() => setTimeSlot(slot)}
-                            className={`p-3 rounded-xl text-left border text-xs transition ${
-                              timeSlot === slot
-                                ? 'border-maroon bg-beige/30 font-bold text-maroon'
-                                : 'border-beige hover:border-gold text-brown'
+                            key={item.slot}
+                            onClick={() => {
+                              setTimeSlot(item.slot);
+                              const [h, rest] = item.slot.split(':');
+                              const [m, ampm] = rest.split(' ');
+                              setCustomHour(h);
+                              setCustomMinute(m);
+                              setCustomAmPm(ampm as 'AM' | 'PM');
+                            }}
+                            className={`p-3 rounded-xl text-left border transition ${
+                              timeSlot.startsWith(item.slot.slice(0, 8))
+                                ? 'border-maroon bg-gold/15 font-bold text-maroon shadow-sm'
+                                : 'border-beige hover:border-gold/60 text-brown bg-ivory/40'
                             }`}
                           >
-                            <Clock className="w-3.5 h-3.5 text-gold-600 inline mr-1.5" />
-                            {slot}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-brown flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                {item.slot}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-brown/60 mt-1">{item.desc}</p>
                           </button>
                         ))}
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   <div className="pt-4 border-t border-beige flex justify-between">
@@ -641,5 +900,20 @@ export default function BookingPage() {
 
       <Footer />
     </div>
+  );
+}
+
+export default function BookingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-ivory text-maroon">
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 border-3 border-maroon border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="font-heading font-bold text-sm">॥ ॐ श्री गणेशाय नमः ॥ Loading Sacred Booking...</p>
+        </div>
+      </div>
+    }>
+      <BookingContent />
+    </Suspense>
   );
 }

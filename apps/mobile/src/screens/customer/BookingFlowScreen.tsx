@@ -30,11 +30,38 @@ interface BookingFlowScreenProps {
   onBookingSuccess: (booking: Booking) => void;
 }
 
-const TIME_SLOTS = [
-  { id: 'MORNING_0700', label: 'Pratah Kaal (07:00 AM - 10:00 AM)', time: '07:00 AM' },
-  { id: 'MIDDAY_1100', label: 'Madhyahan Kaal (11:00 AM - 02:00 PM)', time: '11:00 AM' },
-  { id: 'EVENING_1700', label: 'Sandhya Kaal (05:00 PM - 08:00 PM)', time: '05:00 PM' },
+const NOVEMBER_2026_WEEKS = [
+  { weekNum: 44, days: [null, null, null, null, null, null, 1] },
+  { weekNum: 45, days: [2, 3, 4, 5, 6, 7, 8] },
+  { weekNum: 46, days: [9, 10, 11, 12, 13, 14, 15] },
+  { weekNum: 47, days: [16, 17, 18, 19, 20, 21, 22] },
+  { weekNum: 48, days: [23, 24, 25, 26, 27, 28, 29] },
+  { weekNum: 49, days: [30, null, null, null, null, null, null] },
 ];
+
+const DECEMBER_2026_WEEKS = [
+  { weekNum: 49, days: [null, 1, 2, 3, 4, 5, 6] },
+  { weekNum: 50, days: [7, 8, 9, 10, 11, 12, 13] },
+  { weekNum: 51, days: [14, 15, 16, 17, 18, 19, 20] },
+  { weekNum: 52, days: [21, 22, 23, 24, 25, 26, 27] },
+  { weekNum: 53, days: [28, 29, 30, 31, null, null, null] },
+];
+
+const MUHURAT_DAYS_NOV = [5, 8, 12, 18, 19, 20, 21, 23, 24, 26, 28];
+const MUHURAT_DAYS_DEC = [2, 5, 9, 11, 15, 19, 23, 27, 30];
+
+const VEDIC_MUHURAT_SLOTS = [
+  { id: 'BRAHMA', label: 'Brahma Muhurat (06:00 AM - 07:30 AM)', time: '06:30 AM', desc: 'Brahma oblation, Hawan & Gayatri' },
+  { id: 'SHUBH_AM', label: 'Shubh Choghadiya (08:00 AM - 09:30 AM)', time: '08:30 AM', desc: 'Auspicious for Satyanarayan & Griha Pravesh' },
+  { id: 'AMRIT', label: 'Amrit Choghadiya (09:30 AM - 11:00 AM)', time: '10:00 AM', desc: 'Supreme health, peace & prosperity' },
+  { id: 'ABHIJIT', label: 'Abhijit Muhurat (11:45 AM - 12:35 PM)', time: '11:45 AM', desc: 'Lord Vishnu blessed most auspicious window' },
+  { id: 'LABH', label: 'Labh Choghadiya (02:00 PM - 03:30 PM)', time: '02:30 PM', desc: 'Business growth & Lakshmi sankalp' },
+  { id: 'GODHULI', label: 'Sandhya Godhuli (05:30 PM - 07:00 PM)', time: '05:30 PM', desc: 'Evening sacred lamp & kuldevi aradhana' },
+  { id: 'PRADOSH', label: 'Pradosh Kaal (07:15 PM - 08:45 PM)', time: '07:15 PM', desc: 'Shiva Rudrabhishek & Mahamrityunjaya' },
+];
+
+const QUICK_HOURS = ['06', '07', '08', '09', '10', '11', '12', '01', '02', '03', '04', '05', '06', '07', '08', '09'];
+const QUICK_MINUTES = ['00', '15', '30', '45'];
 
 const LANGUAGES = ['Hindi', 'Sanskrit', 'Marathi', 'Gujarati', 'Telugu', 'Tamil', 'English'];
 
@@ -82,11 +109,31 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
   const [availablePujas, setAvailablePujas] = useState<Puja[]>([]);
   const [availablePandits, setAvailablePandits] = useState<PanditProfile[]>([initialPandit || DEFAULT_VERIFIED_PANDIT]);
 
-  // Step 2: Date & Slot
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const [selectedDate, setSelectedDate] = useState<string>(tomorrow.toISOString().split('T')[0]);
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>(TIME_SLOTS[0].label);
+  // Step 2: Interactive Vedic Calendar & Time State
+  const [currentMonthIndex, setCurrentMonthIndex] = useState<0 | 1>(0); // 0: Nov 2026, 1: Dec 2026
+  const [selectedDay, setSelectedDay] = useState<number>(20);
+  const [selectedDate, setSelectedDate] = useState<string>('2026-11-20');
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('09:30 AM (Shubh Choghadiya)');
+
+  // Custom Time Selector State
+  const [useCustomTime, setUseCustomTime] = useState(false);
+  const [customHour, setCustomHour] = useState('09');
+  const [customMinute, setCustomMinute] = useState('30');
+  const [customAmPm, setCustomAmPm] = useState<'AM' | 'PM'>('AM');
+
+  const handleSelectCalendarDay = (day: number) => {
+    setSelectedDay(day);
+    const mStr = currentMonthIndex === 0 ? '11' : '12';
+    const dStr = day < 10 ? `0${day}` : `${day}`;
+    setSelectedDate(`2026-${mStr}-${dStr}`);
+  };
+
+  const handleApplyCustomTime = (h: string, m: string, ampm: 'AM' | 'PM') => {
+    setCustomHour(h);
+    setCustomMinute(m);
+    setCustomAmPm(ampm);
+    setSelectedTimeSlot(`${h}:${m} ${ampm} (Custom Devotee Muhurat)`);
+  };
 
   // Step 3: Venue & Language
   const [venueAddress, setVenueAddress] = useState('Shivaji Nagar, Pune');
@@ -400,47 +447,240 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
           </View>
         )}
 
-        {/* STEP 2: Date & Muhurat Slot */}
+        {/* STEP 2: Interactive Vedic Calendar & AM/PM Time Selector */}
         {step === 2 && (
           <View style={styles.stepSection}>
             <Text style={styles.sectionTitle}>2. Auspicious Date & Muhurat Slot</Text>
 
-            {/* Date Input */}
-            <View style={styles.card}>
-              <Text style={styles.fieldLabel}>Scheduled Ritual Date (YYYY-MM-DD)</Text>
-              <Input
-                placeholder="2026-11-20"
-                value={selectedDate}
-                onChangeText={setSelectedDate}
-                leftIcon="calendar-outline"
-              />
-              <Text style={styles.helperText}>
-                Devotees usually choose auspicious dates like Purnima, Ekadashi, or Shubh Muhurat.
-              </Text>
+            {/* Selected Date & Time Live Banner */}
+            <View style={styles.auspiciousBanner}>
+              <View style={styles.bannerIconBox}>
+                <Ionicons name="calendar" size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bannerHeading}>Selected Sacred Muhurat</Text>
+                <Text style={styles.bannerSubtext}>
+                  {selectedDate} • {selectedTimeSlot}
+                </Text>
+              </View>
+              <View style={styles.shubhPill}>
+                <Text style={styles.shubhPillText}>शुभ मुहूर्त</Text>
+              </View>
             </View>
 
-            {/* Time Slot Selection */}
+            {/* Interactive Calendar Card */}
+            <View style={styles.calendarCard}>
+              {/* Month Navigation */}
+              <View style={styles.calMonthHeader}>
+                <TouchableOpacity
+                  onPress={() => setCurrentMonthIndex(0)}
+                  disabled={currentMonthIndex === 0}
+                  style={[styles.calArrowBtn, currentMonthIndex === 0 && { opacity: 0.4 }]}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="chevron-back" size={18} color={colors.primary} />
+                </TouchableOpacity>
+                <Text style={styles.calMonthTitle}>
+                  {currentMonthIndex === 0 ? '2026 November' : '2026 December'}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setCurrentMonthIndex(1)}
+                  disabled={currentMonthIndex === 1}
+                  style={[styles.calArrowBtn, currentMonthIndex === 1 && { opacity: 0.4 }]}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Day Names Row */}
+              <View style={styles.calWeekdaysRow}>
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+                  <Text key={d} style={styles.calWeekdayText}>{d}</Text>
+                ))}
+              </View>
+
+              {/* Weeks Grid */}
+              {(currentMonthIndex === 0 ? NOVEMBER_2026_WEEKS : DECEMBER_2026_WEEKS).map((week, wIdx) => (
+                <View key={`week-${wIdx}`} style={styles.calWeekRow}>
+                  {week.days.map((day, dIdx) => {
+                    if (day === null) {
+                      return <View key={`empty-${dIdx}`} style={styles.calDayCell} />;
+                    }
+
+                    const isMuhurat = (currentMonthIndex === 0 ? MUHURAT_DAYS_NOV : MUHURAT_DAYS_DEC).includes(day);
+                    const isSelected = selectedDay === day;
+                    const isToday = currentMonthIndex === 0 && day === 19;
+
+                    return (
+                      <TouchableOpacity
+                        key={`day-${day}`}
+                        onPress={() => handleSelectCalendarDay(day)}
+                        style={[
+                          styles.calDayCell,
+                          isSelected && styles.calDaySelected,
+                          isToday && !isSelected && styles.calDayToday,
+                        ]}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.calDayText,
+                            isSelected && styles.calDayTextSelected,
+                            isToday && !isSelected && styles.calDayTextToday,
+                            isMuhurat && !isSelected && !isToday && styles.calDayTextMuhurat,
+                          ]}
+                        >
+                          {day}
+                        </Text>
+                        {isMuhurat && (
+                          <View
+                            style={[
+                              styles.calMuhuratDot,
+                              isSelected && { backgroundColor: '#FFF' },
+                            ]}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
+
+              {/* Calendar Legend */}
+              <View style={styles.calLegendRow}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.calMuhuratDot, { marginRight: 4 }]} />
+                  <Text style={styles.legendText}>Auspicious Muhurat Date</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.calDayTodayDot, { marginRight: 4 }]} />
+                  <Text style={styles.legendText}>Today</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Time Selector Card */}
             <View style={styles.card}>
-              <Text style={styles.fieldLabel}>Preferred Muhurat Time Window</Text>
-              {TIME_SLOTS.map((slot) => {
-                const isSelected = selectedTimeSlot === slot.label;
-                return (
-                  <TouchableOpacity
-                    key={slot.id}
-                    style={[styles.slotItem, isSelected && styles.slotItemActive]}
-                    onPress={() => setSelectedTimeSlot(slot.label)}
-                  >
-                    <Ionicons
-                      name={isSelected ? 'radio-button-on' : 'radio-button-off'}
-                      size={20}
-                      color={isSelected ? colors.primary : colors.textSecondary}
-                    />
-                    <Text style={[styles.slotText, isSelected && styles.slotTextActive]}>
-                      {slot.label}
+              <View style={styles.timeHeaderRow}>
+                <View>
+                  <Text style={styles.fieldLabel}>Preferred Muhurat & Time</Text>
+                  <Text style={styles.helperText}>Select Shubh Choghadiya or set custom AM/PM timing</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setUseCustomTime(!useCustomTime)}
+                  style={[styles.customToggleBtn, useCustomTime && styles.customToggleBtnActive]}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="time" size={14} color={useCustomTime ? colors.textWhite : colors.primary} />
+                  <Text style={[styles.customToggleText, useCustomTime && styles.customToggleTextActive]}>
+                    {useCustomTime ? 'Use Vedic Presets' : 'Custom AM/PM'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Mode A: Custom Time Picker with AM / PM toggle */}
+              {useCustomTime ? (
+                <View style={styles.customPickerContainer}>
+                  {/* Digital Clock Display with AM/PM */}
+                  <View style={styles.clockDisplayRow}>
+                    <Text style={styles.clockTimeLarge}>
+                      {customHour}:{customMinute}
                     </Text>
-                  </TouchableOpacity>
-                );
-              })}
+                    <View style={styles.ampmToggleBox}>
+                      <TouchableOpacity
+                        onPress={() => handleApplyCustomTime(customHour, customMinute, 'AM')}
+                        style={[styles.ampmBtn, customAmPm === 'AM' && styles.ampmBtnActive]}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.ampmText, customAmPm === 'AM' && styles.ampmTextActive]}>
+                          AM
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleApplyCustomTime(customHour, customMinute, 'PM')}
+                        style={[styles.ampmBtn, customAmPm === 'PM' && styles.ampmBtnActive]}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.ampmText, customAmPm === 'PM' && styles.ampmTextActive]}>
+                          PM
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Hour Selector */}
+                  <Text style={styles.subtextPrompt}>Select Hour (तास निवडा):</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 8 }}>
+                    {QUICK_HOURS.map((h) => (
+                      <TouchableOpacity
+                        key={`h-${h}`}
+                        onPress={() => handleApplyCustomTime(h, customMinute, customAmPm)}
+                        style={[styles.timeChip, customHour === h && styles.timeChipActive]}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.timeChipText, customHour === h && styles.timeChipTextActive]}>
+                          {h}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+
+                  {/* Minute Selector */}
+                  <Text style={styles.subtextPrompt}>Select Minute (मिनिटे निवडा):</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                    {QUICK_MINUTES.map((m) => (
+                      <TouchableOpacity
+                        key={`m-${m}`}
+                        onPress={() => handleApplyCustomTime(customHour, m, customAmPm)}
+                        style={[styles.timeChip, { flex: 1 }, customMinute === m && styles.timeChipActive]}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.timeChipText, customMinute === m && styles.timeChipTextActive]}>
+                          :{m}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                /* Mode B: Vedic Shubh Muhurat Slots */
+                <View style={{ marginTop: 6 }}>
+                  {VEDIC_MUHURAT_SLOTS.map((slot) => {
+                    const isSelected = selectedTimeSlot.startsWith(slot.time) || selectedTimeSlot === slot.label;
+                    return (
+                      <TouchableOpacity
+                        key={slot.id}
+                        style={[styles.vedicSlotItem, isSelected && styles.vedicSlotItemActive]}
+                        onPress={() => {
+                          setSelectedTimeSlot(`${slot.time} (${slot.label.split('(')[0].trim()})`);
+                          const [h, mAmPm] = slot.time.split(':');
+                          const [m, ampm] = mAmPm.split(' ');
+                          setCustomHour(h);
+                          setCustomMinute(m);
+                          setCustomAmPm(ampm as 'AM' | 'PM');
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name={isSelected ? 'radio-button-on' : 'radio-button-off'}
+                          size={18}
+                          color={isSelected ? colors.primary : colors.textSecondary}
+                        />
+                        <View style={{ flex: 1, marginLeft: 8 }}>
+                          <Text style={[styles.vedicSlotTitle, isSelected && styles.vedicSlotTitleActive]}>
+                            {slot.label}
+                          </Text>
+                          <Text style={styles.vedicSlotDesc}>{slot.desc}</Text>
+                        </View>
+                        <View style={styles.timeTag}>
+                          <Text style={styles.timeTagText}>{slot.time}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -839,6 +1079,307 @@ const styles = StyleSheet.create({
   panditChipTextActive: {
     color: colors.textWhite,
     fontWeight: '700',
+  },
+  // Auspicious Banner & Interactive Calendar Styles
+  auspiciousBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    gap: 10,
+  },
+  bannerIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FDE68A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerHeading: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400E',
+    textTransform: 'uppercase',
+  },
+  bannerSubtext: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.primary,
+    marginTop: 1,
+  },
+  shubhPill: {
+    backgroundColor: '#B45309',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  shubhPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  calendarCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    marginBottom: 14,
+  },
+  calMonthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+    marginBottom: 10,
+  },
+  calArrowBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.backgroundLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calMonthTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+  calWeekdaysRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingBottom: 6,
+  },
+  calWeekdayText: {
+    width: 38,
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  calWeekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 4,
+  },
+  calDayCell: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  calDaySelected: {
+    backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  calDayToday: {
+    borderWidth: 1.5,
+    borderColor: '#D97706',
+  },
+  calDayText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  calDayTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  calDayTextToday: {
+    color: '#D97706',
+    fontWeight: '800',
+  },
+  calDayTextMuhurat: {
+    color: '#15803D',
+    fontWeight: '800',
+  },
+  calMuhuratDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#16A34A',
+    position: 'absolute',
+    bottom: 3,
+  },
+  calDayTodayDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D97706',
+  },
+  calLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingTop: 8,
+    marginTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  legendText: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  timeHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  customToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
+  },
+  customToggleBtnActive: {
+    backgroundColor: colors.primary,
+  },
+  customToggleText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  customToggleTextActive: {
+    color: colors.textWhite,
+  },
+  customPickerContainer: {
+    padding: 12,
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    marginTop: 6,
+  },
+  clockDisplayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    marginBottom: 12,
+  },
+  clockTimeLarge: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: colors.primary,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    letterSpacing: 2,
+  },
+  ampmToggleBox: {
+    flexDirection: 'row',
+    backgroundColor: colors.backgroundDark,
+    borderRadius: 8,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  ampmBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  ampmBtnActive: {
+    backgroundColor: colors.primary,
+  },
+  ampmText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  ampmTextActive: {
+    color: colors.textWhite,
+  },
+  timeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    marginRight: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  timeChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  timeChipTextActive: {
+    color: colors.textWhite,
+  },
+  vedicSlotItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    marginBottom: 8,
+    backgroundColor: colors.surface,
+  },
+  vedicSlotItemActive: {
+    backgroundColor: colors.backgroundLight,
+    borderColor: colors.primary,
+  },
+  vedicSlotTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  vedicSlotTitleActive: {
+    color: colors.primary,
+  },
+  vedicSlotDesc: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  timeTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: colors.backgroundDark,
+  },
+  timeTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.secondary,
   },
   fieldLabel: {
     fontSize: 13,

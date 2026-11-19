@@ -29,15 +29,15 @@ export const MuhurthScreen: React.FC<MuhurthScreenProps> = ({
   onBookDate,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDay, setSelectedDay] = useState<number>(18);
+  const [monthIndex, setMonthIndex] = useState<0 | 1>(0); // 0: Nov 2026, 1: Dec 2026
+  const [selectedDay, setSelectedDay] = useState<number>(19);
   const insets = useSafeAreaInsets();
   const headerPaddingTop = Platform.OS === 'android'
     ? (StatusBar.currentHeight || 28) + 8
     : Math.max(insets.top, 20) + 6;
 
   // November 2026 Calendar Data
-  // Nov 1, 2026 is Sunday (week 44)
-  const weeks = [
+  const novemberWeeks = [
     { weekNum: 44, days: [null, null, null, null, null, null, 1] },
     { weekNum: 45, days: [2, 3, 4, 5, 6, 7, 8] },
     { weekNum: 46, days: [9, 10, 11, 12, 13, 14, 15] },
@@ -46,8 +46,21 @@ export const MuhurthScreen: React.FC<MuhurthScreenProps> = ({
     { weekNum: 49, days: [30, null, null, null, null, null, null] },
   ];
 
-  // Auspicious Muhurat days for Vastushanti / Griha Pravesh
-  const muhuratDays = [5, 8, 12, 18, 21, 26];
+  // December 2026 Calendar Data
+  const decemberWeeks = [
+    { weekNum: 49, days: [null, 1, 2, 3, 4, 5, 6] },
+    { weekNum: 50, days: [7, 8, 9, 10, 11, 12, 13] },
+    { weekNum: 51, days: [14, 15, 16, 17, 18, 19, 20] },
+    { weekNum: 52, days: [21, 22, 23, 24, 25, 26, 27] },
+    { weekNum: 53, days: [28, 29, 30, 31, null, null, null] },
+  ];
+
+  const weeks = monthIndex === 0 ? novemberWeeks : decemberWeeks;
+
+  // Auspicious Muhurat days
+  const muhuratDaysNov = [5, 8, 12, 18, 19, 20, 21, 23, 24, 26, 28];
+  const muhuratDaysDec = [2, 5, 9, 11, 15, 19, 23, 27, 30];
+  const muhuratDays = monthIndex === 0 ? muhuratDaysNov : muhuratDaysDec;
 
   return (
     <View style={styles.safe}>
@@ -87,12 +100,22 @@ export const MuhurthScreen: React.FC<MuhurthScreenProps> = ({
 
         {/* Month Navigation */}
         <View style={styles.monthHeader}>
-          <TouchableOpacity style={styles.monthArrow}>
-            <Ionicons name="caret-back" size={14} color={colors.primary} />
+          <TouchableOpacity
+            style={styles.monthArrow}
+            onPress={() => setMonthIndex(0)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="caret-back" size={16} color={monthIndex === 0 ? '#C4B5A5' : colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.monthTitle}>2026 November</Text>
-          <TouchableOpacity style={styles.monthArrow}>
-            <Ionicons name="caret-forward" size={14} color={colors.primary} />
+          <Text style={styles.monthTitle}>
+            {monthIndex === 0 ? '2026 November' : '2026 December'}
+          </Text>
+          <TouchableOpacity
+            style={styles.monthArrow}
+            onPress={() => setMonthIndex(1)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="caret-forward" size={16} color={monthIndex === 1 ? '#C4B5A5' : colors.primary} />
           </TouchableOpacity>
         </View>
 
@@ -122,7 +145,7 @@ export const MuhurthScreen: React.FC<MuhurthScreenProps> = ({
                   return <View key={`empty-${idx}`} style={styles.dayCell} />;
                 }
 
-                const isToday = day === 18;
+                const isToday = monthIndex === 0 && day === 19;
                 const isMuhurat = muhuratDays.includes(day);
                 const isSelected = selectedDay === day;
 
@@ -135,7 +158,9 @@ export const MuhurthScreen: React.FC<MuhurthScreenProps> = ({
                     ]}
                     onPress={() => {
                       setSelectedDay(day);
-                      if (onBookDate) onBookDate(`2026-11-${day < 10 ? '0' + day : day}`);
+                      const mStr = monthIndex === 0 ? '11' : '12';
+                      const dStr = day < 10 ? `0${day}` : `${day}`;
+                      if (onBookDate) onBookDate(`2026-${mStr}-${dStr}`);
                     }}
                   >
                     <Text
@@ -155,6 +180,49 @@ export const MuhurthScreen: React.FC<MuhurthScreenProps> = ({
           ))}
         </View>
 
+        {/* Auspicious Timings Card for Selected Day */}
+        {selectedDay && (
+          <View style={styles.shubhCard}>
+            <View style={styles.shubhHeader}>
+              <Ionicons name="sparkles" size={16} color={colors.gold} />
+              <Text style={styles.shubhTitle}>
+                {monthIndex === 0 ? 'November' : 'December'} {selectedDay}, 2026 {muhuratDays.includes(selectedDay) ? '★ Auspicious Muhurat' : 'Panchang Timings'}
+              </Text>
+            </View>
+            <Text style={styles.shubhTime}>• Brahma Muhurat: 06:00 AM to 07:30 AM</Text>
+            <Text style={styles.shubhTime}>• Shubh Choghadiya: 08:00 AM to 09:30 AM</Text>
+            <Text style={styles.shubhTime}>• Amrit Kaal: 09:30 AM to 11:00 AM</Text>
+            <Text style={styles.shubhTime}>• Abhijit Muhurat: 11:45 AM to 12:35 PM</Text>
+            <Text style={styles.shubhTime}>• Sandhya Godhuli: 05:30 PM to 07:00 PM</Text>
+            <Text style={styles.shubhTime}>• Pradosh Kaal: 07:15 PM to 08:45 PM</Text>
+
+            {onBookDate && (
+              <TouchableOpacity
+                style={{
+                  marginTop: 12,
+                  backgroundColor: colors.primary,
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                onPress={() => {
+                  const mStr = monthIndex === 0 ? '11' : '12';
+                  const dStr = selectedDay < 10 ? `0${selectedDay}` : `${selectedDay}`;
+                  onBookDate(`2026-${mStr}-${dStr}`);
+                }}
+              >
+                <Ionicons name="calendar-outline" size={16} color="#FFF8EC" style={{ marginRight: 6 }} />
+                <Text style={{ color: '#FFF8EC', fontWeight: 'bold', fontSize: 13 }}>
+                  Book Puja on this Auspicious Date
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {/* Steps for finding Muhurat */}
         <View style={styles.stepsCard}>
           <Text style={styles.stepsTitle}>Steps for finding Muhrat -</Text>
@@ -167,21 +235,6 @@ export const MuhurthScreen: React.FC<MuhurthScreenProps> = ({
             4. If you cannot find your specific Puja through the search function, feel free to reach out to our team for assistance at +91 98220 12345 or support@pujaconnect.com.
           </Text>
         </View>
-
-        {/* Auspicious Timings Card for Selected Day */}
-        {selectedDay && muhuratDays.includes(selectedDay) && (
-          <View style={styles.shubhCard}>
-            <View style={styles.shubhHeader}>
-              <Ionicons name="star" size={16} color={colors.gold} />
-              <Text style={styles.shubhTitle}>
-                Auspicious Muhurat on Nov {selectedDay}, 2026
-              </Text>
-            </View>
-            <Text style={styles.shubhTime}>• Amrit Kaal: 07:15 AM to 09:00 AM</Text>
-            <Text style={styles.shubhTime}>• Abhijit Muhurat: 11:45 AM to 12:35 PM</Text>
-            <Text style={styles.shubhTime}>• Vijay Muhurat: 02:10 PM to 02:55 PM</Text>
-          </View>
-        )}
       </ScrollView>
     </View>
   );
