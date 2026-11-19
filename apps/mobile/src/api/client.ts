@@ -345,6 +345,11 @@ export const api = {
     pincode: string;
     includeSamagri?: boolean;
     specialInstructions?: string;
+    customerName?: string;
+    customerPhone?: string;
+    paymentMethod?: string;
+    paymentStatus?: string;
+    transactionId?: string;
   }): Promise<Booking> {
     return apiRequest<Booking>('/bookings', {
       method: 'POST',

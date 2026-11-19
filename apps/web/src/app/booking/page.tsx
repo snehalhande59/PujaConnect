@@ -585,11 +585,11 @@ export default function BookingPage() {
                       Back
                     </button>
                     <Link
-                      href={`/checkout?amount=${totalAmount}`}
+                      href={`/checkout?amount=${totalAmount}&puja=${selectedPuja.slug}&title=${encodeURIComponent(selectedPuja.name)}&date=${pujaDate}&slot=${encodeURIComponent(timeSlot)}&city=${encodeURIComponent(city)}&address=${encodeURIComponent(addressLine)}&pincode=${pincode}&samagri=${includeSamagri}`}
                       className="flex-1 py-3 bg-maroon hover:bg-maroon-800 text-ivory font-bold text-xs rounded-xl shadow-sacred transition flex items-center justify-center gap-2 border border-gold/40 text-center"
                     >
                       <CreditCard className="w-4 h-4 text-gold-300" />
-                      <span>Confirm & Pay with Razorpay</span>
+                      <span>Confirm & Proceed to Payment</span>
                     </Link>
                   </div>
                 </div>

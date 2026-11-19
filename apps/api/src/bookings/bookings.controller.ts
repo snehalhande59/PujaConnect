@@ -7,6 +7,7 @@ import {
   Body,
   UseGuards,
   ParseUUIDPipe,
+  Req,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
@@ -20,19 +21,19 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Bookings')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('bookings')
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
   @Post()
-  @Roles(Role.CUSTOMER)
   @ApiOperation({ summary: 'Create a new Puja booking' })
-  async createBooking(@CurrentUser() user: any, @Body() dto: CreateBookingDto) {
-    return this.bookingsService.createBooking(user.id, dto);
+  async createBooking(@Req() req: any, @Body() dto: CreateBookingDto) {
+    const userId = this.bookingsService.extractUserIdFromAuthHeader(req.headers?.authorization);
+    return this.bookingsService.createBooking(userId, dto);
   }
 
   @Get('my')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.CUSTOMER)
   @ApiOperation({ summary: 'Get current customer bookings' })
   async getMyCustomerBookings(@CurrentUser() user: any) {
@@ -40,6 +41,7 @@ export class BookingsController {
   }
 
   @Get('pandit')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.PANDIT)
   @ApiOperation({ summary: 'Get bookings assigned to current Pandit' })
   async getMyPanditBookings(@CurrentUser() user: any) {
@@ -47,6 +49,7 @@ export class BookingsController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Get booking details by ID' })
   async getBookingDetails(
     @CurrentUser() user: any,
@@ -56,6 +59,7 @@ export class BookingsController {
   }
 
   @Patch(':id/accept')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.PANDIT)
   @ApiOperation({ summary: 'Pandit accepts booking request' })
   async acceptBooking(
@@ -66,6 +70,7 @@ export class BookingsController {
   }
 
   @Patch(':id/reject')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.PANDIT)
   @ApiOperation({ summary: 'Pandit declines booking request' })
   async rejectBooking(
@@ -77,6 +82,7 @@ export class BookingsController {
   }
 
   @Patch(':id/cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.CUSTOMER)
   @ApiOperation({ summary: 'Customer cancels booking' })
   async cancelBooking(

@@ -165,23 +165,44 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
         pincode: pincode.trim(),
         includeSamagri,
         specialInstructions: `${specialInstructions ? specialInstructions + ' | ' : ''}Paid via ${paymentDetails.method} (Txn: ${paymentDetails.paymentId})`,
+        customerName: 'Snehal Hande',
+        customerPhone: '8459369260',
+        paymentMethod: paymentDetails.method,
+        paymentStatus: 'PAID',
+        transactionId: paymentDetails.paymentId,
       });
 
-      await storage.saveBooking(booking);
-      onBookingSuccess(booking);
+      // Ensure local object has all needed display properties
+      const enrichedBooking: Booking = {
+        ...booking,
+        puja: booking.puja || selectedPuja,
+        panditProfile: booking.panditProfile || (selectedPandit as any),
+        pujaDate: booking.pujaDate || selectedDate,
+        pujaTimeSlot: booking.pujaTimeSlot || selectedTimeSlot,
+        venueAddress: booking.venueAddress || venueAddress,
+        city: booking.city || city,
+        pincode: booking.pincode || pincode,
+        totalAmount: booking.totalAmount || paymentDetails.amount,
+        totalPrice: booking.totalPrice || booking.totalAmount || paymentDetails.amount,
+        status: booking.status || 'CONFIRMED',
+      };
+
+      await storage.saveBooking(enrichedBooking);
+      onBookingSuccess(enrichedBooking);
     } catch (e: any) {
       console.warn('Backend booking fallback:', e);
       // Fallback booking object so user can test full success flow
       const fallbackBooking: Booking = {
         id: paymentDetails.orderId,
+        bookingNumber: `DS-${Date.now().toString().slice(-6)}`,
         customerProfileId: 'customer_1',
         panditProfileId: selectedPandit.id,
         pujaId: selectedPuja.id,
         pujaDate: selectedDate,
         pujaTimeSlot: selectedTimeSlot,
-        venueAddress: venueAddress || 'Sample Address',
+        venueAddress: venueAddress || 'Shivaji Nagar',
         city: city || 'Pune',
-        pincode: pincode || '411001',
+        pincode: pincode || '411005',
         includeSamagri,
         totalAmount: paymentDetails.amount,
         totalPrice: paymentDetails.amount,

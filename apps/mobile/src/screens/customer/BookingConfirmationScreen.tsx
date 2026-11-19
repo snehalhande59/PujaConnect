@@ -39,22 +39,24 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
           <View style={styles.badgeRow}>
             <View style={styles.refBadge}>
               <Text style={styles.refBadgeText}>
-                REF #{booking?.id ? booking.id.slice(0, 8).toUpperCase() : 'DEVSUTRA'}
+                REF #{booking?.bookingNumber ? booking.bookingNumber : (booking?.id ? booking.id.slice(0, 8).toUpperCase() : 'DEVSUTRA')}
               </Text>
             </View>
             <View style={styles.statusBadge}>
               <Text style={styles.statusBadgeText}>
-                {booking?.status || 'PENDING CONFIRMATION'}
+                {booking?.status || 'CONFIRMED'}
               </Text>
             </View>
           </View>
 
-          <Text style={styles.pujaName}>{booking?.puja?.title || 'Vedic Ritual Puja'}</Text>
+          <Text style={styles.pujaName}>{booking?.puja?.title || (booking?.puja as any)?.name || 'Vedic Ritual Puja'}</Text>
           <Text style={styles.panditName}>
-            Purohit: Pt.{' '}
-            {booking?.pandit?.user?.firstName
-              ? `${booking.pandit.user.firstName} ${booking.pandit.user.lastName || ''}`.trim()
-              : 'Assigned Vedic Scholar'}
+            Purohit:{' '}
+            {booking?.panditProfile?.fullName
+              ? booking.panditProfile.fullName
+              : booking?.pandit?.user?.firstName
+              ? `Pt. ${booking.pandit.user.firstName} ${booking.pandit.user.lastName || ''}`.trim()
+              : (booking?.panditProfile as any)?.name || 'Pt. Radheshyam Joshi (Gurukul Certified)'}
           </Text>
 
           <View style={styles.divider} />
@@ -63,28 +65,39 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
             <Ionicons name="calendar-outline" size={16} color={colors.primary} />
             <Text style={styles.infoLabel}>Date:</Text>
             <Text style={styles.infoValue}>
-              {booking?.bookingDate
+              {booking?.pujaDate
+                ? (typeof booking.pujaDate === 'string' && !booking.pujaDate.includes('T')
+                    ? booking.pujaDate
+                    : new Date(booking.pujaDate).toLocaleDateString('en-IN', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      }))
+                : booking?.bookingDate
                 ? new Date(booking.bookingDate).toLocaleDateString('en-IN', {
                     weekday: 'short',
                     day: 'numeric',
                     month: 'short',
                     year: 'numeric',
                   })
-                : 'Selected Date'}
+                : 'Selected Muhurat Date'}
             </Text>
           </View>
 
           <View style={styles.infoRow}>
             <Ionicons name="time-outline" size={16} color={colors.primary} />
             <Text style={styles.infoLabel}>Time:</Text>
-            <Text style={styles.infoValue}>{booking?.timeSlot || 'Morning Muhurat'}</Text>
+            <Text style={styles.infoValue}>{booking?.pujaTimeSlot || booking?.timeSlot || '09:00 AM (Shubh Muhurat)'}</Text>
           </View>
 
           <View style={styles.infoRow}>
             <Ionicons name="location-outline" size={16} color={colors.primary} />
             <Text style={styles.infoLabel}>Venue:</Text>
             <Text style={styles.infoValue} numberOfLines={2}>
-              {booking?.address
+              {booking?.venueAddress
+                ? `${booking.venueAddress}, ${booking.city || ''} ${booking.pincode ? '- ' + booking.pincode : ''}`.trim()
+                : booking?.address
                 ? `${booking.address.street}, ${booking.address.city}`
                 : 'Devotee Specified Venue'}
             </Text>
@@ -94,7 +107,7 @@ export const BookingConfirmationScreen: React.FC<BookingConfirmationScreenProps>
             <Ionicons name="cash-outline" size={16} color={colors.primary} />
             <Text style={styles.infoLabel}>Dakshina:</Text>
             <Text style={[styles.infoValue, { color: colors.primary, fontWeight: '800' }]}>
-              ₹{booking?.totalPrice || 2500}
+              ₹{booking?.totalAmount || booking?.totalPrice || 2500}
             </Text>
           </View>
         </View>

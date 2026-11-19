@@ -9,16 +9,19 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateBookingDto {
-  @ApiProperty({ description: 'Puja ID to book' })
-  @IsUUID()
+  @ApiProperty({ description: 'Puja ID or slug to book' })
+  @IsString()
+  @IsNotEmpty()
   pujaId: string;
 
-  @ApiProperty({ description: 'Selected Pandit Profile ID' })
-  @IsUUID()
-  panditProfileId: string;
+  @ApiPropertyOptional({ description: 'Selected Pandit Profile ID' })
+  @IsOptional()
+  @IsString()
+  panditProfileId?: string;
 
-  @ApiProperty({ example: '2026-11-25', description: 'Selected puja date (YYYY-MM-DD)' })
-  @IsDateString()
+  @ApiProperty({ example: '2026-11-25', description: 'Selected puja date' })
+  @IsString()
+  @IsNotEmpty()
   pujaDate: string;
 
   @ApiProperty({ example: '09:00 AM', description: 'Selected time slot' })
@@ -55,4 +58,34 @@ export class CreateBookingDto {
   @IsOptional()
   @IsString()
   specialInstructions?: string;
+
+  @ApiPropertyOptional({ example: 'Rahul Sharma' })
+  @IsOptional()
+  @IsString()
+  customerName?: string;
+
+  @ApiPropertyOptional({ example: '9876543210' })
+  @IsOptional()
+  @IsString()
+  customerPhone?: string;
+
+  @ApiPropertyOptional({ example: 'rahul@example.com' })
+  @IsOptional()
+  @IsString()
+  customerEmail?: string;
+
+  @ApiPropertyOptional({ example: 'UPI' })
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
+
+  @ApiPropertyOptional({ example: 'PAID' })
+  @IsOptional()
+  @IsString()
+  paymentStatus?: string;
+
+  @ApiPropertyOptional({ example: 'PAY_12345678' })
+  @IsOptional()
+  @IsString()
+  transactionId?: string;
 }
