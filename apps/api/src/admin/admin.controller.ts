@@ -1,6 +1,7 @@
 ﻿import {
   Controller,
   Get,
+  Post,
   Patch,
   Param,
   Body,
@@ -29,6 +30,20 @@ import { QueryPanditsDto } from './dto/query-pandits.dto';
 @Roles(Role.ADMIN)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
+
+  // ==========================================
+  // DASHBOARD OVERVIEW STATS
+  // ==========================================
+
+  @Get('dashboard/stats')
+  @ApiOperation({ summary: 'Get complete platform overview statistics from real database' })
+  async getDashboardStats() {
+    return this.adminService.getDashboardStats();
+  }
+
+  // ==========================================
+  // PANDIT MANAGEMENT
+  // ==========================================
 
   @Get('pandits/stats')
   @ApiOperation({ summary: 'Get Pandit verification analytics and counts' })
@@ -67,5 +82,85 @@ export class AdminController {
     @Body() dto: RejectPanditDto,
   ) {
     return this.adminService.rejectPandit(id, dto.reason);
+  }
+
+  // ==========================================
+  // CUSTOMER MANAGEMENT
+  // ==========================================
+
+  @Get('customers')
+  @ApiOperation({ summary: 'Get registered customers with booking count' })
+  async getCustomers(@Query() query: any) {
+    return this.adminService.getCustomers(query);
+  }
+
+  // ==========================================
+  // BOOKINGS MANAGEMENT
+  // ==========================================
+
+  @Get('bookings')
+  @ApiOperation({ summary: 'Get all bookings across the platform' })
+  async getBookings(@Query() query: any) {
+    return this.adminService.getBookings(query);
+  }
+
+  @Patch('bookings/:id/status')
+  @ApiOperation({ summary: 'Update status of a booking' })
+  async updateBookingStatus(
+    @Param('id') id: string,
+    @Body('status') status: string,
+  ) {
+    return this.adminService.updateBookingStatus(id, status);
+  }
+
+  @Patch('bookings/:id/assign-pandit')
+  @ApiOperation({ summary: 'Assign or reassign a Pandit to a booking' })
+  async assignPandit(
+    @Param('id') id: string,
+    @Body('panditProfileId') panditProfileId: string,
+  ) {
+    return this.adminService.assignPandit(id, panditProfileId);
+  }
+
+  // ==========================================
+  // PAYMENT MANAGEMENT
+  // ==========================================
+
+  @Get('payments')
+  @ApiOperation({ summary: 'Get all payment transactions' })
+  async getPayments(@Query() query: any) {
+    return this.adminService.getPayments(query);
+  }
+
+  // ==========================================
+  // PUJA SERVICES MANAGEMENT
+  // ==========================================
+
+  @Get('pujas')
+  @ApiOperation({ summary: 'Get all Pujas with category' })
+  async getPujas(@Query() query: any) {
+    return this.adminService.getPujas(query);
+  }
+
+  @Post('pujas')
+  @ApiOperation({ summary: 'Create a new Puja service' })
+  async createPuja(@Body() data: any) {
+    return this.adminService.createPuja(data);
+  }
+
+  @Patch('pujas/:id')
+  @ApiOperation({ summary: 'Update a Puja service' })
+  async updatePuja(@Param('id') id: string, @Body() data: any) {
+    return this.adminService.updatePuja(id, data);
+  }
+
+  // ==========================================
+  // REPORTS & ANALYTICS
+  // ==========================================
+
+  @Get('reports')
+  @ApiOperation({ summary: 'Get system analytics and reports' })
+  async getReports() {
+    return this.adminService.getReports();
   }
 }

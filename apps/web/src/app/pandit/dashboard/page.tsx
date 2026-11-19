@@ -26,6 +26,7 @@ export default function PanditDashboardPage() {
   const router = useRouter();
   const [panditUser, setPanditUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,13 +39,20 @@ export default function PanditDashboardPage() {
 
     const token = getClientToken();
     if (token) {
-      fetch(`${API_BASE_URL}/pandits/me/profile`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data) {
-            setProfile(data.data?.data || data.data);
+      Promise.all([
+        fetch(`${API_BASE_URL}/pandits/me/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((res) => (res.ok ? res.json() : null)),
+        fetch(`${API_BASE_URL}/pandits/me/dashboard`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((res) => (res.ok ? res.json() : null)),
+      ])
+        .then(([profileRes, dashRes]) => {
+          if (profileRes) {
+            setProfile(profileRes.data?.data || profileRes.data);
+          }
+          if (dashRes) {
+            setDashboardData(dashRes.data?.data || dashRes.data);
           }
         })
         .catch(console.error)
@@ -165,23 +173,29 @@ export default function PanditDashboardPage() {
         {/* Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div className="bg-white p-5 rounded-2xl border border-beige shadow-sacred">
-            <span className="text-xs text-brown/60 font-medium">This Month Earnings</span>
-            <p className="text-2xl font-heading font-bold text-maroon mt-1">₹42,500</p>
+            <span className="text-xs text-brown/60 font-medium">Sacred Dakshina Settled</span>
+            <p className="text-2xl font-heading font-bold text-maroon mt-1">
+              ₹{(dashboardData?.stats?.totalEarnings || 0).toLocaleString()}
+            </p>
           </div>
           <div className="bg-white p-5 rounded-2xl border border-beige shadow-sacred">
             <span className="text-xs text-brown/60 font-medium">New Booking Requests</span>
             <p className="text-2xl font-heading font-bold text-gold-600 mt-1">
-              {verificationStatus === 'VERIFIED' ? '2 Pending' : 'Locked (Pending Verification)'}
+              {verificationStatus === 'VERIFIED'
+                ? `${dashboardData?.stats?.pendingRequests || 0} Pending`
+                : 'Locked (Awaiting Approval)'}
             </p>
           </div>
           <div className="bg-white p-5 rounded-2xl border border-beige shadow-sacred">
             <span className="text-xs text-brown/60 font-medium">Upcoming Rituals</span>
-            <p className="text-2xl font-heading font-bold text-maroon mt-1">5 Confirmed</p>
+            <p className="text-2xl font-heading font-bold text-maroon mt-1">
+              {dashboardData?.stats?.upcomingPujas || 0} Confirmed
+            </p>
           </div>
           <div className="bg-white p-5 rounded-2xl border border-beige shadow-sacred">
-            <span className="text-xs text-brown/60 font-medium">Devotee Rating</span>
-            <p className="text-2xl font-heading font-bold text-gold-600 mt-1 flex items-center gap-1">
-              4.95 <Star className="w-4 h-4 fill-gold-500 text-gold-500" />
+            <span className="text-xs text-brown/60 font-medium">Total Ceremonies Assigned</span>
+            <p className="text-2xl font-heading font-bold text-emerald-600 mt-1">
+              {dashboardData?.stats?.totalAssigned || 0} Total
             </p>
           </div>
         </div>

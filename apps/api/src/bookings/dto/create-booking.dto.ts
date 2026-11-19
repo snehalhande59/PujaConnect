@@ -88,4 +88,24 @@ export class CreateBookingDto {
   @IsOptional()
   @IsString()
   transactionId?: string;
+
+  @ApiPropertyOptional({ example: 4501 })
+  @IsOptional()
+  totalAmount?: number;
+
+  @ApiPropertyOptional({ example: 4501 })
+  @IsOptional()
+  amount?: number;
+
+  @ApiPropertyOptional({ example: 3501 })
+  @IsOptional()
+  pujaFee?: number;
+
+  @ApiPropertyOptional({ example: 1100 })
+  @IsOptional()
+  samagriFee?: number;
+
+  @ApiPropertyOptional({ example: 101 })
+  @IsOptional()
+  platformFee?: number;
 }

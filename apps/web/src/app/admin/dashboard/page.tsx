@@ -41,6 +41,14 @@ export default function AdminDashboardPage() {
     rejected: 0,
   });
 
+  const [platformStats, setPlatformStats] = useState({
+    customers: { total: 0 },
+    pandits: { total: 0, pending: 0, approved: 0 },
+    pujas: { total: 0 },
+    bookings: { total: 0, pending: 0, confirmed: 0, completed: 0, cancelled: 0 },
+    payments: { total: 0, successful: 0, pending: 0, failed: 0, totalRevenue: 0 },
+  });
+
   // Pending Pandits State
   const [pendingPandits, setPendingPandits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,19 +66,22 @@ export default function AdminDashboardPage() {
 
     try {
       setLoading(true);
-      // Fetch stats
-      const statsRes = await fetch(`${API_BASE_URL}/admin/pandits/stats`, {
+      // Fetch platform wide live stats
+      const statsRes = await fetch(`${API_BASE_URL}/admin/dashboard/stats`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         const payload = statsData.data?.data || statsData.data || statsData;
-        setStats({
-          total: payload.total || 0,
-          pending: payload.pending || 0,
-          verified: payload.verified || 0,
-          rejected: payload.rejected || 0,
-        });
+        if (payload.customers) {
+          setPlatformStats(payload);
+          setStats({
+            total: payload.pandits?.total || 0,
+            pending: payload.pandits?.pending || 0,
+            verified: payload.pandits?.approved || 0,
+            rejected: Math.max(0, (payload.pandits?.total || 0) - (payload.pandits?.approved || 0) - (payload.pandits?.pending || 0)),
+          });
+        }
       }
 
       // Fetch pending pandits
@@ -279,35 +290,66 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
-          {/* Top Real Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-maroon-900 border border-gold/30 p-5 rounded-2xl shadow-sacred">
-              <span className="text-xs text-beige/70 font-medium">Pending Verifications</span>
-              <p className="text-2xl font-heading font-bold text-gold-300 mt-1">
-                {stats.pending} Applications
+          {/* Top Real Platform Metrics from Database */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
+            <div className="bg-maroon-900 border border-gold/30 p-4 rounded-xl shadow-sacred">
+              <span className="text-[11px] text-beige/70 font-medium flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-gold" /> Registered Devotees
+              </span>
+              <p className="text-xl font-heading font-bold text-ivory mt-1">
+                {platformStats.customers.total}
               </p>
-              <span className="text-[11px] text-gold-400/80 mt-1 block">Awaiting admin review</span>
+              <span className="text-[10px] text-beige/50 mt-0.5 block">Active Customers</span>
             </div>
-            <div className="bg-maroon-900 border border-gold/30 p-5 rounded-2xl shadow-sacred">
-              <span className="text-xs text-beige/70 font-medium">Verified Active Pandits</span>
-              <p className="text-2xl font-heading font-bold text-emerald-400 mt-1">
-                {stats.verified} Shastri / Acharyas
+
+            <div className="bg-maroon-900 border border-gold/30 p-4 rounded-xl shadow-sacred">
+              <span className="text-[11px] text-beige/70 font-medium flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Approved Pandits
+              </span>
+              <p className="text-xl font-heading font-bold text-emerald-400 mt-1">
+                {platformStats.pandits.approved}
               </p>
-              <span className="text-[11px] text-emerald-300/80 mt-1 block">Eligible for bookings</span>
+              <span className="text-[10px] text-gold-300 mt-0.5 block">{platformStats.pandits.pending} Pending Approval</span>
             </div>
-            <div className="bg-maroon-900 border border-gold/30 p-5 rounded-2xl shadow-sacred">
-              <span className="text-xs text-beige/70 font-medium">Rejected / Action Req.</span>
-              <p className="text-2xl font-heading font-bold text-rose-300 mt-1">
-                {stats.rejected} Applications
+
+            <div className="bg-maroon-900 border border-gold/30 p-4 rounded-xl shadow-sacred">
+              <span className="text-[11px] text-beige/70 font-medium flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-gold-400" /> Puja Catalog
+              </span>
+              <p className="text-xl font-heading font-bold text-gold-300 mt-1">
+                {platformStats.pujas.total}
               </p>
-              <span className="text-[11px] text-rose-300/80 mt-1 block">Awaiting pandit resubmission</span>
+              <span className="text-[10px] text-beige/50 mt-0.5 block">Shastric Ceremonies</span>
             </div>
-            <div className="bg-maroon-900 border border-gold/30 p-5 rounded-2xl shadow-sacred">
-              <span className="text-xs text-beige/70 font-medium">Total Registered Pandits</span>
-              <p className="text-2xl font-heading font-bold text-ivory mt-1">
-                {stats.total} Total
+
+            <div className="bg-maroon-900 border border-gold/30 p-4 rounded-xl shadow-sacred">
+              <span className="text-[11px] text-beige/70 font-medium flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-gold-400" /> Confirmed Bookings
+              </span>
+              <p className="text-xl font-heading font-bold text-emerald-400 mt-1">
+                {platformStats.bookings.confirmed}
               </p>
-              <span className="text-[11px] text-beige/60 mt-1 block">Across all statuses</span>
+              <span className="text-[10px] text-beige/50 mt-0.5 block">{platformStats.bookings.total} Total Bookings</span>
+            </div>
+
+            <div className="bg-maroon-900 border border-gold/30 p-4 rounded-xl shadow-sacred">
+              <span className="text-[11px] text-beige/70 font-medium flex items-center gap-1.5">
+                <IndianRupee className="w-3.5 h-3.5 text-gold" /> Total Revenue
+              </span>
+              <p className="text-xl font-heading font-bold text-gold-300 mt-1">
+                ₹{platformStats.payments.totalRevenue.toLocaleString()}
+              </p>
+              <span className="text-[10px] text-emerald-300 mt-0.5 block">Collected via Gateway</span>
+            </div>
+
+            <div className="bg-maroon-900 border border-gold/30 p-4 rounded-xl shadow-sacred">
+              <span className="text-[11px] text-beige/70 font-medium flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-400" /> Paid Transactions
+              </span>
+              <p className="text-xl font-heading font-bold text-ivory mt-1">
+                {platformStats.payments.successful}
+              </p>
+              <span className="text-[10px] text-gold-300 mt-0.5 block">{platformStats.payments.pending} Pending Cash/UPI</span>
             </div>
           </div>
 

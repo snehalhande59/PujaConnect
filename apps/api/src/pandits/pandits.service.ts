@@ -382,4 +382,172 @@ export class PanditsService {
       documentType: document.documentType,
     };
   }
+
+  /**
+   * Get Pandit Dashboard Overview
+   */
+  async getMyDashboard(userId: string) {
+    const profile = await this.prisma.panditProfile.findUnique({
+      where: { userId },
+      include: { user: true },
+    });
+
+    if (!profile) {
+      throw new NotFoundException('Pandit profile not found.');
+    }
+
+    const [
+      totalAssigned,
+      pendingRequests,
+      upcomingPujas,
+      completedPujas,
+      cancelledPujas,
+      recentBookings,
+      completedBookingsFee,
+    ] = await Promise.all([
+      this.prisma.booking.count({ where: { panditProfileId: profile.id } }),
+      this.prisma.booking.count({
+        where: { panditProfileId: profile.id, status: 'PENDING' },
+      }),
+      this.prisma.booking.count({
+        where: { panditProfileId: profile.id, status: 'CONFIRMED' },
+      }),
+      this.prisma.booking.count({
+        where: { panditProfileId: profile.id, status: 'COMPLETED' },
+      }),
+      this.prisma.booking.count({
+        where: { panditProfileId: profile.id, status: 'CANCELLED' },
+      }),
+      this.prisma.booking.findMany({
+        where: { panditProfileId: profile.id },
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          puja: true,
+          customerProfile: { include: { user: true } },
+          payments: true,
+        },
+      }),
+      this.prisma.booking.findMany({
+        where: {
+          panditProfileId: profile.id,
+          status: { in: ['CONFIRMED', 'COMPLETED'] },
+        },
+        select: { pujaFee: true },
+      }),
+    ]);
+
+    const totalEarnings = completedBookingsFee.reduce(
+      (sum, b) => sum + Number(b.pujaFee || 0),
+      0
+    );
+
+    return {
+      profile: {
+        id: profile.id,
+        fullName: profile.fullName,
+        avatarUrl: profile.avatarUrl,
+        verificationStatus: profile.verificationStatus,
+        isAvailable: profile.isAvailable,
+        experienceYears: profile.experienceYears,
+        city: profile.city,
+      },
+      stats: {
+        totalAssigned,
+        pendingRequests,
+        upcomingPujas,
+        completedPujas,
+        cancelledPujas,
+        totalEarnings,
+      },
+      recentBookings,
+    };
+  }
+
+  /**
+   * Get bookings assigned to current Pandit
+   */
+  async getMyBookings(userId: string, status?: string) {
+    const profile = await this.prisma.panditProfile.findUnique({
+      where: { userId },
+    });
+
+    if (!profile) {
+      throw new NotFoundException('Pandit profile not found.');
+    }
+
+    const where: any = { panditProfileId: profile.id };
+    if (status && status.toUpperCase() !== 'ALL') {
+      where.status = status.toUpperCase();
+    }
+
+    return this.prisma.booking.findMany({
+      where,
+      orderBy: { pujaDate: 'asc' },
+      include: {
+        puja: true,
+        customerProfile: {
+          include: {
+            user: {
+              select: { email: true, phoneNumber: true },
+            },
+          },
+        },
+        payments: true,
+      },
+    });
+  }
+
+  /**
+   * Accept or reject an assigned booking
+   */
+  async respondToBooking(userId: string, bookingId: string, action: 'ACCEPT' | 'REJECT', reason?: string) {
+    const profile = await this.prisma.panditProfile.findUnique({
+      where: { userId },
+    });
+
+    if (!profile) {
+      throw new NotFoundException('Pandit profile not found.');
+    }
+
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, panditProfileId: profile.id },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Assigned booking not found.');
+    }
+
+    const newStatus = action === 'ACCEPT' ? 'CONFIRMED' : 'CANCELLED';
+
+    return this.prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: newStatus as any,
+        cancellationReason: action === 'REJECT' ? (reason || 'Rejected by Pandit') : null,
+      },
+      include: {
+        puja: true,
+        customerProfile: true,
+      },
+    });
+  }
+
+  /**
+   * Toggle Pandit availability status
+   */
+  async toggleAvailability(userId: string, isAvailable: boolean) {
+    const profile = await this.prisma.panditProfile.findUnique({
+      where: { userId },
+    });
+
+    if (!profile) {
+      throw new NotFoundException('Pandit profile not found.');
+    }
+
+    return this.prisma.panditProfile.update({
+      where: { id: profile.id },
+      data: { isAvailable },
+    });
+  }
 }

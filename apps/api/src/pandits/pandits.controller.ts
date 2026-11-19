@@ -52,6 +52,67 @@ export class PanditsController {
   }
 
   /**
+   * Get authenticated Pandit's Dashboard Overview
+   */
+  @Get('me/dashboard')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PANDIT)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current Pandit dashboard metrics, stats and bookings' })
+  async getMyDashboard(@CurrentUser() user: any) {
+    return this.panditsService.getMyDashboard(user.id);
+  }
+
+  /**
+   * Get authenticated Pandit's Bookings
+   */
+  @Get('me/bookings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PANDIT)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all bookings assigned to current Pandit' })
+  async getMyBookings(
+    @CurrentUser() user: any,
+    @Query('status') status?: string,
+  ) {
+    return this.panditsService.getMyBookings(user.id, status);
+  }
+
+  /**
+   * Accept or Reject an assigned booking
+   */
+  @Post('bookings/:id/respond')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PANDIT)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Accept or reject an assigned booking request' })
+  async respondToBooking(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body('action') action: 'ACCEPT' | 'REJECT',
+    @Body('reason') reason?: string,
+  ) {
+    return this.panditsService.respondToBooking(user.id, id, action, reason);
+  }
+
+  /**
+   * Toggle Pandit availability status
+   */
+  @Post('me/availability')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PANDIT)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Toggle Pandit online/offline availability' })
+  async toggleAvailability(
+    @CurrentUser() user: any,
+    @Body('isAvailable') isAvailable: boolean,
+  ) {
+    return this.panditsService.toggleAvailability(user.id, isAvailable);
+  }
+
+  /**
    * Get authenticated Pandit's own profile and verification documents
    */
   @Get('me/profile')

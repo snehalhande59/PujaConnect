@@ -294,4 +294,388 @@ export class AdminService {
 
     return updated;
   }
+
+  /**
+   * Get complete live platform analytics and counts for the Admin Dashboard Overview
+   */
+  async getDashboardStats() {
+    const [
+      totalCustomers,
+      totalPandits,
+      pendingPandits,
+      approvedPandits,
+      totalPujas,
+      totalBookings,
+      pendingBookings,
+      confirmedBookings,
+      completedBookings,
+      cancelledBookings,
+      successfulPayments,
+      pendingPayments,
+      failedPayments,
+      paymentsWithAmount,
+    ] = await Promise.all([
+      this.prisma.customerProfile.count({ where: { user: { isDeleted: false } } }),
+      this.prisma.panditProfile.count({ where: { user: { isDeleted: false } } }),
+      this.prisma.panditProfile.count({
+        where: { verificationStatus: VerificationStatus.PENDING, user: { isDeleted: false } },
+      }),
+      this.prisma.panditProfile.count({
+        where: { verificationStatus: VerificationStatus.VERIFIED, user: { isDeleted: false } },
+      }),
+      this.prisma.puja.count({ where: { isActive: true } }),
+      this.prisma.booking.count(),
+      this.prisma.booking.count({ where: { status: 'PENDING' } }),
+      this.prisma.booking.count({ where: { status: 'CONFIRMED' } }),
+      this.prisma.booking.count({ where: { status: 'COMPLETED' } }),
+      this.prisma.booking.count({ where: { status: 'CANCELLED' } }),
+      this.prisma.payment.count({ where: { paymentStatus: 'SUCCESS' } }),
+      this.prisma.payment.count({ where: { paymentStatus: 'PENDING' } }),
+      this.prisma.payment.count({ where: { paymentStatus: 'FAILED' } }),
+      this.prisma.payment.findMany({
+        where: { paymentStatus: 'SUCCESS' },
+        select: { amount: true },
+      }),
+    ]);
+
+    const totalRevenue = paymentsWithAmount.reduce(
+      (sum, p) => sum + Number(p.amount || 0),
+      0
+    );
+
+    return {
+      customers: {
+        total: totalCustomers,
+      },
+      pandits: {
+        total: totalPandits,
+        pending: pendingPandits,
+        approved: approvedPandits,
+      },
+      pujas: {
+        total: totalPujas,
+      },
+      bookings: {
+        total: totalBookings,
+        pending: pendingBookings,
+        confirmed: confirmedBookings,
+        completed: completedBookings,
+        cancelled: cancelledBookings,
+      },
+      payments: {
+        total: successfulPayments + pendingPayments + failedPayments,
+        successful: successfulPayments,
+        pending: pendingPayments,
+        failed: failedPayments,
+        totalRevenue,
+      },
+    };
+  }
+
+  /**
+   * Get all registered customers with search and booking statistics
+   */
+  async getCustomers(query: { search?: string; page?: number; limit?: number }) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.CustomerProfileWhereInput = {
+      user: { isDeleted: false },
+    };
+
+    if (query.search) {
+      const s = query.search.trim();
+      where.OR = [
+        { firstName: { contains: s, mode: 'insensitive' } },
+        { lastName: { contains: s, mode: 'insensitive' } },
+        { user: { email: { contains: s, mode: 'insensitive' } } },
+        { user: { phoneNumber: { contains: s, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [total, customers] = await Promise.all([
+      this.prisma.customerProfile.count({ where }),
+      this.prisma.customerProfile.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              phoneNumber: true,
+              isActive: true,
+              createdAt: true,
+            },
+          },
+          _count: {
+            select: { bookings: true, orders: true },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      customers,
+    };
+  }
+
+  /**
+   * Get all bookings across the platform with filtering
+   */
+  async getBookings(query: {
+    status?: string;
+    search?: string;
+    date?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.BookingWhereInput = {};
+
+    if (query.status && query.status.toUpperCase() !== 'ALL') {
+      where.status = query.status.toUpperCase() as any;
+    }
+
+    if (query.search) {
+      const s = query.search.trim();
+      where.OR = [
+        { bookingNumber: { contains: s, mode: 'insensitive' } },
+        { city: { contains: s, mode: 'insensitive' } },
+        { customerProfile: { firstName: { contains: s, mode: 'insensitive' } } },
+        { customerProfile: { lastName: { contains: s, mode: 'insensitive' } } },
+        { panditProfile: { fullName: { contains: s, mode: 'insensitive' } } },
+        { puja: { title: { contains: s, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [total, bookings] = await Promise.all([
+      this.prisma.booking.count({ where }),
+      this.prisma.booking.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          customerProfile: {
+            include: { user: { select: { email: true, phoneNumber: true } } },
+          },
+          panditProfile: {
+            include: { user: { select: { email: true, phoneNumber: true } } },
+          },
+          puja: true,
+          payments: { orderBy: { createdAt: 'desc' } },
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      bookings,
+    };
+  }
+
+  /**
+   * Update booking status
+   */
+  async updateBookingStatus(id: string, status: string) {
+    const booking = await this.prisma.booking.findUnique({ where: { id } });
+    if (!booking) {
+      throw new NotFoundException(`Booking '${id}' not found.`);
+    }
+
+    return this.prisma.booking.update({
+      where: { id },
+      data: { status: status.toUpperCase() as any },
+      include: {
+        customerProfile: true,
+        panditProfile: true,
+        puja: true,
+        payments: true,
+      },
+    });
+  }
+
+  /**
+   * Reassign a Pandit to a booking
+   */
+  async assignPandit(bookingId: string, panditProfileId: string) {
+    const [booking, pandit] = await Promise.all([
+      this.prisma.booking.findUnique({ where: { id: bookingId } }),
+      this.prisma.panditProfile.findUnique({ where: { id: panditProfileId } }),
+    ]);
+
+    if (!booking) throw new NotFoundException('Booking not found.');
+    if (!pandit) throw new NotFoundException('Pandit profile not found.');
+
+    return this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { panditProfileId },
+      include: {
+        customerProfile: true,
+        panditProfile: true,
+        puja: true,
+      },
+    });
+  }
+
+  /**
+   * Get all payments and transaction overview
+   */
+  async getPayments(query: { status?: string; page?: number; limit?: number }) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.PaymentWhereInput = {};
+    if (query.status && query.status.toUpperCase() !== 'ALL') {
+      where.paymentStatus = query.status.toUpperCase() as any;
+    }
+
+    const [total, payments] = await Promise.all([
+      this.prisma.payment.count({ where }),
+      this.prisma.payment.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          booking: {
+            include: {
+              customerProfile: true,
+              panditProfile: true,
+              puja: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      payments,
+    };
+  }
+
+  /**
+   * Get all Pujas with category relations
+   */
+  async getPujas(query?: { search?: string; page?: number; limit?: number }) {
+    const page = Number(query?.page) || 1;
+    const limit = Number(query?.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.PujaWhereInput = {};
+    if (query?.search) {
+      where.OR = [
+        { title: { contains: query.search.trim(), mode: 'insensitive' } },
+        { description: { contains: query.search.trim(), mode: 'insensitive' } },
+      ];
+    }
+
+    const [total, pujas] = await Promise.all([
+      this.prisma.puja.count({ where }),
+      this.prisma.puja.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: { category: true },
+      }),
+    ]);
+
+    return { total, pujas };
+  }
+
+  /**
+   * Create a new Puja
+   */
+  async createPuja(data: any) {
+    let categoryId = data.categoryId;
+    if (!categoryId) {
+      const firstCat = await this.prisma.pujaCategory.findFirst();
+      categoryId = firstCat ? firstCat.id : undefined;
+    }
+
+    const slug = data.slug || data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+    return this.prisma.puja.create({
+      data: {
+        title: data.title,
+        slug,
+        categoryId,
+        description: data.description || '',
+        basePrice: data.basePrice || 3501,
+        samagriPrice: data.samagriPrice || 1100,
+        durationMinutes: data.durationMinutes || 120,
+        requiredPandits: data.requiredPandits || 1,
+        languages: data.languages || ['Hindi', 'Sanskrit', 'Marathi'],
+        requiredSamagri: data.requiredSamagri || [],
+        imageUrl: data.imageUrl || '/images/pujas/satyanarayan.jpg',
+        isActive: data.isActive !== undefined ? data.isActive : true,
+      },
+    });
+  }
+
+  /**
+   * Update an existing Puja
+   */
+  async updatePuja(id: string, data: any) {
+    return this.prisma.puja.update({
+      where: { id },
+      data,
+    });
+  }
+
+  /**
+   * Comprehensive Reports and Business Analytics
+   */
+  async getReports() {
+    const [recentBookings, topPujas, payments] = await Promise.all([
+      this.prisma.booking.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: { puja: true, customerProfile: true, panditProfile: true },
+      }),
+      this.prisma.puja.findMany({
+        take: 5,
+        orderBy: { bookings: { _count: 'desc' } },
+        include: { _count: { select: { bookings: true } } },
+      }),
+      this.prisma.payment.findMany({
+        where: { paymentStatus: 'SUCCESS' },
+        select: { amount: true, createdAt: true },
+      }),
+    ]);
+
+    const totalRevenue = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+    return {
+      totalRevenue,
+      totalPaidTransactions: payments.length,
+      topPujas: topPujas.map((p) => ({
+        id: p.id,
+        title: p.title,
+        bookingsCount: p._count.bookings,
+        basePrice: p.basePrice,
+      })),
+      recentBookings,
+    };
+  }
 }

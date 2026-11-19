@@ -24,6 +24,8 @@ import {
   Check,
 } from 'lucide-react';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -59,8 +61,8 @@ function CheckoutContent() {
     const generatedOrderNumber = `DS-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
 
     try {
-      // 1. Try sending real booking request to backend API
-      const res = await fetch('http://localhost:3001/api/v1/bookings', {
+      // 1. Send real booking request to backend API
+      const res = await fetch(`${API_BASE_URL}/bookings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -85,6 +87,28 @@ function CheckoutContent() {
       if (res && res.ok) {
         const json = await res.json();
         createdData = json.data || json;
+
+        // 2. Call payments API to record payment in database
+        if (paymentMethod === 'CASH') {
+          await fetch(`${API_BASE_URL}/payments/cash-after-puja`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: createdData.bookingNumber || createdData.id,
+              notes: 'Devotee will offer Dakshina in cash after ceremony completion.',
+            }),
+          }).catch(console.warn);
+        } else {
+          await fetch(`${API_BASE_URL}/payments/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId: createdData.bookingNumber || createdData.id,
+              razorpayOrderId: `order_${Date.now()}`,
+              razorpayPaymentId: generatedTxnId,
+            }),
+          }).catch(console.warn);
+        }
       }
 
       const finalBooking = createdData || {
