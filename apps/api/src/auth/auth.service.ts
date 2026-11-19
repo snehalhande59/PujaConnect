@@ -41,10 +41,10 @@ export class AuthService {
     }
 
     // 2. Prevent duplicate phone registration if phone is supplied
-    if (dto.phoneNumber) {
-      const cleanPhone = dto.phoneNumber.trim();
+    const phoneValue = (dto.phoneNumber || dto.phone)?.trim() || null;
+    if (phoneValue) {
       const existingPhone = await this.prisma.user.findFirst({
-        where: { phoneNumber: cleanPhone },
+        where: { phoneNumber: phoneValue },
       });
       if (existingPhone) {
         throw new ConflictException(
@@ -61,7 +61,7 @@ export class AuthService {
       data: {
         email,
         passwordHash,
-        phoneNumber: dto.phoneNumber?.trim() || null,
+        phoneNumber: phoneValue,
         role: Role.CUSTOMER,
         customerProfile: {
           create: {

@@ -19,4 +19,8 @@ export class RegisterCustomerDto {
   @IsOptional()
   @IsString()
   phoneNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
 }

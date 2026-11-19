@@ -19,9 +19,23 @@ const getBaseUrl = (): string => {
   const configUrl = Constants.expoConfig?.extra?.apiUrl;
   if (configUrl) return configUrl;
 
- if (Platform.OS === 'android') {
-  return 'http://192.168.1.3:3001/api/v1';
-}  return 'http://localhost:3001/api/v1';
+  // Extract host IP dynamically from Expo Go connection if available
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest?.debuggerHost ||
+    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
+
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+      return `http://${ip}:3001/api/v1`;
+    }
+  }
+
+  if (Platform.OS === 'android') {
+    return 'http://192.168.1.3:3001/api/v1';
+  }
+  return 'http://localhost:3001/api/v1';
 };
 
 export const API_BASE_URL = getBaseUrl();
