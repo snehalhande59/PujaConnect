@@ -2,10 +2,14 @@
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { VerificationStatus, Prisma } from '@prisma/client';
+import { VerificationStatus, Role, Prisma } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import { QueryPanditsDto } from './dto/query-pandits.dto';
+import { CreatePanditDto } from './dto/create-pandit.dto';
+import { UpdatePanditDto } from './dto/update-pandit.dto';
 
 @Injectable()
 export class AdminService {
@@ -296,6 +300,247 @@ export class AdminService {
   }
 
   /**
+   * Admin-Only: Add a new verified Pandit directly to PostgreSQL database
+   */
+  async createPandit(dto: CreatePanditDto) {
+    const email = dto.email.toLowerCase().trim();
+    const phoneNumber = dto.phoneNumber.trim();
+
+    // Check duplicate email
+    const existingEmail = await this.prisma.user.findUnique({
+      where: { email },
+    });
+    if (existingEmail) {
+      throw new ConflictException('An account with this email address already exists.');
+    }
+
+    // Check duplicate phone
+    const existingPhone = await this.prisma.user.findFirst({
+      where: { phoneNumber },
+    });
+    if (existingPhone) {
+      throw new ConflictException('An account with this mobile number already exists.');
+    }
+
+    // Generate secure password hash for account
+    const passwordHash = await bcrypt.hash(`Pandit_${Date.now()}`, 10);
+
+    // Create User & PanditProfile with VERIFIED status and isAvailable=true
+    const pandit = await this.prisma.panditProfile.create({
+      data: {
+        fullName: dto.fullName.trim(),
+        avatarUrl: dto.avatarUrl || null,
+        experienceYears: dto.experienceYears ?? 1,
+        languages: dto.languages && dto.languages.length > 0 ? dto.languages : ['Hindi', 'Sanskrit'],
+        specializations: dto.specializations && dto.specializations.length > 0 ? dto.specializations : ['Vedic Puja'],
+        city: dto.city.trim(),
+        state: dto.state.trim(),
+        serviceAreas: dto.serviceAreas && dto.serviceAreas.length > 0 ? dto.serviceAreas : [dto.city.trim()],
+        bio: dto.bio || null,
+        basePrice: dto.basePrice !== undefined ? new Prisma.Decimal(dto.basePrice) : new Prisma.Decimal(2100),
+        verificationStatus: VerificationStatus.VERIFIED,
+        isAvailable: dto.isAvailable ?? true,
+        user: {
+          create: {
+            email,
+            phoneNumber,
+            passwordHash,
+            role: Role.PANDIT,
+            isActive: true,
+          },
+        },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    // Connect Puja services if provided
+    if (dto.pujaIds && dto.pujaIds.length > 0) {
+      for (const pujaId of dto.pujaIds) {
+        await this.prisma.panditService.upsert({
+          where: {
+            panditProfileId_pujaId: {
+              panditProfileId: pandit.id,
+              pujaId,
+            },
+          },
+          create: {
+            panditProfileId: pandit.id,
+            pujaId,
+            isActive: true,
+          },
+          update: {
+            isActive: true,
+          },
+        }).catch(() => {});
+      }
+    }
+
+    return pandit;
+  }
+
+  /**
+   * Admin-Only: Edit Pandit details
+   */
+  async updatePandit(id: string, dto: UpdatePanditDto) {
+    const pandit = await this.prisma.panditProfile.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+
+    if (!pandit) {
+      throw new NotFoundException('Pandit profile not found.');
+    }
+
+    // Update User email / phone / isActive if provided
+    const userUpdates: any = {};
+    if (dto.email && dto.email.toLowerCase().trim() !== pandit.user.email) {
+      const email = dto.email.toLowerCase().trim();
+      const existing = await this.prisma.user.findUnique({ where: { email } });
+      if (existing && existing.id !== pandit.userId) {
+        throw new ConflictException('Email already in use by another user.');
+      }
+      userUpdates.email = email;
+    }
+    if (dto.phoneNumber && dto.phoneNumber.trim() !== pandit.user.phoneNumber) {
+      const phone = dto.phoneNumber.trim();
+      const existing = await this.prisma.user.findFirst({ where: { phoneNumber: phone } });
+      if (existing && existing.id !== pandit.userId) {
+        throw new ConflictException('Mobile number already in use by another user.');
+      }
+      userUpdates.phoneNumber = phone;
+    }
+    if (dto.isActive !== undefined) {
+      userUpdates.isActive = dto.isActive;
+    }
+
+    if (Object.keys(userUpdates).length > 0) {
+      await this.prisma.user.update({
+        where: { id: pandit.userId },
+        data: userUpdates,
+      });
+    }
+
+    // Update PanditProfile fields
+    const profileUpdates: any = {};
+    if (dto.fullName) profileUpdates.fullName = dto.fullName.trim();
+    if (dto.avatarUrl !== undefined) profileUpdates.avatarUrl = dto.avatarUrl;
+    if (dto.experienceYears !== undefined) profileUpdates.experienceYears = dto.experienceYears;
+    if (dto.languages) profileUpdates.languages = dto.languages;
+    if (dto.specializations) profileUpdates.specializations = dto.specializations;
+    if (dto.city) profileUpdates.city = dto.city.trim();
+    if (dto.state) profileUpdates.state = dto.state.trim();
+    if (dto.serviceAreas) profileUpdates.serviceAreas = dto.serviceAreas;
+    if (dto.bio !== undefined) profileUpdates.bio = dto.bio;
+    if (dto.basePrice !== undefined) profileUpdates.basePrice = new Prisma.Decimal(dto.basePrice);
+    if (dto.isAvailable !== undefined) profileUpdates.isAvailable = dto.isAvailable;
+
+    const updated = await this.prisma.panditProfile.update({
+      where: { id },
+      data: profileUpdates,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            isActive: true,
+          },
+        },
+        services: {
+          include: {
+            puja: true,
+          },
+        },
+      },
+    });
+
+    if (dto.pujaIds) {
+      await this.prisma.panditService.deleteMany({ where: { panditProfileId: id } });
+      for (const pujaId of dto.pujaIds) {
+        await this.prisma.panditService.create({
+          data: {
+            panditProfileId: id,
+            pujaId,
+            isActive: true,
+          },
+        }).catch(() => {});
+      }
+    }
+
+    return updated;
+  }
+
+  /**
+   * Admin-Only: Deactivate or Delete a Pandit
+   */
+  async deletePandit(id: string) {
+    const pandit = await this.prisma.panditProfile.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+
+    if (!pandit) {
+      throw new NotFoundException('Pandit profile not found.');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: pandit.userId },
+        data: {
+          isActive: false,
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+      }),
+      this.prisma.panditProfile.update({
+        where: { id },
+        data: {
+          isAvailable: false,
+          verificationStatus: VerificationStatus.SUSPENDED,
+        },
+      }),
+    ]);
+
+    return { success: true, message: 'Pandit has been successfully deactivated.' };
+  }
+
+  /**
+   * Admin-Only: View full booking history for a specific Pandit
+   */
+  async getPanditBookings(id: string) {
+    const pandit = await this.prisma.panditProfile.findUnique({
+      where: { id },
+    });
+
+    if (!pandit) {
+      throw new NotFoundException('Pandit profile not found.');
+    }
+
+    return this.prisma.booking.findMany({
+      where: { panditProfileId: id },
+      include: {
+        customerProfile: {
+          include: {
+            user: { select: { email: true, phoneNumber: true } },
+          },
+        },
+        puja: true,
+        payments: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
    * Get complete live platform analytics and counts for the Admin Dashboard Overview
    */
   async getDashboardStats() {
@@ -314,6 +559,8 @@ export class AdminService {
       pendingPayments,
       failedPayments,
       paymentsWithAmount,
+      recentBookings,
+      recentCustomers,
     ] = await Promise.all([
       this.prisma.customerProfile.count({ where: { user: { isDeleted: false } } }),
       this.prisma.panditProfile.count({ where: { user: { isDeleted: false } } }),
@@ -335,6 +582,25 @@ export class AdminService {
       this.prisma.payment.findMany({
         where: { paymentStatus: 'SUCCESS' },
         select: { amount: true },
+      }),
+      this.prisma.booking.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          customerProfile: {
+            include: { user: { select: { email: true, phoneNumber: true } } },
+          },
+          panditProfile: true,
+          puja: true,
+          payments: true,
+        },
+      }),
+      this.prisma.customerProfile.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: { select: { email: true, phoneNumber: true, createdAt: true } },
+        },
       }),
     ]);
 
@@ -369,6 +635,8 @@ export class AdminService {
         failed: failedPayments,
         totalRevenue,
       },
+      recentBookings,
+      recentCustomers,
     };
   }
 

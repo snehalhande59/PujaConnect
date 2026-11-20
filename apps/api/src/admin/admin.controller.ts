@@ -3,6 +3,7 @@
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -22,6 +23,8 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RejectPanditDto } from './dto/reject-pandit.dto';
 import { QueryPanditsDto } from './dto/query-pandits.dto';
+import { CreatePanditDto } from './dto/create-pandit.dto';
+import { UpdatePanditDto } from './dto/update-pandit.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -82,6 +85,33 @@ export class AdminController {
     @Body() dto: RejectPanditDto,
   ) {
     return this.adminService.rejectPandit(id, dto.reason);
+  }
+
+  @Post('pandits')
+  @ApiOperation({ summary: 'Admin directly adds a new verified Pandit' })
+  async createPandit(@Body() dto: CreatePanditDto) {
+    return this.adminService.createPandit(dto);
+  }
+
+  @Patch('pandits/:id')
+  @ApiOperation({ summary: 'Admin edits Pandit profile and status' })
+  async updatePandit(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePanditDto,
+  ) {
+    return this.adminService.updatePandit(id, dto);
+  }
+
+  @Delete('pandits/:id')
+  @ApiOperation({ summary: 'Admin deactivates/deletes a Pandit' })
+  async deletePandit(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminService.deletePandit(id);
+  }
+
+  @Get('pandits/:id/bookings')
+  @ApiOperation({ summary: 'Admin views full booking history for a Pandit' })
+  async getPanditBookings(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminService.getPanditBookings(id);
   }
 
   // ==========================================

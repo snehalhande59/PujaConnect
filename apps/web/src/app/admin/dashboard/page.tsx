@@ -49,6 +49,10 @@ export default function AdminDashboardPage() {
     payments: { total: 0, successful: 0, pending: 0, failed: 0, totalRevenue: 0 },
   });
 
+  // Recent Entities State
+  const [recentBookings, setRecentBookings] = useState<any[]>([]);
+  const [recentCustomers, setRecentCustomers] = useState<any[]>([]);
+
   // Pending Pandits State
   const [pendingPandits, setPendingPandits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +85,12 @@ export default function AdminDashboardPage() {
             verified: payload.pandits?.approved || 0,
             rejected: Math.max(0, (payload.pandits?.total || 0) - (payload.pandits?.approved || 0) - (payload.pandits?.pending || 0)),
           });
+          if (Array.isArray(payload.recentBookings)) {
+            setRecentBookings(payload.recentBookings);
+          }
+          if (Array.isArray(payload.recentCustomers)) {
+            setRecentCustomers(payload.recentCustomers);
+          }
         }
       }
 
@@ -460,6 +470,97 @@ export default function AdminDashboardPage() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Recent Bookings & Devotee Registrations Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 1. Recent Bookings Table */}
+            <div className="bg-maroon-900 border border-gold/30 rounded-2xl p-6 space-y-4 shadow-sacred">
+              <div className="flex items-center justify-between border-b border-maroon-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-gold" />
+                  <h3 className="font-heading font-bold text-sm text-ivory">Recent Bookings (PostgreSQL)</h3>
+                </div>
+                <Link href="/admin/bookings" className="text-xs text-gold-300 hover:underline">
+                  View All &gt;
+                </Link>
+              </div>
+
+              {recentBookings.length === 0 ? (
+                <p className="text-xs text-beige/60 py-6 text-center">No recent bookings recorded yet.</p>
+              ) : (
+                <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                  {recentBookings.map((b) => (
+                    <div
+                      key={b.id}
+                      className="p-3 bg-maroon-950/80 border border-gold/15 rounded-xl flex items-center justify-between text-xs gap-3"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-gold text-[11px] font-bold">{b.bookingNumber}</span>
+                          <span className="font-bold text-ivory">{b.puja?.title || 'Vedic Ritual'}</span>
+                        </div>
+                        <p className="text-[11px] text-beige/70">
+                          Devotee: <strong className="text-ivory">{b.customer?.firstName} {b.customer?.lastName}</strong> • Date: {new Date(b.pujaDate).toLocaleDateString()}
+                        </p>
+                        {b.pandit && (
+                          <p className="text-[10px] text-emerald-400">
+                            Assigned Purohit: Pt. {b.pandit.user?.firstName || 'Purohit'} {b.pandit.user?.lastName || ''}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-gold/15 text-gold border border-gold/30">
+                          {b.status}
+                        </span>
+                        <p className="text-xs font-bold text-ivory mt-1">₹{b.totalAmount}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Recent Devotee Registrations Table */}
+            <div className="bg-maroon-900 border border-gold/30 rounded-2xl p-6 space-y-4 shadow-sacred">
+              <div className="flex items-center justify-between border-b border-maroon-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-gold" />
+                  <h3 className="font-heading font-bold text-sm text-ivory">Recent Customer Registrations</h3>
+                </div>
+                <Link href="/admin/customers" className="text-xs text-gold-300 hover:underline">
+                  View All &gt;
+                </Link>
+              </div>
+
+              {recentCustomers.length === 0 ? (
+                <p className="text-xs text-beige/60 py-6 text-center">No customer registrations yet.</p>
+              ) : (
+                <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                  {recentCustomers.map((c) => (
+                    <div
+                      key={c.id}
+                      className="p-3 bg-maroon-950/80 border border-gold/15 rounded-xl flex items-center justify-between text-xs gap-3"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-ivory">{c.firstName} {c.lastName}</span>
+                          <span className="text-[10px] bg-emerald-950 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/30">
+                            ACTIVE
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-beige/70">
+                          {c.email} • {c.phoneNumber || 'Mobile unverified'}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0 text-[10px] text-beige/50">
+                        {new Date(c.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </main>
       </div>

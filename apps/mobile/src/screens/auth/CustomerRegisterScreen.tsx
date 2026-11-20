@@ -14,6 +14,7 @@ import { colors } from '../../theme/colors';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { useAuth } from '../../context/AuthContext';
+import { DevSutraLogo } from '../../components/common/DevSutraLogo';
 
 interface CustomerRegisterScreenProps {
   onBack: () => void;
@@ -80,6 +81,8 @@ export const CustomerRegisterScreen: React.FC<CustomerRegisterScreenProps> = ({
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
+            <DevSutraLogo variant="vertical" size="lg" />
+            <Text style={styles.mantraText}>॥ ॐ श्री गणेशाय नमः ॥</Text>
             <Text style={styles.title}>Join DevSutra</Text>
             <Text style={styles.subtitle}>
               Book authentic rituals with verified Vedic scholars for your family & home.
@@ -201,6 +204,13 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginVertical: 14,
+  },
+  mantraText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.gold,
+    marginTop: 10,
+    marginBottom: 4,
   },
   title: {
     fontSize: 22,

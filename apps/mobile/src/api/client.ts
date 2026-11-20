@@ -13,12 +13,10 @@ import {
   Address,
 } from '../types';
 
-// Default host determination for Android Emulator vs Device vs Local Web
-const getBaseUrl = (): string => {
-  // If explicitly configured in app.json extra
-  const configUrl = Constants.expoConfig?.extra?.apiUrl;
-  if (configUrl) return configUrl;
+export const PRODUCTION_API_URL = 'https://pujaconnect-api-he9b.onrender.com/api/v1';
 
+// Dynamic host determination for Android Device vs Emulator vs Local Web
+const getLocalBaseUrl = (): string => {
   // Extract host IP dynamically from Expo Go connection if available
   const hostUri =
     Constants.expoConfig?.hostUri ||
@@ -38,7 +36,7 @@ const getBaseUrl = (): string => {
   return 'http://localhost:3001/api/v1';
 };
 
-export const API_BASE_URL = getBaseUrl();
+export const API_BASE_URL = getLocalBaseUrl();
 
 // Storage keys
 const TOKEN_KEY = 'pujaconnect_auth_token';
@@ -144,7 +142,42 @@ export const storage = {
   },
 };
 
-// Generic fetch wrapper
+// Helper to perform fetch with timeout to prevent hanging connections
+function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  headers: Record<string, string>,
+  timeoutMs: number = 7000,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  return fetch(url, {
+    ...options,
+    headers,
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeoutId));
+}
+
+async function handleApiResponse<T>(response: Response): Promise<T> {
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const errorMsg = Array.isArray(payload.message)
+      ? payload.message.join(', ')
+      : payload.message || `Request failed with status ${response.status}`;
+    throw new Error(errorMsg);
+  }
+
+  // NestJS TransformInterceptor wraps in { success: true, data: ... }
+  if (payload.data !== undefined) {
+    return payload.data?.data !== undefined ? payload.data.data : payload.data;
+  }
+
+  return payload as T;
+}
+
+// Generic fetch wrapper with automatic fallback between local network and live production API
 async function apiRequest<T = any>(
   endpoint: string,
   options: RequestInit = {},
@@ -159,28 +192,50 @@ async function apiRequest<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const url = `${API_BASE_URL}${endpoint}`;
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  // 1. First attempt: Primary URL (Local LAN in DEV or Production)
+  const primaryUrl = `${API_BASE_URL}${endpoint}`;
+  try {
+    const response = await fetchWithTimeout(primaryUrl, options, headers, 4000);
+    return await handleApiResponse<T>(response);
+  } catch (primaryErr: any) {
+    // 2. If primary was local LAN and failed (e.g. device on cellular, connection reset, timeout),
+    // automatically fallback to live Render production API!
+    if (API_BASE_URL !== PRODUCTION_API_URL) {
+      const fallbackUrl = `${PRODUCTION_API_URL}${endpoint}`;
+      try {
+        const fallbackRes = await fetchWithTimeout(fallbackUrl, options, headers, 30000);
+        return await handleApiResponse<T>(fallbackRes);
+      } catch (fallbackErr: any) {
+        const isSocketReset =
+          primaryErr?.message?.includes('SocketException') ||
+          primaryErr?.message?.includes('Connection reset') ||
+          primaryErr?.message?.includes('Network request failed');
 
-  const payload = await response.json().catch(() => ({}));
+        if (isSocketReset) {
+          throw new Error(
+            'Cannot reach PujaConnect server. Please check your internet connection or verify Wi-Fi.',
+          );
+        }
+        throw new Error(
+          fallbackErr.message ||
+            primaryErr.message ||
+            'Connection failed. Please check network.',
+        );
+      }
+    }
 
-  if (!response.ok) {
-    const errorMsg = Array.isArray(payload.message)
-      ? payload.message.join(', ')
-      : payload.message || `Request failed with status ${response.status}`;
-    throw new Error(errorMsg);
+    const isSocketReset =
+      primaryErr?.message?.includes('SocketException') ||
+      primaryErr?.message?.includes('Connection reset') ||
+      primaryErr?.message?.includes('Network request failed');
+
+    if (isSocketReset) {
+      throw new Error(
+        'Cannot reach PujaConnect server. Please check your internet connection.',
+      );
+    }
+    throw primaryErr;
   }
-
-  // NestJS TransformInterceptor wraps in { success: true, data: ... }
-  if (payload.data !== undefined) {
-    // If double-wrapped, unwrap once
-    return payload.data?.data !== undefined ? payload.data.data : payload.data;
-  }
-
-  return payload as T;
 }
 
 // -------------------------------------------------------------

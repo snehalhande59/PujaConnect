@@ -31,6 +31,7 @@ import {
 } from '../../theme/culturalAssets';
 import { KundaliModal } from '../../components/common/KundaliModal';
 import { ReviewRatingModal } from '../../components/common/ReviewRatingModal';
+import { DevSutraLogo } from '../../components/common/DevSutraLogo';
 import { formatStandardDate, formatStandardTime } from '../../utils/dateUtils';
 
 const { width } = Dimensions.get('window');
@@ -177,8 +178,16 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
 
   return (
     <View style={styles.safe}>
-      {/* Top Header - Exact Speedy Pandit Style */}
-      <View style={[styles.topHeader, { paddingTop: headerPaddingTop }]}>
+      {/* Top Auspicious Ribbon (Matching Web) */}
+      <View style={[styles.topAuspiciousRibbon, { paddingTop: Math.max(headerPaddingTop - 28, 4) }]}>
+        <Ionicons name="sparkles" size={11} color="#FFE26B" style={{ marginRight: 4 }} />
+        <Text style={styles.topAuspiciousRibbonText} numberOfLines={1}>
+          Vedic Tradition • 100% Verified Gurukul Pandits • Pure Samagri
+        </Text>
+      </View>
+
+      {/* Top Header with DevSutra Logo & Quick Controls */}
+      <View style={styles.topHeader}>
         {/* Left Hamburger Drawer Menu */}
         <TouchableOpacity style={styles.menuBtn} onPress={onOpenDrawer} activeOpacity={0.7}>
           <View style={styles.hamburgerContainer}>
@@ -188,17 +197,35 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
           </View>
         </TouchableOpacity>
 
-        {/* Center City Selector with Red Location Pin */}
-        <TouchableOpacity style={styles.citySelector} onPress={onSelectCity} activeOpacity={0.7}>
-          <Ionicons name="location" size={17} color={colors.primary} />
-          <Text style={styles.cityText}>{selectedCity}</Text>
-          <Ionicons name="chevron-down" size={14} color={colors.primary} />
-        </TouchableOpacity>
+        {/* Center DevSutra Logo */}
+        <View style={styles.headerLogoCenter}>
+          <DevSutraLogo variant="horizontal" size="sm" showTagline={false} />
+        </View>
 
-        {/* Right Notification Bell */}
-        <TouchableOpacity style={styles.bellBtn} onPress={onNavigateNotifications} activeOpacity={0.7}>
-          <Ionicons name="notifications-outline" size={24} color={colors.primary} />
-        </TouchableOpacity>
+        {/* Right Controls: City Selector + Cart + Notifications */}
+        <View style={styles.headerRightControls}>
+          {/* City Selector */}
+          <TouchableOpacity style={styles.citySelector} onPress={onSelectCity} activeOpacity={0.7}>
+            <Ionicons name="location" size={14} color={colors.primary} />
+            <Text style={styles.cityText} numberOfLines={1}>{selectedCity}</Text>
+            <Ionicons name="chevron-down" size={11} color={colors.primary} />
+          </TouchableOpacity>
+
+          {/* Cart Icon with Dynamic Badge */}
+          <TouchableOpacity style={styles.cartBtn} onPress={onNavigateCart} activeOpacity={0.7}>
+            <Ionicons name="bag-handle-outline" size={22} color={colors.primary} />
+            {itemCount > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{itemCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Notification Bell */}
+          <TouchableOpacity style={styles.bellBtn} onPress={onNavigateNotifications} activeOpacity={0.7}>
+            <Ionicons name="notifications-outline" size={22} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -276,14 +303,61 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
                 • गुरुकुल प्रमाणित पुरोहित  • १००% शुद्ध पूजा सामग्री
               </Text>
 
-              <TouchableOpacity
-                style={styles.heroCtaBtn}
-                activeOpacity={0.85}
-                onPress={onNavigateExplore}
-              >
-                <Text style={styles.heroCtaBtnText}>पूजा बुक करा (Book Pandit)</Text>
-                <Ionicons name="arrow-forward" size={14} color={colors.primary} />
-              </TouchableOpacity>
+              {/* Action Buttons Row matching website */}
+              <View style={styles.heroActionBtnsRow}>
+                <TouchableOpacity
+                  style={styles.heroCtaBtn}
+                  activeOpacity={0.85}
+                  onPress={onNavigateExplore}
+                >
+                  <Ionicons name="calendar-outline" size={14} color={colors.primary} style={{ marginRight: 4 }} />
+                  <Text style={styles.heroCtaBtnText}>Book Puja</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.heroExploreBtn}
+                  activeOpacity={0.85}
+                  onPress={() => onNavigateCategory('Regular Puja')}
+                >
+                  <Ionicons name="flame-outline" size={14} color="#FFF8EC" style={{ marginRight: 4 }} />
+                  <Text style={styles.heroExploreBtnText}>Explore Services</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Trust Highlights Strip (Matching Website Exactly) */}
+        <View style={styles.trustHighlightsStrip}>
+          <View style={styles.trustItem}>
+            <Ionicons name="shield-checkmark" size={18} color="#C49A45" />
+            <View style={styles.trustItemTextCol}>
+              <Text style={styles.trustItemTitle}>Gurukul Verified</Text>
+              <Text style={styles.trustItemSub}>100% Checked</Text>
+            </View>
+          </View>
+
+          <View style={styles.trustItem}>
+            <Ionicons name="flame" size={18} color={colors.secondary} />
+            <View style={styles.trustItemTextCol}>
+              <Text style={styles.trustItemTitle}>Pure Vedic Vidhi</Text>
+              <Text style={styles.trustItemSub}>Shastric Mantras</Text>
+            </View>
+          </View>
+
+          <View style={styles.trustItem}>
+            <Ionicons name="bag-check" size={18} color="#C49A45" />
+            <View style={styles.trustItemTextCol}>
+              <Text style={styles.trustItemTitle}>Temple Samagri</Text>
+              <Text style={styles.trustItemSub}>100% Pure</Text>
+            </View>
+          </View>
+
+          <View style={styles.trustItem}>
+            <Ionicons name="heart-circle" size={18} color={colors.secondary} />
+            <View style={styles.trustItemTextCol}>
+              <Text style={styles.trustItemTitle}>Clear Dakshina</Text>
+              <Text style={styles.trustItemSub}>No Hidden Fees</Text>
             </View>
           </View>
         </View>
@@ -878,7 +952,9 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
 
         {/* Authentic Devotional Trust Footer */}
         <View style={styles.trustFooter}>
-          <Text style={styles.footerBrand}>PujaConnect (पुजाकनेक्ट)</Text>
+          <View style={{ marginBottom: 10 }}>
+            <DevSutraLogo variant="vertical" size="md" />
+          </View>
           <Text style={styles.footerTagline}>अस्सल भारतीय वैदिक परंपरा • आपल्या दारी</Text>
 
           {/* 3 Pillars */}
@@ -955,13 +1031,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF8EC', // Warm cream background
   },
+  topAuspiciousRibbon: {
+    backgroundColor: '#7B2635',
+    paddingBottom: 4,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(196, 154, 69, 0.35)',
+  },
+  topAuspiciousRibbonText: {
+    color: '#FFF8EC',
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
   topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     backgroundColor: '#FFF8EC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EDE0CB',
   },
   menuBtn: {
     padding: 6,
@@ -981,22 +1075,57 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: 2,
   },
+  headerLogoCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerRightControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   citySelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    gap: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    backgroundColor: '#FDF3E3',
+    borderWidth: 1,
+    borderColor: '#EDE0CB',
+    maxWidth: 90,
   },
   cityText: {
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.primary,
   },
+  cartBtn: {
+    padding: 4,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: colors.secondary,
+    borderRadius: 9,
+    width: 17,
+    height: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
   bellBtn: {
-    padding: 6,
-    height: 36,
-    width: 36,
+    padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1093,21 +1222,80 @@ const styles = StyleSheet.create({
     color: '#FFE9D4',
     fontWeight: '500',
   },
+  heroActionBtnsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
   heroCtaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
+    backgroundColor: '#FFE26B',
+    paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 18,
-    gap: 6,
-    marginTop: 4,
+    gap: 4,
   },
   heroCtaBtnText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '800',
     color: colors.primary,
+  },
+  heroExploreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 248, 236, 0.15)',
+    borderWidth: 1,
+    borderColor: '#C49A45',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 18,
+    gap: 4,
+  },
+  heroExploreBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#FFF8EC',
+  },
+  trustHighlightsStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: -8,
+    marginBottom: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EDE0CB',
+    shadowColor: '#382820',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  trustItem: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 3,
+  },
+  trustItemTextCol: {
+    alignItems: 'center',
+  },
+  trustItemTitle: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  trustItemSub: {
+    fontSize: 8,
+    color: colors.textLight,
+    textAlign: 'center',
+    marginTop: 1,
   },
   categoryChipsRow: {
     flexDirection: 'row',

@@ -122,7 +122,7 @@ export class BookingsService {
       throw new NotFoundException('No active Puja service available.');
     }
 
-    // 3. Resolve Pandit (by UUID, city, or fallback verified Pandit)
+    // 3. Resolve Pandit: If customer selected a specific Pandit, preserve that Pandit strictly!
     let pandit: any = null;
     const isPanditUuid = dto.panditProfileId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dto.panditProfileId);
 
@@ -131,39 +131,52 @@ export class BookingsService {
         where: { id: dto.panditProfileId },
         include: { user: true },
       });
+
+      if (!pandit || !pandit.user.isActive || pandit.user.isDeleted) {
+        throw new NotFoundException('The selected Pandit is currently unavailable. Please choose another Pandit.');
+      }
+    } else if (dto.panditProfileId) {
+      // Find by name if text passed
+      pandit = await this.prisma.panditProfile.findFirst({
+        where: {
+          fullName: { contains: dto.panditProfileId, mode: 'insensitive' },
+          user: { isActive: true, isDeleted: false },
+        },
+        include: { user: true },
+      });
     }
 
-    if (!pandit || pandit.verificationStatus !== VerificationStatus.VERIFIED) {
-      // Find a verified Pandit in the target city
+    // If customer did not select a Pandit (automatic assignment mode):
+    if (!pandit) {
+      // Find an active verified Pandit in the target city
       pandit = await this.prisma.panditProfile.findFirst({
         where: {
           city: { contains: dto.city, mode: 'insensitive' },
           verificationStatus: VerificationStatus.VERIFIED,
+          isAvailable: true,
+          user: { isActive: true, isDeleted: false },
         },
         include: { user: true },
       });
     }
 
     if (!pandit) {
-      // Fallback to any verified Gurukul Pandit (like Acharya Devendra Shastri)
+      // Fallback to any verified Gurukul Pandit
       pandit = await this.prisma.panditProfile.findFirst({
-        where: { verificationStatus: VerificationStatus.VERIFIED },
+        where: {
+          verificationStatus: VerificationStatus.VERIFIED,
+          isAvailable: true,
+          user: { isActive: true, isDeleted: false },
+        },
         include: { user: true },
       });
     }
 
     if (!pandit) {
-      throw new NotFoundException('No verified Gurukul Pandit available for booking.');
+      throw new NotFoundException('No verified Gurukul Pandit available for booking in your area.');
     }
 
-    // 4. Calculate fees & parse date
-    const pujaFee = Number(puja.basePrice);
-    const samagriFee = dto.includeSamagri ? Number(puja.samagriPrice) : 0;
-    const platformFee = 99;
-    const totalAmount = pujaFee + samagriFee + platformFee;
-
-    const bookingNumber = `DS-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
-
+    // Parse booking date
     let parsedDate: Date;
     try {
       const parsed = new Date(dto.pujaDate);
@@ -171,6 +184,31 @@ export class BookingsService {
     } catch {
       parsedDate = new Date();
     }
+
+    // Prevent double booking for the same Pandit, date and time slot
+    const conflictingBooking = await this.prisma.booking.findFirst({
+      where: {
+        panditProfileId: pandit.id,
+        pujaDate: parsedDate,
+        pujaTimeSlot: dto.pujaTimeSlot,
+        status: { in: [BookingStatus.CONFIRMED, BookingStatus.ACCEPTED, BookingStatus.PENDING] },
+      },
+    });
+
+    if (conflictingBooking) {
+      throw new BadRequestException(
+        `Selected Pandit (${pandit.fullName}) is already booked for ${dto.pujaTimeSlot} on ${dto.pujaDate}. Please choose a different time slot or select another Pandit.`,
+      );
+    }
+
+    // 4. Calculate fees & parse amounts
+    const pujaFee = Number(puja.basePrice);
+    const samagriFee = dto.includeSamagri ? Number(puja.samagriPrice) : 0;
+    const platformFee = 99;
+    const calculatedTotal = pujaFee + samagriFee + platformFee;
+    const totalAmount = dto.totalAmount ? Number(dto.totalAmount) : calculatedTotal;
+
+    const bookingNumber = `DS-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
 
     const isPaid = dto.paymentStatus === 'PAID' || Boolean(dto.transactionId);
     const bookingStatus = isPaid ? BookingStatus.CONFIRMED : BookingStatus.PENDING;

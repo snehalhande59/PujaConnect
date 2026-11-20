@@ -15,6 +15,10 @@ import { LoginDto } from "./dto/login.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { RegisterPanditDto } from "./dto/register-pandit.dto";
+import { SendOtpDto } from "./dto/send-otp.dto";
+import { VerifyOtpDto } from "./dto/verify-otp.dto";
+import { SmsService } from "./sms.service";
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -22,6 +26,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly smsService: SmsService,
   ) {}
 
   /**
@@ -372,5 +377,217 @@ export class AuthService {
 
     const { passwordHash, ...safeUser } = user;
     return safeUser;
+  }
+
+  /**
+   * Send actual mobile number OTP for Customer login / registration
+   */
+  async sendCustomerOtp(dto: SendOtpDto) {
+    if (!dto.phoneNumber || !dto.phoneNumber.trim()) {
+      throw new BadRequestException("Mobile number is required.");
+    }
+
+    if (!this.smsService.isValidIndianMobile(dto.phoneNumber)) {
+      throw new BadRequestException(
+        "Please provide a valid 10-digit Indian mobile number (+91XXXXXXXXXX).",
+      );
+    }
+
+    const normalizedPhone = this.smsService.normalizePhoneNumber(dto.phoneNumber);
+
+    // Enforce 60-second resend cooldown
+    const recentOtp = await this.prisma.otpVerification.findFirst({
+      where: {
+        phoneNumber: normalizedPhone,
+        createdAt: { gte: new Date(Date.now() - 60 * 1000) },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (recentOtp) {
+      const waitSeconds = Math.ceil((recentOtp.createdAt.getTime() + 60 * 1000 - Date.now()) / 1000);
+      throw new BadRequestException(
+        `Please wait ${waitSeconds > 0 ? waitSeconds : 1} seconds before requesting a new OTP.`,
+      );
+    }
+
+    // Rate limiting: Maximum 5 OTP requests per hour per mobile number
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const hourlyCount = await this.prisma.otpVerification.count({
+      where: {
+        phoneNumber: normalizedPhone,
+        createdAt: { gte: oneHourAgo },
+      },
+    });
+
+    if (hourlyCount >= 5) {
+      throw new BadRequestException(
+        "Too many OTP requests for this mobile number. Please try again after 1 hour.",
+      );
+    }
+
+    // Generate cryptographically secure 6-digit OTP
+    const rawOtp = this.smsService.generateOtp();
+    const otpHash = this.smsService.hashOtp(rawOtp);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Store hashed OTP in PostgreSQL
+    await this.prisma.otpVerification.create({
+      data: {
+        phoneNumber: normalizedPhone,
+        otpHash,
+        purpose: dto.purpose || "LOGIN",
+        expiresAt,
+      },
+    });
+
+    // Send real SMS through Twilio/MSG91 gateway
+    const smsResult = await this.smsService.sendOtpSms(normalizedPhone, rawOtp);
+
+    const maskedPhone = `${normalizedPhone.slice(0, 6)}****${normalizedPhone.slice(-2)}`;
+    return {
+      success: true,
+      message: `OTP has been sent to ${maskedPhone}. Valid for 10 minutes.`,
+      phoneNumber: normalizedPhone,
+      cooldownSeconds: 60,
+      provider: smsResult.provider,
+    };
+  }
+
+  /**
+   * Verify mobile number OTP and authenticate or register Customer
+   */
+  async verifyCustomerOtp(dto: VerifyOtpDto) {
+    if (!dto.phoneNumber || !dto.otp) {
+      throw new BadRequestException("Mobile number and OTP are required.");
+    }
+
+    const normalizedPhone = this.smsService.normalizePhoneNumber(dto.phoneNumber);
+    const cleanOtp = dto.otp.trim();
+
+    if (cleanOtp.length !== 6 || !/^\d{6}$/.test(cleanOtp)) {
+      throw new BadRequestException("OTP must be exactly 6 digits.");
+    }
+
+    // Find latest active unverified OTP for this phone number
+    const record = await this.prisma.otpVerification.findFirst({
+      where: {
+        phoneNumber: normalizedPhone,
+        isVerified: false,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!record) {
+      throw new BadRequestException(
+        "No active OTP request found for this number. Please click 'Send OTP' first.",
+      );
+    }
+
+    // Check expiration
+    if (new Date() > record.expiresAt) {
+      throw new BadRequestException("OTP has expired. Please request a new OTP.");
+    }
+
+    // Check maximum attempts limit (max 3 failed tries)
+    if (record.attempts >= 3) {
+      throw new BadRequestException(
+        "Maximum OTP verification attempts exceeded. Please request a new OTP.",
+      );
+    }
+
+    // Verify OTP hash
+    const isValid = this.smsService.verifyOtpHash(cleanOtp, record.otpHash);
+    if (!isValid) {
+      // Increment attempt counter
+      await this.prisma.otpVerification.update({
+        where: { id: record.id },
+        data: { attempts: record.attempts + 1 },
+      });
+
+      const remaining = 3 - (record.attempts + 1);
+      throw new UnauthorizedException(
+        `Invalid OTP code. ${remaining > 0 ? `${remaining} attempts remaining.` : "Please request a new OTP."}`,
+      );
+    }
+
+    // Mark OTP as verified
+    await this.prisma.otpVerification.update({
+      where: { id: record.id },
+      data: { isVerified: true },
+    });
+
+    // Resolve or create Customer User
+    let user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { phoneNumber: normalizedPhone },
+          ...(dto.email ? [{ email: dto.email.toLowerCase().trim() }] : []),
+        ],
+      },
+      include: {
+        customerProfile: true,
+      },
+    });
+
+    let isNewCustomer = false;
+
+    if (!user) {
+      isNewCustomer = true;
+      const email = dto.email
+        ? dto.email.toLowerCase().trim()
+        : `devotee.${normalizedPhone.replace(/\D/g, "").slice(-6)}@devsutra.com`;
+
+      const names = (dto.fullName || "Sacred Devotee").trim().split(" ");
+      const firstName = names[0] || "Sacred";
+      const lastName = names.slice(1).join(" ") || "Devotee";
+
+      const dummyHash = await bcrypt.hash(`otp_auth_${Date.now()}`, 10);
+
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          phoneNumber: normalizedPhone,
+          passwordHash: dummyHash,
+          role: Role.CUSTOMER,
+          customerProfile: {
+            create: {
+              firstName,
+              lastName,
+            },
+          },
+        },
+        include: {
+          customerProfile: true,
+        },
+      });
+
+      this.logger.log(`Created new Devotee via OTP: ${user.phoneNumber} (ID: ${user.id})`);
+    } else if (user.role !== Role.CUSTOMER) {
+      this.logger.warn(`User ${user.email} with role ${user.role} authenticated via customer OTP`);
+    }
+
+    // Generate JWT Auth Token
+    const token = this.jwtService.sign({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    return {
+      message: isNewCustomer
+        ? "Account created and logged in successfully!"
+        : "Logged in successfully!",
+      token,
+      isNewCustomer,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        firstName: user.customerProfile?.firstName || "Devotee",
+        lastName: user.customerProfile?.lastName || "",
+        phoneNumber: user.phoneNumber,
+      },
+    };
   }
 }

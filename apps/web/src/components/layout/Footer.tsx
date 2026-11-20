@@ -105,14 +105,7 @@ export default function Footer() {
               <li><Link href="/store" className="hover:text-gold-300 transition">Puja Samagri Store</Link></li>
               <li><Link href="/booking" className="hover:text-gold-300 transition">Book a Puja</Link></li>
               <li><Link href="/customer/login" className="hover:text-gold-300 transition">Customer Login</Link></li>
-              <li>
-                <Link href="/pandit/register" className="text-gold hover:text-gold-300 transition font-medium flex items-center gap-1">
-                  <span>Pandit Registration</span>
-                  <ArrowUpRight className="w-3 h-3" />
-                </Link>
-              </li>
-              <li><Link href="/pandit/login" className="hover:text-gold-300 transition">Pandit Portal</Link></li>
-              <li><Link href="/admin/login" className="hover:text-gold-300 transition">Admin Dashboard</Link></li>
+              <li><Link href="/admin/login" className="hover:text-gold-300 transition">Admin Portal</Link></li>
               <li><Link href="/support/login" className="hover:text-gold-300 transition">Customer Support</Link></li>
             </ul>
           </div>

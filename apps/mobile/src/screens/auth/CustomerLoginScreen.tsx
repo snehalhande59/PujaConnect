@@ -14,6 +14,7 @@ import { colors } from '../../theme/colors';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { useAuth } from '../../context/AuthContext';
+import { DevSutraLogo } from '../../components/common/DevSutraLogo';
 
 interface CustomerLoginScreenProps {
   onBack: () => void;
@@ -68,12 +69,11 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="person" size={28} color={colors.primary} />
-            </View>
-            <Text style={styles.title}>Welcome Back</Text>
+            <DevSutraLogo variant="vertical" size="lg" />
+            <Text style={styles.mantraText}>॥ ॐ श्री गणेशाय नमः ॥</Text>
+            <Text style={styles.title}>Devotee Sign In</Text>
             <Text style={styles.subtitle}>
-              Sign in to manage your Vedic puja bookings, view live rituals & order samagri.
+              Sign in to manage your Vedic puja bookings, view live rituals & order pure samagri.
             </Text>
           </View>
 
@@ -172,6 +172,13 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginVertical: 18,
+  },
+  mantraText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.gold,
+    marginTop: 10,
+    marginBottom: 4,
   },
   iconCircle: {
     width: 60,

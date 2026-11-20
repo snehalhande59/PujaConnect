@@ -14,6 +14,7 @@ import { colors } from '../../theme/colors';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { useAuth } from '../../context/AuthContext';
+import { DevSutraLogo } from '../../components/common/DevSutraLogo';
 
 interface PanditLoginScreenProps {
   onBack: () => void;
@@ -74,9 +75,10 @@ export const PanditLoginScreen: React.FC<PanditLoginScreenProps> = ({
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="school" size={28} color={colors.secondary} />
-            </View>
+            <DevSutraLogo variant="vertical" size="lg" />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.gold, marginTop: 10, marginBottom: 4 }}>
+              ॥ ॐ गुरवे नमः ॥
+            </Text>
             <Text style={styles.title}>पंडित व पुरोहित लॉगिन</Text>
             <Text style={styles.subtitle}>
               Shastri & Acharya Portal • पूजा विनंत्या, यजमान पत्ते व दक्षिणा लेजर

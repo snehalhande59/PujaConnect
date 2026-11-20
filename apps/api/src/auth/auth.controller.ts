@@ -24,6 +24,8 @@ import { RegisterPanditDto } from "./dto/register-pandit.dto";
 import { LoginDto } from "./dto/login.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { SendOtpDto } from "./dto/send-otp.dto";
+import { VerifyOtpDto } from "./dto/verify-otp.dto";
 
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { CurrentUser } from "./decorators/current-user.decorator";
@@ -94,6 +96,37 @@ export class AuthController {
 
     this.setAuthCookie(res, result.token);
 
+    return result;
+  }
+
+  // ==========================================
+  // CUSTOMER MOBILE OTP AUTHENTICATION
+  // ==========================================
+
+  @Post("customer/send-otp")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Send OTP via SMS to customer mobile number (+91)" })
+  @ApiResponse({
+    status: 200,
+    description: "OTP sent successfully to mobile number",
+  })
+  async sendCustomerOtp(@Body() dto: SendOtpDto) {
+    return this.authService.sendCustomerOtp(dto);
+  }
+
+  @Post("customer/verify-otp")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Verify mobile OTP and login or register customer" })
+  @ApiResponse({
+    status: 200,
+    description: "OTP verified successfully. User logged in.",
+  })
+  async verifyCustomerOtp(
+    @Body() dto: VerifyOtpDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyCustomerOtp(dto);
+    this.setAuthCookie(res, result.token);
     return result;
   }
 

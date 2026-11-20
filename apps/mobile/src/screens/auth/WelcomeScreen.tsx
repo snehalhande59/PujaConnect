@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { Button } from '../../components/common/Button';
+import { DevSutraLogo } from '../../components/common/DevSutraLogo';
 
 interface WelcomeScreenProps {
   onSelectRole: (role: 'CUSTOMER' | 'PANDIT') => void;
@@ -40,10 +41,12 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
             />
           </View>
 
-          <View style={styles.iconCircle}>
-            <Ionicons name="flame" size={38} color={colors.gold} />
+          <View style={{ marginVertical: 12, alignItems: 'center' }}>
+            <DevSutraLogo variant="vertical" size="xl" />
           </View>
-          <Text style={styles.brandTitle}>DevSutra</Text>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.gold, marginBottom: 6 }}>
+            ॥ ॐ श्री गणेशाय नमः ॥
+          </Text>
           <Text style={styles.brandTagline}>Your Sacred Journey, Simplified.</Text>
           <Text style={styles.heroDesc}>
             India&apos;s premier online puja booking and certified Vedic pandit marketplace.
@@ -52,7 +55,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
 
         {/* Action Selection Cards */}
         <View style={styles.cardsSection}>
-          <Text style={styles.selectionPrompt}>Choose Your Portal to Continue</Text>
+          <Text style={styles.selectionPrompt}>Welcome to DevSutra</Text>
 
           {/* Devotee / Customer Card */}
           <View style={styles.portalCard}>
@@ -61,7 +64,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                 <Ionicons name="people" size={24} color={colors.secondary} />
               </View>
               <View style={styles.cardTextCol}>
-                <Text style={styles.cardTitle}>Devotee / Customer</Text>
+                <Text style={styles.cardTitle}>Devotee Portal</Text>
                 <Text style={styles.cardSubtitle}>
                   Discover rituals, book verified pandits & order complete puja samagri kits.
                 </Text>
@@ -74,29 +77,6 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
               size="lg"
               onPress={() => onSelectRole('CUSTOMER')}
               icon={<Ionicons name="arrow-forward" size={18} color={colors.textWhite} />}
-            />
-          </View>
-
-          {/* Pandit / Acharya Card */}
-          <View style={[styles.portalCard, styles.panditCard]}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.cardIconBg, { backgroundColor: colors.goldLight }]}>
-                <Ionicons name="school" size={24} color={colors.goldDark} />
-              </View>
-              <View style={styles.cardTextCol}>
-                <Text style={styles.cardTitle}>Vedic Pandit / Shastri</Text>
-                <Text style={styles.cardSubtitle}>
-                  Accept puja bookings, manage ritual availability & track earnings.
-                </Text>
-              </View>
-            </View>
-
-            <Button
-              title="Pandit Partner Portal"
-              variant="secondary"
-              size="lg"
-              onPress={() => onSelectRole('PANDIT')}
-              icon={<Ionicons name="shield-checkmark" size={18} color={colors.textWhite} />}
             />
           </View>
         </View>

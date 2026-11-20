@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { APP_IMAGES } from '../../theme/culturalAssets';
 import { useAuth } from '../../context/AuthContext';
+import { DevSutraLogo } from './DevSutraLogo';
 
 const { width, height } = Dimensions.get('window');
 
@@ -78,6 +79,9 @@ export const DrawerMenuModal: React.FC<DrawerMenuModalProps> = ({
           {/* Top Header: Hello User, Phone & Close Button */}
           <View style={[styles.headerRow, { paddingTop: headerPaddingTop }]}>
             <View style={styles.userInfoCol}>
+              <View style={{ marginBottom: 4 }}>
+                <DevSutraLogo variant="horizontal" size="sm" showTagline={false} />
+              </View>
               <Text style={styles.userNameText}>{displayName}</Text>
               <Text style={styles.userPhoneText}>{displayPhone}</Text>
             </View>

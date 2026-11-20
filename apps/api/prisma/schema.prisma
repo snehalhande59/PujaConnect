@@ -487,3 +487,17 @@ model Coupon {
 
   @@index([code])
 }
+
+model OtpVerification {
+  id          String   @id @default(uuid()) @db.Uuid
+  phoneNumber String
+  otpHash     String
+  purpose     String   @default("LOGIN") // "LOGIN", "REGISTER"
+  expiresAt   DateTime
+  attempts    Int      @default(0)
+  isVerified  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([phoneNumber])
+  @@index([phoneNumber, isVerified])
+}
