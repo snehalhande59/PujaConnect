@@ -227,7 +227,7 @@ async function apiRequest<T = any>(
 
         if (isNetworkErr) {
           throw new Error(
-            'Cannot reach PujaConnect server. Please check your internet connection.',
+            'Cannot reach DevSutra server. Please check your internet connection.',
           );
         }
         throw new Error(
@@ -247,7 +247,7 @@ async function apiRequest<T = any>(
 
     if (isNetworkErr) {
       throw new Error(
-        `Cannot reach PujaConnect server at ${API_BASE_URL}. Please ensure your mobile device and computer are on the same Wi-Fi network and the backend server is running.`,
+        `Cannot reach DevSutra server at ${API_BASE_URL}. Please ensure your mobile device and computer are on the same Wi-Fi network and the backend server is running.`,
       );
     }
     throw primaryErr;

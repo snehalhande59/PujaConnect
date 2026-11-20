@@ -1151,7 +1151,7 @@ export default function AdminDashboardPage() {
                   <input
                     type="email"
                     required
-                    placeholder="rameshwar@pujaconnect.com"
+                    placeholder="rameshwar@devsutra.in"
                     value={panditForm.email}
                     onChange={(e) => setPanditForm({ ...panditForm, email: e.target.value })}
                     className="w-full p-2.5 rounded-xl bg-maroon-950 border border-gold/30 text-ivory focus:outline-none focus:ring-1 focus:ring-gold text-xs"

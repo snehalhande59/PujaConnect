@@ -56,7 +56,7 @@ export default function AdminSettingsPage() {
                 className="w-full max-w-md px-3.5 py-2.5 rounded-xl bg-stone-950 border border-stone-800 text-white focus:outline-none focus:border-amber-600"
               />
               <p className="text-[11px] text-stone-500 mt-1">
-                Retained by PujaConnect from Pandit Dakshina upon successful completion of sacred rituals
+                Retained by DevSutra from Pandit Dakshina upon successful completion of sacred rituals
               </p>
             </div>
 

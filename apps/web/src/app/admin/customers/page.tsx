@@ -96,6 +96,7 @@ export default function AdminCustomersPage() {
                     <th className="p-4">Location</th>
                     <th className="p-4">Total Bookings</th>
                     <th className="p-4">Registered Date</th>
+                    <th className="p-4">Last Active / Login</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-800">
@@ -106,6 +107,9 @@ export default function AdminCustomersPage() {
                     const city = c.city || 'India';
                     const bookingCount = c._count?.bookings || 0;
                     const regDate = c.createdAt ? new Date(c.createdAt).toLocaleDateString() : 'N/A';
+                    const lastActive = c.user?.updatedAt
+                      ? new Date(c.user.updatedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+                      : regDate;
 
                     return (
                       <tr key={c.id} className="hover:bg-stone-800/50 transition">
@@ -139,6 +143,7 @@ export default function AdminCustomersPage() {
                           </span>
                         </td>
                         <td className="p-4 text-stone-400">{regDate}</td>
+                        <td className="p-4 text-amber-300/80 font-mono text-[11px]">{lastActive}</td>
                       </tr>
                     );
                   })}

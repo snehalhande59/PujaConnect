@@ -7,7 +7,7 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap() {
-  const logger = new Logger('PujaConnectBootstrap');
+  const logger = new Logger('DevSutraBootstrap');
   const app = await NestFactory.create(AppModule);
 
   const port = process.env.PORT || 3001;
@@ -40,9 +40,9 @@ async function bootstrap() {
 
   // Swagger Documentation
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('PujaConnect API')
-    .setDescription('Online Puja Booking, Pandit Marketplace and Puja Samagri E-commerce Platform API')
-    .setVersion('1.0.0')
+    .setTitle('DevSutra API')
+    .setDescription('DevSutra – Online Puja Booking, Vedic Pandit Marketplace & Samagri Platform API')
+    .setVersion('2.0.0')
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);

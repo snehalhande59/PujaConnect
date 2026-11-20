@@ -150,11 +150,10 @@ export default function AdminPanditsPage() {
 
     try {
       setActionLoading('saving_pandit');
-      const fullName = `${modalForm.firstName} ${modalForm.lastName}`.trim();
-      const payload = {
-        fullName: fullName || 'Vedic Purohit',
-        firstName: modalForm.firstName.trim(),
-        lastName: modalForm.lastName.trim(),
+      const fullName = `${modalForm.firstName} ${modalForm.lastName}`.trim() || 'Vedic Purohit';
+      const addressNote = modalForm.address.trim() ? ` Location: ${modalForm.address.trim()}` : '';
+      const payload: Record<string, any> = {
+        fullName,
         email: modalForm.email.trim(),
         phoneNumber: modalForm.phoneNumber.trim(),
         experienceYears: Number(modalForm.experienceYears) || 0,
@@ -162,9 +161,8 @@ export default function AdminPanditsPage() {
         specializations: modalForm.specializations.split(',').map((s) => s.trim()).filter(Boolean),
         city: modalForm.city.trim(),
         state: modalForm.state.trim(),
-        address: modalForm.address.trim(),
         basePrice: Number(modalForm.basePrice) || 2100,
-        bio: modalForm.bio.trim(),
+        bio: `${modalForm.bio.trim()}${addressNote}`.trim(),
         serviceAreas: modalForm.serviceAreas.split(',').map((s) => s.trim()).filter(Boolean),
         isAvailable: modalForm.isAvailable,
       };
@@ -191,8 +189,8 @@ export default function AdminPanditsPage() {
       setBannerMessage({
         type: 'success',
         text: isEditing
-          ? `Pt. ${payload.firstName} ${payload.lastName} updated successfully in PostgreSQL!`
-          : `New Pandit Pt. ${payload.firstName} ${payload.lastName} registered and activated successfully!`,
+          ? `Pt. ${fullName} updated successfully in PostgreSQL!`
+          : `New Pandit Pt. ${fullName} registered and activated successfully!`,
       });
       setShowAddEditModal(false);
       setIsEditing(false);

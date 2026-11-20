@@ -191,7 +191,7 @@ export const RootNavigator: React.FC = () => {
         <View style={styles.splashIconCircle}>
           <Ionicons name="flame" size={54} color={colors.gold} />
         </View>
-        <Text style={styles.splashBrand}>PujaConnect</Text>
+        <Text style={styles.splashBrand}>DevSutra</Text>
         <Text style={styles.splashTagline}>Your Sacred Vedic Journey • वैदिक पूजा व अनुष्ठान</Text>
         <ActivityIndicator size="small" color={colors.gold} style={{ marginTop: 24 }} />
       </View>

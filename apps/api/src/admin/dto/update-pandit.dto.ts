@@ -30,7 +30,7 @@ export class UpdatePanditDto {
   @IsString()
   address?: string;
 
-  @ApiPropertyOptional({ example: 'devendra.shastri@pujaconnect.com' })
+  @ApiPropertyOptional({ example: 'devendra.shastri@devsutra.in' })
   @IsOptional()
   @IsEmail()
   email?: string;

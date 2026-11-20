@@ -30,9 +30,13 @@ export default function AdminPujasPage() {
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [categoryName, setCategoryName] = useState('Vedic Rituals');
   const [basePrice, setBasePrice] = useState(3501);
   const [samagriPrice, setSamagriPrice] = useState(1100);
   const [durationMinutes, setDurationMinutes] = useState(120);
+  const [requiredPandits, setRequiredPandits] = useState(1);
+  const [samagriItems, setSamagriItems] = useState('Ganga Jal, Roli, Akshat, Supari, Pure Ghee, Hawan Samagri, Dry Coconut, Dhoop');
+  const [ritualSteps, setRitualSteps] = useState('1. Sankalpa & Kalash Sthapana\n2. Gauri Ganesh Pujan\n3. Navgraha Avahanam\n4. Mukhya Puja & Abhishek\n5. Hawan & Agni Ahuti\n6. Maha Aarti & Ashirwad');
 
   const fetchPujas = useCallback(async () => {
     const token = getClientToken();
@@ -64,6 +68,9 @@ export default function AdminPujasPage() {
     const token = getClientToken();
     try {
       setSaving(true);
+      const fullDesc = `${description.trim()}\n\nRitual Steps:\n${ritualSteps.trim()}`.trim();
+      const samagriList = samagriItems.split(',').map((s) => s.trim()).filter(Boolean);
+
       const res = await fetch(`${API_BASE_URL}/admin/pujas`, {
         method: 'POST',
         headers: {
@@ -72,16 +79,18 @@ export default function AdminPujasPage() {
         },
         body: JSON.stringify({
           title: title.trim(),
-          description: description.trim(),
+          description: fullDesc,
           basePrice: Number(basePrice),
           samagriPrice: Number(samagriPrice),
           durationMinutes: Number(durationMinutes),
-          languages: ['Hindi', 'Sanskrit', 'Marathi'],
+          requiredPandits: Number(requiredPandits) || 1,
+          requiredSamagri: samagriList,
+          languages: ['Hindi', 'Sanskrit', 'Marathi', 'English'],
         }),
       });
 
       if (res.ok) {
-        setMsg({ type: 'success', text: `Puja '${title}' successfully added to PostgreSQL database.` });
+        setMsg({ type: 'success', text: `Puja '${title}' successfully added to PostgreSQL database with complete ritual steps.` });
         setShowAddModal(false);
         setTitle('');
         setDescription('');
@@ -252,7 +261,7 @@ export default function AdminPujasPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs text-stone-300 font-medium block mb-1">
                       Dakshina (₹) *
@@ -290,6 +299,45 @@ export default function AdminPujasPage() {
                       className="w-full px-3 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-100 focus:outline-none focus:border-amber-600"
                     />
                   </div>
+                  <div>
+                    <label className="text-xs text-stone-300 font-medium block mb-1">
+                      Pandits Required
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={11}
+                      value={requiredPandits}
+                      onChange={(e) => setRequiredPandits(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-100 focus:outline-none focus:border-amber-600"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-stone-300 font-medium block mb-1">
+                    Essential Puja Samagri List (Comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={samagriItems}
+                    onChange={(e) => setSamagriItems(e.target.value)}
+                    placeholder="Ganga Jal, Roli, Akshat, Supari, Hawan Samagri, Pure Ghee..."
+                    className="w-full px-3.5 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-stone-300 font-medium block mb-1">
+                    Authentic Ritual Execution Steps
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={ritualSteps}
+                    onChange={(e) => setRitualSteps(e.target.value)}
+                    placeholder="1. Sankalpa & Kalash Sthapana&#10;2. Gauri Ganesh Pujan&#10;3. Navgraha Avahanam&#10;4. Mukhya Puja & Hawan&#10;5. Maha Aarti"
+                    className="w-full px-3.5 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-600 font-mono text-[11px]"
+                  />
                 </div>
 
                 <div className="pt-3 border-t border-stone-800 flex justify-end gap-2">

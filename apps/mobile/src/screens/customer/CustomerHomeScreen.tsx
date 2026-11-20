@@ -104,7 +104,7 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
       rating: 5,
       date: '०८ नोव्हेंबर २०२६',
       puja: 'रुद्राभिषेक व महामृत्युंजय',
-      comment: 'रुद्राभिषेक विधी खूप भक्तिमय झाला. गुरुजींचे संस्कृत मंत्रोच्चार अतिशय स्पष्ट व प्रभावी होते. PujaConnect ची सेवा उत्तम आहे.',
+      comment: 'रुद्राभिषेक विधी खूप भक्तिमय झाला. गुरुजींचे संस्कृत मंत्रोच्चार अतिशय स्पष्ट व प्रभावी होते. DevSutra ची सेवा उत्तम आहे.',
     },
   ]);
 
@@ -991,7 +991,7 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
           </View>
 
           <Text style={styles.copyrightText}>
-            © 2026 PujaConnect Technologies Pvt. Ltd. सर्व हक्क सुरक्षित.
+            © 2026 DevSutra Technologies Pvt. Ltd. सर्व हक्क सुरक्षित.
           </Text>
         </View>
       </ScrollView>

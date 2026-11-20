@@ -39,7 +39,7 @@ export const HelpSupportModal: React.FC<HelpSupportModalProps> = ({ visible, onC
 
   const faqs = [
     {
-      q: 'How are PujaConnect Pandits verified?',
+      q: 'How are DevSutra Pandits verified?',
       a: 'Every Pandit undergoes strict identity background verification, Gurukul credential checks, and oral Sanskrit recitation assessments before being onboarded.',
     },
     {
@@ -65,7 +65,7 @@ export const HelpSupportModal: React.FC<HelpSupportModalProps> = ({ visible, onC
             <TouchableOpacity onPress={onClose} style={styles.backBtn} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={24} color={colors.primary} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>PujaConnect Seva & Support</Text>
+            <Text style={styles.headerTitle}>DevSutra Seva & Support</Text>
             <View style={{ width: 36 }} />
           </View>
 
@@ -104,13 +104,13 @@ export const HelpSupportModal: React.FC<HelpSupportModalProps> = ({ visible, onC
               <TouchableOpacity
                 style={styles.contactCard}
                 activeOpacity={0.8}
-                onPress={() => sendEmail('support@pujaconnect.com')}
+                onPress={() => sendEmail('support@devsutra.in')}
               >
                 <View style={[styles.contactIconCircle, { backgroundColor: '#FFF8EC' }]}>
                   <Ionicons name="mail" size={22} color={colors.primary} />
                 </View>
                 <Text style={styles.contactCardTitle}>Email Seva</Text>
-                <Text style={styles.contactCardSubtitle}>support@pujaconnect.com</Text>
+                <Text style={styles.contactCardSubtitle}>support@devsutra.in</Text>
               </TouchableOpacity>
             </View>
 

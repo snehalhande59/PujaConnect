@@ -134,7 +134,7 @@ export const DrawerMenuModal: React.FC<DrawerMenuModalProps> = ({
             >
               <View style={styles.itemLeftGroup}>
                 <View style={styles.plusBadgeBox}>
-                  <Text style={styles.plusLogoText}>pujaconnect</Text>
+                  <Text style={styles.plusLogoText}>devsutra</Text>
                   <View style={styles.plusPill}>
                     <Text style={styles.plusPillText}>Plus</Text>
                   </View>

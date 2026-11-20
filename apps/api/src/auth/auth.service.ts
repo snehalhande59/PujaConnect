@@ -595,7 +595,7 @@ export class AuthService {
 
       user = await this.prisma.user.create({
         data: {
-          email: isEmail ? normalizedIdentifier : `devotee.${Date.now()}@pujaconnect.com`,
+          email: isEmail ? normalizedIdentifier : `devotee.${Date.now()}@devsutra.in`,
           phoneNumber: isEmail ? null : normalizedIdentifier,
           passwordHash,
           role: Role.CUSTOMER,
@@ -612,6 +612,25 @@ export class AuthService {
       });
 
       this.logger.log(`Created new Devotee via Email OTP: ${user.email} (ID: ${user.id})`);
+    } else {
+      // Ensure customer profile exists if missing on existing devotee
+      if (!user.customerProfile) {
+        const names = (dto.fullName || 'Sacred Devotee').trim().split(/\s+/);
+        const firstName = names[0] || 'Devotee';
+        const lastName = names.slice(1).join(' ') || '';
+        user.customerProfile = await this.prisma.customerProfile.create({
+          data: {
+            userId: user.id,
+            firstName,
+            lastName,
+          },
+        });
+      }
+      // Record latest active login timestamp in database
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { updatedAt: new Date() },
+      });
     }
 
     // Generate JWT Auth Token

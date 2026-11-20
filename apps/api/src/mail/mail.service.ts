@@ -76,7 +76,7 @@ export class MailService {
     const masked = this.maskEmail(toEmail);
     const fromAddress =
       this.configService.get<string>('SMTP_FROM') ||
-      'PujaConnect <no-reply@pujaconnect.com>';
+      'DevSutra <no-reply@devsutra.in>';
 
     if (!this.isConfigured || !this.transporter) {
       return {
@@ -288,7 +288,7 @@ export class MailService {
     const masked = this.maskEmail(toEmail);
     const fromAddress =
       this.configService.get<string>('SMTP_FROM') ||
-      'PujaConnect <no-reply@pujaconnect.com>';
+      'DevSutra <no-reply@devsutra.in>';
 
     if (!this.isConfigured || !this.transporter) {
       this.logger.error(
@@ -417,12 +417,12 @@ export class MailService {
   <div class="wrapper">
     <div class="container">
       <div class="header">
-        <h1 class="brand-name">PujaConnect</h1>
-        <div class="brand-tagline">Vedic Rituals & Certified Pandits</div>
+        <h1 class="brand-name">DevSutra</h1>
+        <div class="brand-tagline">Vedic Rituals & Certified Gurukul Pandits</div>
       </div>
       <div class="content">
         <h2 class="title">Verify Your Email</h2>
-        <p class="subtitle">Use the verification code below to complete your login or registration with PujaConnect.</p>
+        <p class="subtitle">Use the verification code below to complete your login or registration with DevSutra.</p>
         <div class="otp-box">
           <div class="otp-code">${otp}</div>
         </div>
@@ -430,11 +430,11 @@ export class MailService {
           <span class="badge">⏱ Valid for 5 minutes</span>
         </div>
         <div class="warning">
-          <strong>Security Notice:</strong> Never share this code with anyone. PujaConnect representatives will never ask for your one-time password. If you did not request this verification, you can safely ignore this email.
+          <strong>Security Notice:</strong> Never share this code with anyone. DevSutra representatives will never ask for your one-time password. If you did not request this verification, you can safely ignore this email.
         </div>
       </div>
       <div class="footer">
-        © ${new Date().getFullYear()} PujaConnect. All rights reserved.
+        © ${new Date().getFullYear()} DevSutra. All rights reserved.
       </div>
     </div>
   </div>
@@ -446,8 +446,8 @@ export class MailService {
       const info = await this.transporter.sendMail({
         from: fromAddress,
         to: toEmail,
-        subject: `${otp} is your PujaConnect verification code`,
-        text: `Your PujaConnect verification code is: ${otp}. This code is valid for 5 minutes. Never share this code with anyone.`,
+        subject: `${otp} is your DevSutra verification code`,
+        text: `Your DevSutra verification code is: ${otp}. This code is valid for 5 minutes. Never share this code with anyone.`,
         html: htmlContent,
       });
 
@@ -471,6 +471,138 @@ export class MailService {
         success: false,
         error: err?.message || 'Failed to deliver OTP email',
       };
+    }
+  }
+
+  /**
+   * Send real email to customer when booking status changes (CONFIRMED, COMPLETED, CANCELLED)
+   */
+  async sendBookingStatusEmail(
+    toEmail: string,
+    details: {
+      customerName: string;
+      bookingNumber: string;
+      pujaName: string;
+      status: string;
+      date?: string;
+      panditName?: string;
+      reason?: string;
+    },
+  ): Promise<SendEmailResult> {
+    const masked = this.maskEmail(toEmail);
+    const fromAddress =
+      this.configService.get<string>('SMTP_FROM') ||
+      'DevSutra <no-reply@devsutra.in>';
+
+    if (!this.isConfigured || !this.transporter) {
+      this.logger.warn(`SMTP not configured. Skipping status email to ${masked}`);
+      return { success: false, error: 'SMTP not configured' };
+    }
+
+    const isConfirmed = details.status === 'CONFIRMED';
+    const isCompleted = details.status === 'COMPLETED';
+    const isCancelled = details.status === 'CANCELLED' || details.status === 'REJECTED';
+
+    let subject = `[DevSutra] Sacred Puja Status: ${details.status} (Booking #${details.bookingNumber})`;
+    let statusBadgeColor = '#B26A00';
+    let statusBgColor = '#FFF3E0';
+    let messageBody = `Your booking for ${details.pujaName} status has been updated to <strong>${details.status}</strong>.`;
+
+    if (isConfirmed) {
+      subject = `[DevSutra] Sacred Puja Confirmed: ${details.pujaName} (Booking #${details.bookingNumber})`;
+      statusBadgeColor = '#1B5E20';
+      statusBgColor = '#E8F5E9';
+      messageBody = `Shubh Samachar! Your booking for <strong>${details.pujaName}</strong> has been officially confirmed by DevSutra. Our verified Vedic Pandit has been reserved for your auspicious Muhurat.`;
+    } else if (isCompleted) {
+      subject = `[DevSutra] Sacred Puja Completed – Divine Blessings (Booking #${details.bookingNumber})`;
+      statusBadgeColor = '#0D47A1';
+      statusBgColor = '#E3F2FD';
+      messageBody = `May the divine grace and Vedic blessings bring peace, prosperity, and harmony to you and your family. Your ritual <strong>${details.pujaName}</strong> has been successfully performed.`;
+    } else if (isCancelled) {
+      subject = `[DevSutra] Booking Cancellation Notice (Booking #${details.bookingNumber})`;
+      statusBadgeColor = '#B71C1C';
+      statusBgColor = '#FFEBEE';
+      messageBody = `Your booking for <strong>${details.pujaName}</strong> has been cancelled. ${details.reason ? `Reason: ${details.reason}` : ''}`;
+    }
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${subject}</title>
+  <style>
+    body { margin: 0; padding: 0; background-color: #FAF7F2; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #2C241E; }
+    .wrapper { width: 100%; padding: 32px 0; }
+    .container { max-width: 580px; margin: 0 auto; background-color: #FFFFFF; border-radius: 16px; border: 1px solid #EFE8DC; overflow: hidden; box-shadow: 0 4px 20px rgba(44, 36, 30, 0.05); }
+    .header { background: linear-gradient(135deg, #4A0E17 0%, #2A080C 100%); padding: 32px 24px; text-align: center; color: #FFFFFF; }
+    .brand-name { font-size: 26px; font-weight: 800; letter-spacing: 1px; color: #D4AF37; margin: 0; }
+    .brand-tagline { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #E8DCC4; margin-top: 6px; }
+    .content { padding: 32px 28px; }
+    .status-badge { display: inline-block; background-color: ${statusBgColor}; color: ${statusBadgeColor}; font-weight: 700; font-size: 13px; padding: 6px 16px; border-radius: 999px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+    .details-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; background-color: #FAF7F2; border-radius: 12px; overflow: hidden; }
+    .details-table td { padding: 12px 16px; border-bottom: 1px solid #EFE8DC; }
+    .details-table td.label { font-weight: 600; color: #8C7E74; width: 35%; }
+    .details-table td.value { font-weight: 700; color: #2C241E; }
+    .footer { background-color: #F7F3EB; padding: 18px 24px; text-align: center; font-size: 11px; color: #9C8E84; border-top: 1px solid #EFE8DC; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="container">
+      <div class="header">
+        <h1 class="brand-name">DevSutra</h1>
+        <div class="brand-tagline">Vedic Rituals & Certified Gurukul Pandits</div>
+      </div>
+      <div class="content">
+        <span class="status-badge">${details.status}</span>
+        <h2 style="margin: 0 0 12px 0; color: #2C241E; font-size: 20px;">Namaste ${details.customerName},</h2>
+        <p style="font-size: 14px; line-height: 1.6; color: #4A3E36; margin: 0 0 20px 0;">${messageBody}</p>
+
+        <table class="details-table">
+          <tr>
+            <td class="label">Booking Number</td>
+            <td class="value">#${details.bookingNumber}</td>
+          </tr>
+          <tr>
+            <td class="label">Sacred Puja</td>
+            <td class="value">${details.pujaName}</td>
+          </tr>
+          ${details.panditName ? `<tr><td class="label">Vedic Pandit</td><td class="value">Pt. ${details.panditName}</td></tr>` : ''}
+          ${details.date ? `<tr><td class="label">Shubh Muhurat</td><td class="value">${details.date}</td></tr>` : ''}
+          <tr>
+            <td class="label">Current Status</td>
+            <td class="value" style="color: ${statusBadgeColor};">${details.status}</td>
+          </tr>
+        </table>
+
+        <p style="font-size: 12px; color: #8C7E74; margin-top: 24px; line-height: 1.5;">
+          You can track this booking live in your DevSutra Customer Dashboard at any time. For questions or muhurat adjustments, reply directly to this email.
+        </p>
+      </div>
+      <div class="footer">
+        © ${new Date().getFullYear()} DevSutra. Vedic Rituals Made Authentic & Accessible.
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+    `;
+
+    try {
+      const info = await this.transporter.sendMail({
+        from: fromAddress,
+        to: toEmail,
+        subject,
+        text: `Namaste ${details.customerName},\n\nYour booking #${details.bookingNumber} for ${details.pujaName} is now ${details.status}.\n\nDevSutra Vedic Platform`,
+        html: htmlContent,
+      });
+
+      this.logger.log(`Booking status email [${details.status}] sent to ${masked} (messageId: ${info.messageId})`);
+      return { success: true, messageId: info.messageId };
+    } catch (err: any) {
+      this.logger.error(`Failed to send booking status email to ${masked}: ${err?.message}`);
+      return { success: false, error: err?.message };
     }
   }
 }

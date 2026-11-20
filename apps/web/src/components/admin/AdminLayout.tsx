@@ -118,7 +118,7 @@ export default function AdminLayout({ children, pendingPanditsCount = 0 }: Admin
           </Link>
           <div className="text-right hidden sm:block">
             <span className="text-stone-400 text-[11px] block">Admin:</span>
-            <span className="font-semibold text-white text-xs">{adminUser?.email || 'admin@pujaconnect.in'}</span>
+            <span className="font-semibold text-white text-xs">{adminUser?.email || 'admin@devsutra.in'}</span>
           </div>
           <button
             onClick={handleSignOut}

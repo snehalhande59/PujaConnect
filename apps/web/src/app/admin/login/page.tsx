@@ -45,7 +45,7 @@ export default function AdminLoginPage() {
             <DevSutraLogo variant="dark" size="lg" showTagline={false} />
           </div>
           <h1 className="text-2xl font-heading font-bold text-ivory tracking-tight">
-            PujaConnect Admin Console
+            DevSutra Admin Console
           </h1>
           <p className="text-xs text-beige/70">
             Strict administrative control, verification & platform oversight
@@ -66,7 +66,7 @@ export default function AdminLoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@pujaconnect.in"
+              placeholder="admin@devsutra.in"
               className="w-full px-3.5 py-2.5 rounded-xl bg-maroon-950 border border-gold/30 text-ivory placeholder-beige/40 focus:outline-none focus:ring-2 focus:ring-gold transition"
               required
               autoComplete="email"

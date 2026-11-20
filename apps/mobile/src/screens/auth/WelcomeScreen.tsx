@@ -55,7 +55,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
 
         {/* Action Selection Cards */}
         <View style={styles.cardsSection}>
-          <Text style={styles.selectionPrompt}>Welcome to PujaConnect</Text>
+          <Text style={styles.selectionPrompt}>Welcome to DevSutra</Text>
 
           {/* Devotee / Customer Card */}
           <View style={styles.portalCard}>

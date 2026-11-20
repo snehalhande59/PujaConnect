@@ -5,6 +5,7 @@
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { VerificationStatus, Role, BookingStatus, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { QueryPanditsDto } from './dto/query-pandits.dto';
@@ -13,7 +14,10 @@ import { UpdatePanditDto } from './dto/update-pandit.dto';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
 
   /**
    * Get verification overview statistics for Admin dashboard
@@ -101,6 +105,7 @@ export class AdminService {
               phoneNumber: true,
               isActive: true,
               createdAt: true,
+              updatedAt: true,
             },
           },
           documents: {
@@ -702,6 +707,7 @@ export class AdminService {
               phoneNumber: true,
               isActive: true,
               createdAt: true,
+              updatedAt: true,
             },
           },
           _count: {
@@ -801,7 +807,9 @@ export class AdminService {
           cancellationReason: isCancelled ? (reason || 'Cancelled by Admin') : booking.cancellationReason,
         },
         include: {
-          customerProfile: true,
+          customerProfile: {
+            include: { user: true },
+          },
           panditProfile: true,
           puja: true,
           payments: true,
@@ -818,6 +826,37 @@ export class AdminService {
         },
       }),
     ]);
+
+    // Send real email notification to the Customer via Gmail SMTP
+    try {
+      const customerEmail = updatedBooking.customerProfile?.user?.email;
+      if (customerEmail) {
+        const customerName = `${updatedBooking.customerProfile?.firstName || 'Devotee'} ${updatedBooking.customerProfile?.lastName || ''}`.trim();
+        const panditName = updatedBooking.panditProfile?.fullName || 'Assigned Vedic Pandit';
+        const pujaName = updatedBooking.puja?.title || 'Vedic Puja';
+        const bookingNumber = updatedBooking.bookingNumber;
+        const formattedDate = updatedBooking.pujaDate
+          ? new Date(updatedBooking.pujaDate).toLocaleDateString('en-IN', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+            })
+          : undefined;
+
+        await this.mailService.sendBookingStatusEmail(customerEmail, {
+          customerName,
+          bookingNumber,
+          pujaName,
+          status: targetStatus,
+          date: formattedDate,
+          panditName,
+          reason,
+        });
+      }
+    } catch (mailErr: any) {
+      console.warn(`Could not dispatch status email for booking ${id}:`, mailErr?.message);
+    }
 
     return updatedBooking;
   }

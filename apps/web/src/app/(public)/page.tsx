@@ -80,7 +80,7 @@ export default function HomePage() {
   };
 
   const handleWhatsAppBooking = () => {
-    const text = encodeURIComponent(`Namaste PujaConnect! I want to book a Pandit for ${smartService || 'Puja'} in ${smartLocation} on ${smartDate}. Please connect me with a Gurukul Pandit.`);
+    const text = encodeURIComponent(`Namaste DevSutra! I want to book a Pandit for ${smartService || 'Puja'} in ${smartLocation} on ${smartDate}. Please connect me with a Gurukul Pandit.`);
     window.open(`https://wa.me/919822012345?text=${text}`, '_blank');
   };
 
@@ -1296,7 +1296,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 9. Why Choose PujaConnect (DevSutra Value Pillars) */}
+      {/* 9. Why Choose DevSutra (DevSutra Value Pillars) */}
       <section className="py-20 bg-beige/25 border-y border-beige">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-14">
@@ -1305,7 +1305,7 @@ export default function HomePage() {
               <span>Uncompromising Devotion</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-heading font-bold text-brown tracking-tight">
-              Why Choose PujaConnect
+              Why Choose DevSutra
             </h2>
             <p className="mt-3 text-sm text-brown/70 font-sans">
               We combine centuries of Sanatan spiritual purity with modern technology for a frictionless sacred experience.
@@ -1441,7 +1441,7 @@ export default function HomePage() {
             <div className="space-y-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold/15 border border-gold/40 text-gold-300 text-xs font-semibold">
                 <Smartphone className="w-4 h-4" />
-                <span>PujaConnect Mobile App</span>
+                <span>DevSutra Mobile App</span>
               </div>
 
               <h2 className="text-3xl sm:text-5xl font-heading font-bold text-ivory tracking-tight leading-tight">
@@ -1450,7 +1450,7 @@ export default function HomePage() {
               </h2>
 
               <p className="text-sm font-sans text-beige/85 leading-relaxed max-w-xl">
-                Download the official PujaConnect Android application. Get instant Shubh Muhurat reminders, book verified Pandits in 2 clicks, order pure samagri kits, and track live ritual status right from your phone.
+                Download the official DevSutra Android application. Get instant Shubh Muhurat reminders, book verified Pandits in 2 clicks, order pure samagri kits, and track live ritual status right from your phone.
               </p>
 
               <div className="space-y-3 font-sans text-xs text-beige/90">
@@ -1490,7 +1490,7 @@ export default function HomePage() {
                 <div className="relative h-[480px] w-full rounded-[24px] overflow-hidden bg-ivory">
                   <Image
                     src="/images/banners/hero-banner-speedy.jpg"
-                    alt="PujaConnect Mobile App Preview"
+                    alt="DevSutra Mobile App Preview"
                     fill
                     sizes="320px"
                     className="object-cover"

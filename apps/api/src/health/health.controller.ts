@@ -19,8 +19,8 @@ export class HealthController {
 
     return {
       status: 'ok',
-      service: 'PujaConnect API Service',
-      version: '1.0.0',
+      service: 'DevSutra API Service',
+      version: '2.0.0',
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',

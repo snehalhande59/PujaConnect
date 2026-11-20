@@ -31,7 +31,7 @@ export class CreatePanditDto {
   @IsString()
   address?: string;
 
-  @ApiPropertyOptional({ example: 'devendra.shastri@pujaconnect.com', description: 'Email address' })
+  @ApiPropertyOptional({ example: 'devendra.shastri@devsutra.in', description: 'Email address' })
   @IsEmail({}, { message: 'Valid email address is required.' })
   @IsNotEmpty()
   email: string;

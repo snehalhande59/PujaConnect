@@ -84,7 +84,7 @@ export class PaymentsService {
             notes: {
               bookingId: booking.id,
               bookingNumber: booking.bookingNumber,
-              customerEmail: booking.customerProfile?.user?.email || 'devotee@pujaconnect.com',
+              customerEmail: booking.customerProfile?.user?.email || 'devotee@devsutra.in',
               pujaTitle: booking.puja?.title || 'Vedic Puja',
             },
           }),
@@ -141,7 +141,7 @@ export class PaymentsService {
         name: booking.customerProfile
           ? `${booking.customerProfile.firstName} ${booking.customerProfile.lastName}`.trim()
           : 'Devotee',
-        email: booking.customerProfile?.user?.email || 'devotee@pujaconnect.com',
+        email: booking.customerProfile?.user?.email || 'devotee@devsutra.in',
         phone: booking.customerProfile?.user?.phoneNumber || '9876543210',
       },
     };

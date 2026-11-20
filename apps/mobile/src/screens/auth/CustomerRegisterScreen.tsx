@@ -83,7 +83,7 @@ export const CustomerRegisterScreen: React.FC<CustomerRegisterScreenProps> = ({
           <View style={styles.header}>
             <DevSutraLogo variant="vertical" size="lg" />
             <Text style={styles.mantraText}>॥ ॐ श्री गणेशाय नमः ॥</Text>
-            <Text style={styles.title}>Join PujaConnect</Text>
+            <Text style={styles.title}>Join DevSutra</Text>
             <Text style={styles.subtitle}>
               Book authentic rituals with verified Vedic scholars for your family & home.
             </Text>

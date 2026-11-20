@@ -73,7 +73,7 @@ export class BookingsService {
         // Create demo customer user
         const newCustomerUser = await this.prisma.user.create({
           data: {
-            email: dto.customerEmail || `devotee.${Date.now()}@pujaconnect.com`,
+            email: dto.customerEmail || `devotee.${Date.now()}@devsutra.in`,
             phoneNumber: dto.customerPhone || '9822012345',
             passwordHash: 'dummy_hash',
             role: Role.CUSTOMER,

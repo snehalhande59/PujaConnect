@@ -71,7 +71,7 @@ export default function AdminBookingsPage() {
         body: JSON.stringify({ status: newStatus }),
       });
       if (res.ok) {
-        setMsg({ type: 'success', text: `Booking status updated to ${newStatus}.` });
+        setMsg({ type: 'success', text: `Booking status updated to ${newStatus}. Status email notification dispatched to Devotee.` });
         fetchBookings();
       } else {
         const err = await res.json();

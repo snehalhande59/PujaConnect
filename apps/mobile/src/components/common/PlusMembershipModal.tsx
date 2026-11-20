@@ -66,7 +66,7 @@ export const PlusMembershipModal: React.FC<PlusMembershipModalProps> = ({
               <Ionicons name="arrow-back" size={24} color={colors.primary} />
             </TouchableOpacity>
             <View style={styles.logoBadgeBox}>
-              <Text style={styles.brandTitle}>pujaconnect</Text>
+              <Text style={styles.brandTitle}>devsutra</Text>
               <View style={styles.plusPill}>
                 <Text style={styles.plusPillText}>Plus</Text>
               </View>
@@ -81,7 +81,7 @@ export const PlusMembershipModal: React.FC<PlusMembershipModalProps> = ({
                 <Text style={styles.cardRibbonText}>SACRED DEVOTEE PASS</Text>
               </View>
 
-              <Text style={styles.planName}>PujaConnect Plus Annual</Text>
+              <Text style={styles.planName}>DevSutra Plus Annual</Text>
               <Text style={styles.planPrice}>₹999 / year</Text>
               <Text style={styles.planSubtitle}>
                 Save up to ₹8,500 annually across family pujas, havans, and consecrated samagri.
@@ -114,7 +114,7 @@ export const PlusMembershipModal: React.FC<PlusMembershipModalProps> = ({
                 onClose();
               }}
             >
-              <Text style={styles.subscribeBtnText}>Join PujaConnect Plus • ₹999/Year</Text>
+              <Text style={styles.subscribeBtnText}>Join DevSutra Plus • ₹999/Year</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>

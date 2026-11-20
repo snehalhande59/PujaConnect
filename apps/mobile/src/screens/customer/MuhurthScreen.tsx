@@ -232,7 +232,7 @@ export const MuhurthScreen: React.FC<MuhurthScreenProps> = ({
             3. Look for the green-highlighted dates on the calendar; these indicate Muhurat (auspicious dates) for your selected Puja.
           </Text>
           <Text style={styles.stepItem}>
-            4. If you cannot find your specific Puja through the search function, feel free to reach out to our team for assistance at +91 98220 12345 or support@pujaconnect.com.
+            4. If you cannot find your specific Puja through the search function, feel free to reach out to our team for assistance at +91 98220 12345 or support@devsutra.in.
           </Text>
         </View>
       </ScrollView>

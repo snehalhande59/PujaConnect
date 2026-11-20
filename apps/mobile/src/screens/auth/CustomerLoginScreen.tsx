@@ -167,7 +167,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
           <View style={styles.header}>
             <DevSutraLogo variant="vertical" size="md" />
             <Text style={styles.mantraText}>॥ ॐ श्री गणेशाय नमः ॥</Text>
-            <Text style={styles.title}>Welcome to PujaConnect</Text>
+            <Text style={styles.title}>Welcome to DevSutra</Text>
             <Text style={styles.subtitle}>
               Sign in to book certified Vedic pandits, view rituals & order pure samagri.
             </Text>
@@ -382,7 +382,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
 
           {/* Footer Clean Actions */}
           <View style={styles.footerRow}>
-            <Text style={styles.footerText}>New to PujaConnect? </Text>
+            <Text style={styles.footerText}>New to DevSutra? </Text>
             <TouchableOpacity onPress={onNavigateRegister}>
               <Text style={styles.registerLink}>Create Account</Text>
             </TouchableOpacity>

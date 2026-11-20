@@ -115,7 +115,7 @@ export const PanditLoginScreen: React.FC<PanditLoginScreenProps> = ({
           <View style={styles.formCard}>
             <Input
               label="नोंदणीकृत मोबाईल किंवा ईमेल (Mobile or Email)"
-              placeholder="9822011111 किंवा pandit@pujaconnect.com"
+              placeholder="9822011111 किंवा pandit@devsutra.in"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"

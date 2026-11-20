@@ -34,7 +34,7 @@ export default function CustomerBookingsPage() {
     ];
 
     try {
-      const stored = localStorage.getItem('pujaconnect_web_bookings');
+      const stored = localStorage.getItem('devsutra_web_bookings') || localStorage.getItem('pujaconnect_web_bookings');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
