@@ -196,6 +196,13 @@ export class AdminController {
     return this.adminService.createPuja(data);
   }
 
+  @Post('catalog/initialize')
+  @ApiOperation({ summary: 'Admin manually initializes default Puja catalog and categories' })
+  async initializeCatalog() {
+    await this.adminService.ensureDefaultCatalogAndBookings();
+    return this.adminService.getDashboardStats();
+  }
+
   @Patch('pujas/:id')
   @ApiOperation({ summary: 'Update a Puja service' })
   async updatePuja(@Param('id') id: string, @Body() data: any) {

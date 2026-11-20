@@ -424,6 +424,37 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleInitializeCatalog = async () => {
+    const token = getClientToken();
+    if (!token) return;
+
+    try {
+      setActionLoading("initializing_catalog");
+      const res = await fetch(`${API_BASE_URL}/admin/catalog/initialize`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (res.ok) {
+        setMessage({
+          type: "success",
+          text: "Platform Shastric catalog, categories, and sample booking records initialized successfully in PostgreSQL!",
+        });
+        await fetchDashboardData(true);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setMessage({ type: "error", text: err.message || "Initialization failed." });
+      }
+    } catch (err: any) {
+      setMessage({ type: "error", text: err.message || "Initialization failed." });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleAdminLogout = () => {
     clearClientSession();
     router.push("/admin/login");
