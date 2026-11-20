@@ -11,9 +11,10 @@
     "start:api": "pnpm --filter @pujaconnect/api start:dev",
     "dev:web": "pnpm --filter @pujaconnect/web dev",
     "start:web": "pnpm --filter @pujaconnect/web dev",
-    "build": "pnpm --recursive run build",
-    "build:web": "pnpm --filter @pujaconnect/web build",
-    "build:api": "pnpm --filter @pujaconnect/api build",
+    "build": "pnpm --filter @pujaconnect/shared build && pnpm --filter @pujaconnect/api build",
+    "build:all": "pnpm --recursive run build",
+    "build:web": "pnpm --filter @pujaconnect/shared build && pnpm --filter @pujaconnect/web build",
+    "build:api": "pnpm --filter @pujaconnect/shared build && pnpm --filter @pujaconnect/api build",
     "build:shared": "pnpm --filter @pujaconnect/shared build",
     "prisma:generate": "pnpm --filter @pujaconnect/api prisma:generate"
   },

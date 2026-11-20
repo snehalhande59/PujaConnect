@@ -1035,10 +1035,16 @@ export class AdminService {
     if (!categoryId) {
       let firstCat = await this.prisma.pujaCategory.findFirst();
       if (!firstCat) {
+        const catName = data.categoryName || 'Vedic Rituals';
+        const catSlug = (data.categorySlug || catName)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '') || 'vedic-rituals';
+
         firstCat = await this.prisma.pujaCategory.create({
           data: {
-            name: 'Vedic Rituals',
-            slug: 'vedic-rituals',
+            name: catName,
+            slug: `${catSlug}-${Date.now().toString().slice(-4)}`,
             description: 'Authentic Shastric rituals & ceremonies',
           },
         });
@@ -1046,7 +1052,11 @@ export class AdminService {
       categoryId = firstCat.id;
     }
 
-    const slug = data.slug || data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const baseSlug = (data.slug || data.title)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'sacred-puja';
+    const slug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
 
     return this.prisma.puja.create({
       data: {
@@ -1062,6 +1072,9 @@ export class AdminService {
         requiredSamagri: data.requiredSamagri || [],
         imageUrl: data.imageUrl || '/images/pujas/satyanarayan.jpg',
         isActive: data.isActive !== undefined ? data.isActive : true,
+      },
+      include: {
+        category: true,
       },
     });
   }

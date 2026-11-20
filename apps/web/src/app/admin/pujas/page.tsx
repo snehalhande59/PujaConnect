@@ -61,6 +61,33 @@ export default function AdminPujasPage() {
     fetchPujas();
   }, [fetchPujas]);
 
+  const [initializing, setInitializing] = useState(false);
+
+  const handleInitializeCatalog = async () => {
+    const token = getClientToken();
+    try {
+      setInitializing(true);
+      const res = await fetch(`${API_BASE_URL}/admin/catalog/initialize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        setMsg({ type: 'success', text: 'Vedic categories and default puja catalog successfully seeded!' });
+        await fetchPujas();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setMsg({ type: 'error', text: err.message || 'Initialization failed.' });
+      }
+    } catch (e: any) {
+      setMsg({ type: 'error', text: e.message || 'Error initializing catalog.' });
+    } finally {
+      setInitializing(false);
+    }
+  };
+
   const handleCreatePuja = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -80,6 +107,7 @@ export default function AdminPujasPage() {
         body: JSON.stringify({
           title: title.trim(),
           description: fullDesc,
+          categoryName: categoryName || 'Vedic Rituals',
           basePrice: Number(basePrice),
           samagriPrice: Number(samagriPrice),
           durationMinutes: Number(durationMinutes),
@@ -126,6 +154,14 @@ export default function AdminPujasPage() {
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               <span>Refresh</span>
+            </button>
+            <button
+              onClick={handleInitializeCatalog}
+              disabled={initializing}
+              className="px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${initializing ? 'animate-spin' : ''}`} />
+              <span>{initializing ? 'Seeding Catalog...' : 'Seed Default Catalog'}</span>
             </button>
             <button
               onClick={() => setShowAddModal(true)}
