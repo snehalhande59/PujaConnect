@@ -10,6 +10,7 @@ import { JwtService } from "@nestjs/jwt";
 import { PrismaService } from "../prisma/prisma.service";
 import { Role } from "@prisma/client";
 import * as bcrypt from "bcrypt";
+import * as crypto from "crypto";
 import { RegisterCustomerDto } from "./dto/register-customer.dto";
 import { LoginDto } from "./dto/login.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
@@ -18,6 +19,7 @@ import { RegisterPanditDto } from "./dto/register-pandit.dto";
 import { SendOtpDto } from "./dto/send-otp.dto";
 import { VerifyOtpDto } from "./dto/verify-otp.dto";
 import { SmsService } from "./sms.service";
+import { MailService } from "../mail/mail.service";
 
 @Injectable()
 export class AuthService {
@@ -27,6 +29,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly smsService: SmsService,
+    private readonly mailService: MailService,
   ) {}
 
   /**
@@ -252,6 +255,12 @@ export class AuthService {
     }
 
     // 3. Verify password hash using bcrypt
+    if (!user.passwordHash) {
+      throw new UnauthorizedException(
+        "This account was registered using OTP verification. Please sign in with Email OTP or reset your password.",
+      );
+    }
+
     const isPasswordValid = await bcrypt.compare(
       dto.password,
       user.passwordHash,
@@ -380,134 +389,169 @@ export class AuthService {
   }
 
   /**
-   * Send actual mobile number OTP for Customer login / registration
+   * Send Customer OTP for login / registration (Email OTP active via Gmail SMTP)
    */
   async sendCustomerOtp(dto: SendOtpDto) {
-    if (!dto.phoneNumber || !dto.phoneNumber.trim()) {
-      throw new BadRequestException("Mobile number is required.");
+    const rawIdentifier = (dto.identifier || dto.email || dto.phoneNumber || dto.phone || '').trim();
+    if (!rawIdentifier) {
+      throw new BadRequestException('Please provide an email address or mobile number.');
     }
 
-    if (!this.smsService.isValidIndianMobile(dto.phoneNumber)) {
+    const isEmail = rawIdentifier.includes('@');
+    const channel = dto.channel || (isEmail ? 'email' : 'sms');
+
+    if (channel === 'email' || isEmail) {
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(rawIdentifier)) {
+        throw new BadRequestException('Please provide a valid email address.');
+      }
+      const normalizedEmail = rawIdentifier.toLowerCase();
+
+      // Check role boundary: Never authenticate Admin or Pandit via Customer OTP!
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true, role: true, isActive: true },
+      });
+
+      if (existingUser && existingUser.role !== Role.CUSTOMER) {
+        throw new UnauthorizedException(
+          `This email address is registered as an authorized ${existingUser.role} account. Customer OTP cannot be used to sign in to this account.`,
+        );
+      }
+
+      // 60-second resend cooldown
+      const recentOtp = await this.prisma.otpVerification.findFirst({
+        where: {
+          phoneNumber: normalizedEmail,
+          createdAt: { gte: new Date(Date.now() - 60 * 1000) },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (recentOtp) {
+        const waitSeconds = Math.ceil(
+          (recentOtp.createdAt.getTime() + 60 * 1000 - Date.now()) / 1000,
+        );
+        throw new BadRequestException(
+          `Please wait ${waitSeconds > 0 ? waitSeconds : 1} seconds before requesting a new code.`,
+        );
+      }
+
+      // Rate limit: Maximum 5 OTP requests per hour per email
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const hourlyCount = await this.prisma.otpVerification.count({
+        where: {
+          phoneNumber: normalizedEmail,
+          createdAt: { gte: oneHourAgo },
+        },
+      });
+
+      if (hourlyCount >= 5) {
+        throw new BadRequestException(
+          'Too many verification requests for this email address. Please try again after 1 hour.',
+        );
+      }
+
+      // Generate cryptographically secure 6-digit OTP
+      const rawOtp = crypto.randomInt(100000, 1000000).toString();
+      const otpHash = this.smsService.hashOtp(rawOtp);
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+      // Store in PostgreSQL OtpVerification
+      await this.prisma.otpVerification.create({
+        data: {
+          phoneNumber: normalizedEmail,
+          otpHash,
+          purpose: dto.purpose || 'LOGIN',
+          expiresAt,
+        },
+      });
+
+      // Send real branded email via MailService (Gmail SMTP)
+      const mailResult = await this.mailService.sendOtpEmail(normalizedEmail, rawOtp, true);
+
+      if (!mailResult.success) {
+        throw new BadRequestException(
+          mailResult.error || 'Failed to deliver verification email. Please try again.',
+        );
+      }
+
+      const masked = this.mailService.maskEmail(normalizedEmail);
+      return {
+        success: true,
+        channel: 'email',
+        message: `Verification code sent to ${masked}. Valid for 5 minutes.`,
+        identifier: normalizedEmail,
+        cooldownSeconds: 60,
+      };
+    } else {
+      // Mobile SMS OTP - strictly disabled until SMS provider credentials are provided and verified
       throw new BadRequestException(
-        "Please provide a valid 10-digit Indian mobile number (+91XXXXXXXXXX).",
+        'Mobile SMS OTP is temporarily unavailable. Please sign in using your Email Address.',
       );
     }
-
-    const normalizedPhone = this.smsService.normalizePhoneNumber(dto.phoneNumber);
-
-    // Enforce 60-second resend cooldown
-    const recentOtp = await this.prisma.otpVerification.findFirst({
-      where: {
-        phoneNumber: normalizedPhone,
-        createdAt: { gte: new Date(Date.now() - 60 * 1000) },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    if (recentOtp) {
-      const waitSeconds = Math.ceil((recentOtp.createdAt.getTime() + 60 * 1000 - Date.now()) / 1000);
-      throw new BadRequestException(
-        `Please wait ${waitSeconds > 0 ? waitSeconds : 1} seconds before requesting a new OTP.`,
-      );
-    }
-
-    // Rate limiting: Maximum 5 OTP requests per hour per mobile number
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const hourlyCount = await this.prisma.otpVerification.count({
-      where: {
-        phoneNumber: normalizedPhone,
-        createdAt: { gte: oneHourAgo },
-      },
-    });
-
-    if (hourlyCount >= 5) {
-      throw new BadRequestException(
-        "Too many OTP requests for this mobile number. Please try again after 1 hour.",
-      );
-    }
-
-    // Generate cryptographically secure 6-digit OTP
-    const rawOtp = this.smsService.generateOtp();
-    const otpHash = this.smsService.hashOtp(rawOtp);
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    // Store hashed OTP in PostgreSQL
-    await this.prisma.otpVerification.create({
-      data: {
-        phoneNumber: normalizedPhone,
-        otpHash,
-        purpose: dto.purpose || "LOGIN",
-        expiresAt,
-      },
-    });
-
-    // Send real SMS through Twilio/MSG91 gateway
-    const smsResult = await this.smsService.sendOtpSms(normalizedPhone, rawOtp);
-
-    const maskedPhone = `${normalizedPhone.slice(0, 6)}****${normalizedPhone.slice(-2)}`;
-    return {
-      success: true,
-      message: `OTP has been sent to ${maskedPhone}. Valid for 10 minutes.`,
-      phoneNumber: normalizedPhone,
-      cooldownSeconds: 60,
-      provider: smsResult.provider,
-    };
   }
 
   /**
-   * Verify mobile number OTP and authenticate or register Customer
+   * Verify Customer OTP and authenticate or register Customer
    */
   async verifyCustomerOtp(dto: VerifyOtpDto) {
-    if (!dto.phoneNumber || !dto.otp) {
-      throw new BadRequestException("Mobile number and OTP are required.");
+    const rawIdentifier = (dto.identifier || dto.email || dto.phoneNumber || dto.phone || '').trim();
+    if (!rawIdentifier || !dto.otp) {
+      throw new BadRequestException('Identifier and verification code are required.');
     }
 
-    const normalizedPhone = this.smsService.normalizePhoneNumber(dto.phoneNumber);
     const cleanOtp = dto.otp.trim();
-
     if (cleanOtp.length !== 6 || !/^\d{6}$/.test(cleanOtp)) {
-      throw new BadRequestException("OTP must be exactly 6 digits.");
+      throw new BadRequestException('Verification code must be exactly 6 digits.');
     }
 
-    // Find latest active unverified OTP for this phone number
+    const isEmail = rawIdentifier.includes('@');
+    const normalizedIdentifier = isEmail
+      ? rawIdentifier.toLowerCase()
+      : this.smsService.normalizePhoneNumber(rawIdentifier);
+
+    // Find latest active unverified OTP for this identifier
     const record = await this.prisma.otpVerification.findFirst({
       where: {
-        phoneNumber: normalizedPhone,
+        phoneNumber: normalizedIdentifier,
         isVerified: false,
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: 'desc' },
     });
 
     if (!record) {
       throw new BadRequestException(
-        "No active OTP request found for this number. Please click 'Send OTP' first.",
+        "No active verification code request found. Please click 'Send Code' first.",
       );
     }
 
-    // Check expiration
+    // Check expiration (5 minutes)
     if (new Date() > record.expiresAt) {
-      throw new BadRequestException("OTP has expired. Please request a new OTP.");
+      throw new BadRequestException(
+        'Verification code has expired. Please request a new code.',
+      );
     }
 
-    // Check maximum attempts limit (max 3 failed tries)
-    if (record.attempts >= 3) {
+    // Check maximum attempts limit (max 5)
+    if (record.attempts >= 5) {
       throw new BadRequestException(
-        "Maximum OTP verification attempts exceeded. Please request a new OTP.",
+        'Maximum verification attempts exceeded. Please request a new code.',
       );
     }
 
     // Verify OTP hash
     const isValid = this.smsService.verifyOtpHash(cleanOtp, record.otpHash);
     if (!isValid) {
-      // Increment attempt counter
       await this.prisma.otpVerification.update({
         where: { id: record.id },
         data: { attempts: record.attempts + 1 },
       });
 
-      const remaining = 3 - (record.attempts + 1);
+      const remaining = 5 - (record.attempts + 1);
       throw new UnauthorizedException(
-        `Invalid OTP code. ${remaining > 0 ? `${remaining} attempts remaining.` : "Please request a new OTP."}`,
+        `Invalid verification code. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Please request a new code.'}`,
       );
     }
 
@@ -519,36 +563,41 @@ export class AuthService {
 
     // Resolve or create Customer User
     let user = await this.prisma.user.findFirst({
-      where: {
-        OR: [
-          { phoneNumber: normalizedPhone },
-          ...(dto.email ? [{ email: dto.email.toLowerCase().trim() }] : []),
-        ],
-      },
+      where: isEmail
+        ? { email: normalizedIdentifier }
+        : { phoneNumber: normalizedIdentifier },
       include: {
         customerProfile: true,
       },
     });
 
+    // Strict Role boundary check: Never authenticate Admin or Pandit via Customer OTP!
+    if (user && user.role !== Role.CUSTOMER) {
+      this.logger.warn(
+        `Role mismatch rejected: ${user.email} with role ${user.role} attempted Customer OTP login.`,
+      );
+      throw new UnauthorizedException(
+        `Access denied. This account has ${user.role} privileges. Please sign in via the designated portal.`,
+      );
+    }
+
     let isNewCustomer = false;
 
     if (!user) {
       isNewCustomer = true;
-      const email = dto.email
-        ? dto.email.toLowerCase().trim()
-        : `devotee.${normalizedPhone.replace(/\D/g, "").slice(-6)}@devsutra.com`;
+      const names = (dto.fullName || 'Sacred Devotee').trim().split(/\s+/);
+      const firstName = names[0] || 'Devotee';
+      const lastName = names.slice(1).join(' ') || '';
 
-      const names = (dto.fullName || "Sacred Devotee").trim().split(" ");
-      const firstName = names[0] || "Sacred";
-      const lastName = names.slice(1).join(" ") || "Devotee";
-
-      const dummyHash = await bcrypt.hash(`otp_auth_${Date.now()}`, 10);
+      // Create high-entropy cryptographic password hash (unusable for password login)
+      const unguessablePassword = crypto.randomBytes(32).toString('hex');
+      const passwordHash = await bcrypt.hash(unguessablePassword, 12);
 
       user = await this.prisma.user.create({
         data: {
-          email,
-          phoneNumber: normalizedPhone,
-          passwordHash: dummyHash,
+          email: isEmail ? normalizedIdentifier : `devotee.${Date.now()}@pujaconnect.com`,
+          phoneNumber: isEmail ? null : normalizedIdentifier,
+          passwordHash,
           role: Role.CUSTOMER,
           customerProfile: {
             create: {
@@ -562,9 +611,7 @@ export class AuthService {
         },
       });
 
-      this.logger.log(`Created new Devotee via OTP: ${user.phoneNumber} (ID: ${user.id})`);
-    } else if (user.role !== Role.CUSTOMER) {
-      this.logger.warn(`User ${user.email} with role ${user.role} authenticated via customer OTP`);
+      this.logger.log(`Created new Devotee via Email OTP: ${user.email} (ID: ${user.id})`);
     }
 
     // Generate JWT Auth Token
@@ -575,17 +622,18 @@ export class AuthService {
     });
 
     return {
+      success: true,
       message: isNewCustomer
-        ? "Account created and logged in successfully!"
-        : "Logged in successfully!",
+        ? 'Welcome to PujaConnect! Account created successfully.'
+        : 'Logged in successfully!',
       token,
       isNewCustomer,
       user: {
         id: user.id,
         email: user.email,
         role: user.role,
-        firstName: user.customerProfile?.firstName || "Devotee",
-        lastName: user.customerProfile?.lastName || "",
+        firstName: user.customerProfile?.firstName || 'Devotee',
+        lastName: user.customerProfile?.lastName || '',
         phoneNumber: user.phoneNumber,
       },
     };

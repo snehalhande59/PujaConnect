@@ -96,17 +96,15 @@ export class SmsService {
       return this.sendViaMsg91(normalizedPhone, otp, maskedPhone);
     }
 
-    // 3. Fallback / Development mode when live gateway keys are not provided
+    // 3. Gateway credentials missing in .env
     this.logger.warn(
-      `[SMS GATEWAY NOT CONFIGURED] Real SMS Gateway credentials missing in .env. ` +
-      `To deliver real SMS messages to ${maskedPhone}, configure TWILIO_ACCOUNT_SID & TWILIO_AUTH_TOKEN or MSG91_AUTH_KEY. ` +
-      `[DEV-OTP FOR TEST VERIFICATION: ${otp}]`,
+      `SMS gateway credentials are not configured in environment. SMS OTP delivery disabled for ${maskedPhone}.`,
     );
 
     return {
-      success: true,
-      provider: 'SIMULATED_GATEWAY',
-      simulated: true,
+      success: false,
+      provider: 'UNCONFIGURED',
+      error: 'SMS service is temporarily unavailable. Please sign in using Email OTP.',
     };
   }
 

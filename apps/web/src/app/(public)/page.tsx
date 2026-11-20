@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -84,10 +84,53 @@ export default function HomePage() {
     window.open(`https://wa.me/919822012345?text=${text}`, '_blank');
   };
 
+  // Live PostgreSQL Data Integration
+  const [livePandits, setLivePandits] = useState<any[]>(FEATURED_PANDITS_DATA);
+  const [livePujas, setLivePujas] = useState<any[]>(POPULAR_PUJA_CATEGORIES_DATA);
+
+  useEffect(() => {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+
+    // 1. Fetch verified Pandits from PostgreSQL
+    fetch(`${apiBase}/pandits`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const data = json?.data || json;
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((p: any) => ({
+            id: p.id,
+            name: p.fullName || 'Vedic Pandit',
+            avatarUrl: p.avatarUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
+            city: p.city || 'Pune',
+            experienceYears: p.experienceYears || 10,
+            languages: Array.isArray(p.languages) ? p.languages : ['Marathi', 'Hindi', 'Sanskrit'],
+            specializations: Array.isArray(p.specializations) ? p.specializations : ['Vedic Rituals'],
+            baseDakshina: p.basePrice ? Number(p.basePrice) : 2100,
+            isAvailableToday: p.isAvailable ?? true,
+          }));
+          setLivePandits(mapped);
+        }
+      })
+      .catch(() => {});
+
+    // 2. Fetch active Pujas from PostgreSQL
+    fetch(`${apiBase}/pujas`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const data = json?.data || json;
+        if (Array.isArray(data) && data.length > 0) {
+          setLivePujas(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Filter Pandits based on selected city & language
-  const filteredPandits = FEATURED_PANDITS_DATA.filter((pandit) => {
-    const cityMatch = selectedCity === 'All' || pandit.city.includes(selectedCity);
-    const langMatch = selectedLanguage === 'All' || pandit.languages.includes(selectedLanguage);
+  const filteredPandits = livePandits.filter((pandit) => {
+    const cityMatch = selectedCity === 'All' || pandit.city.toLowerCase().includes(selectedCity.toLowerCase());
+    const langMatch =
+      selectedLanguage === 'All' ||
+      pandit.languages.some((l: string) => l.toLowerCase().includes(selectedLanguage.toLowerCase()));
     return cityMatch && langMatch;
   });
 
@@ -965,7 +1008,7 @@ export default function HomePage() {
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-1.5">
-                      {pandit.languages.map((l) => (
+                      {pandit.languages.map((l: string) => (
                         <span
                           key={l}
                           className="px-2 py-0.5 bg-beige/40 text-brown rounded-md text-[10px] font-medium font-sans"

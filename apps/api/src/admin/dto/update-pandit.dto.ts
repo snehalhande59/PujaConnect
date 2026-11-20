@@ -15,6 +15,21 @@ export class UpdatePanditDto {
   @IsString()
   fullName?: string;
 
+  @ApiPropertyOptional({ example: 'Devendra' })
+  @IsOptional()
+  @IsString()
+  firstName?: string;
+
+  @ApiPropertyOptional({ example: 'Shastri' })
+  @IsOptional()
+  @IsString()
+  lastName?: string;
+
+  @ApiPropertyOptional({ example: 'Shivaji Nagar, Pune' })
+  @IsOptional()
+  @IsString()
+  address?: string;
+
   @ApiPropertyOptional({ example: 'devendra.shastri@pujaconnect.com' })
   @IsOptional()
   @IsEmail()
@@ -61,7 +76,7 @@ export class UpdatePanditDto {
   @IsString()
   bio?: string;
 
-  @ApiPropertyOptional({ example: 2501 })
+  @ApiPropertyOptional({ example: 2100 })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -72,17 +87,17 @@ export class UpdatePanditDto {
   @IsBoolean()
   isAvailable?: boolean;
 
-  @ApiPropertyOptional({ example: 'https://images.unsplash.com/...' })
-  @IsOptional()
-  @IsString()
-  avatarUrl?: string;
-
-  @ApiPropertyOptional({ example: true, description: 'Active/Deactivated status' })
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 
-  @ApiPropertyOptional({ example: [] })
+  @ApiPropertyOptional({ example: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2' })
+  @IsOptional()
+  @IsString()
+  avatarUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Puja IDs to associate with this Pandit' })
   @IsOptional()
   @IsArray()
   pujaIds?: string[];

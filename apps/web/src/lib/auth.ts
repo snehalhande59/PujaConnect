@@ -116,6 +116,84 @@ export async function loginCustomer(email: string, password: string): Promise<Au
 }
 
 /**
+ * Send Customer OTP for login / registration (Email OTP active)
+ */
+export async function sendCustomerOtp(
+  identifier: string,
+  channel: 'email' | 'sms' = 'email',
+): Promise<{ success: boolean; message: string; cooldownSeconds?: number }> {
+  const response = await fetch(`${API_BASE_URL}/auth/customer/send-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: identifier.includes('@') ? identifier.trim() : undefined,
+      phoneNumber: !identifier.includes('@') ? identifier.trim() : undefined,
+      identifier: identifier.trim(),
+      channel,
+    }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok) {
+    const errorMessage = Array.isArray(payload.message)
+      ? payload.message.join(', ')
+      : payload.message || 'Failed to send verification code.';
+    throw new Error(errorMessage);
+  }
+
+  const resultData = payload.data || payload;
+  return {
+    success: true,
+    message: resultData.message || 'Verification code sent.',
+    cooldownSeconds: resultData.cooldownSeconds || 60,
+  };
+}
+
+/**
+ * Verify Customer OTP and complete login / registration
+ */
+export async function verifyCustomerOtp(
+  identifier: string,
+  otp: string,
+  fullName?: string,
+): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE_URL}/auth/customer/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      email: identifier.includes('@') ? identifier.trim() : undefined,
+      phoneNumber: !identifier.includes('@') ? identifier.trim() : undefined,
+      identifier: identifier.trim(),
+      otp: otp.trim(),
+      fullName: fullName?.trim() || undefined,
+    }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok) {
+    const errorMessage = Array.isArray(payload.message)
+      ? payload.message.join(', ')
+      : payload.message || 'Invalid or expired verification code.';
+    throw new Error(errorMessage);
+  }
+
+  const resultData = payload.data || payload;
+  if (resultData.token && resultData.user) {
+    saveClientSession(resultData.token, resultData.user);
+  }
+
+  return {
+    success: true,
+    message: resultData.message || 'Authentication successful.',
+    token: resultData.token,
+    user: resultData.user,
+  };
+}
+
+/**
  * Authenticate Vedic Pandit with email and password
  */
 export async function loginPandit(email: string, password: string): Promise<AuthResponse> {

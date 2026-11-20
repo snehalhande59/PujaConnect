@@ -8,20 +8,35 @@ import {
   IsBoolean,
   Min,
 } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreatePanditDto {
-  @ApiProperty({ example: 'Pt. Devendra Shastri', description: 'Full Name of the Pandit' })
+  @ApiPropertyOptional({ example: 'Pt. Devendra Shastri', description: 'Full Name of the Pandit' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Pandit full name is required.' })
-  fullName: string;
+  fullName?: string;
 
-  @ApiProperty({ example: 'devendra.shastri@pujaconnect.com', description: 'Email address' })
+  @ApiPropertyOptional({ example: 'Devendra', description: 'First name' })
+  @IsOptional()
+  @IsString()
+  firstName?: string;
+
+  @ApiPropertyOptional({ example: 'Shastri', description: 'Last name' })
+  @IsOptional()
+  @IsString()
+  lastName?: string;
+
+  @ApiPropertyOptional({ example: 'Shivaji Nagar, Pune', description: 'Address' })
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @ApiPropertyOptional({ example: 'devendra.shastri@pujaconnect.com', description: 'Email address' })
   @IsEmail({}, { message: 'Valid email address is required.' })
   @IsNotEmpty()
   email: string;
 
-  @ApiProperty({ example: '+919822011111', description: 'Mobile phone number' })
+  @ApiPropertyOptional({ example: '+919822011111', description: 'Mobile phone number' })
   @IsString()
   @IsNotEmpty({ message: 'Mobile number is required.' })
   phoneNumber: string;
@@ -42,12 +57,12 @@ export class CreatePanditDto {
   @IsArray()
   specializations?: string[];
 
-  @ApiProperty({ example: 'Pune', description: 'City of residence' })
+  @ApiPropertyOptional({ example: 'Pune', description: 'City of residence' })
   @IsString()
   @IsNotEmpty({ message: 'City is required.' })
   city: string;
 
-  @ApiProperty({ example: 'Maharashtra', description: 'State' })
+  @ApiPropertyOptional({ example: 'Maharashtra', description: 'State' })
   @IsString()
   @IsNotEmpty({ message: 'State is required.' })
   state: string;
@@ -62,23 +77,23 @@ export class CreatePanditDto {
   @IsString()
   bio?: string;
 
-  @ApiPropertyOptional({ example: 2501, description: 'Base Dakshina amount' })
+  @ApiPropertyOptional({ example: 2100, description: 'Standard Dakshina base fee' })
   @IsOptional()
   @IsNumber()
   @Min(0)
   basePrice?: number;
 
-  @ApiPropertyOptional({ example: true, default: true })
+  @ApiPropertyOptional({ example: true, description: 'Active availability in marketplace' })
   @IsOptional()
   @IsBoolean()
   isAvailable?: boolean;
 
-  @ApiPropertyOptional({ example: 'https://images.unsplash.com/...', description: 'Profile avatar image URL' })
+  @ApiPropertyOptional({ example: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2' })
   @IsOptional()
   @IsString()
   avatarUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Array of Puja IDs this Pandit conducts', example: [] })
+  @ApiPropertyOptional({ description: 'Puja IDs to associate with this Pandit' })
   @IsOptional()
   @IsArray()
   pujaIds?: string[];

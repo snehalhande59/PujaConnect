@@ -122,58 +122,32 @@ export class BookingsService {
       throw new NotFoundException('No active Puja service available.');
     }
 
-    // 3. Resolve Pandit: If customer selected a specific Pandit, preserve that Pandit strictly!
+    // 3. Resolve Pandit: Customer must manually select a specific verified Pandit
+    if (!dto.panditProfileId) {
+      throw new BadRequestException('Please select a verified Vedic Pandit for this ceremony. Manual pandit selection is required.');
+    }
+
     let pandit: any = null;
-    const isPanditUuid = dto.panditProfileId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dto.panditProfileId);
+    const isPanditUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dto.panditProfileId);
 
     if (isPanditUuid) {
       pandit = await this.prisma.panditProfile.findUnique({
         where: { id: dto.panditProfileId },
         include: { user: true },
       });
-
-      if (!pandit || !pandit.user.isActive || pandit.user.isDeleted) {
-        throw new NotFoundException('The selected Pandit is currently unavailable. Please choose another Pandit.');
-      }
-    } else if (dto.panditProfileId) {
-      // Find by name if text passed
+    } else {
+      // Find by exact name if text passed
       pandit = await this.prisma.panditProfile.findFirst({
         where: {
-          fullName: { contains: dto.panditProfileId, mode: 'insensitive' },
+          fullName: { equals: dto.panditProfileId.trim(), mode: 'insensitive' },
           user: { isActive: true, isDeleted: false },
         },
         include: { user: true },
       });
     }
 
-    // If customer did not select a Pandit (automatic assignment mode):
-    if (!pandit) {
-      // Find an active verified Pandit in the target city
-      pandit = await this.prisma.panditProfile.findFirst({
-        where: {
-          city: { contains: dto.city, mode: 'insensitive' },
-          verificationStatus: VerificationStatus.VERIFIED,
-          isAvailable: true,
-          user: { isActive: true, isDeleted: false },
-        },
-        include: { user: true },
-      });
-    }
-
-    if (!pandit) {
-      // Fallback to any verified Gurukul Pandit
-      pandit = await this.prisma.panditProfile.findFirst({
-        where: {
-          verificationStatus: VerificationStatus.VERIFIED,
-          isAvailable: true,
-          user: { isActive: true, isDeleted: false },
-        },
-        include: { user: true },
-      });
-    }
-
-    if (!pandit) {
-      throw new NotFoundException('No verified Gurukul Pandit available for booking in your area.');
+    if (!pandit || !pandit.user.isActive || pandit.user.isDeleted || pandit.verificationStatus !== VerificationStatus.VERIFIED) {
+      throw new BadRequestException('The selected Pandit is currently unavailable or unverified. Please choose an active verified Pandit from the directory.');
     }
 
     // Parse booking date
@@ -233,6 +207,15 @@ export class BookingsService {
         totalAmount,
         status: bookingStatus,
         specialInstructions: dto.specialInstructions?.trim() || null,
+        statusHistory: {
+          create: {
+            fromStatus: null,
+            toStatus: bookingStatus,
+            action: 'BOOKING_CREATED',
+            changedBy: 'CUSTOMER',
+            reason: 'Devotee created ceremony booking request',
+          },
+        },
         bookingItems: {
           create: [
             {

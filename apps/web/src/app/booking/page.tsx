@@ -35,12 +35,20 @@ function BookingContent() {
   const [pujaDate, setPujaDate] = useState('2026-11-20');
   const [timeSlot, setTimeSlot] = useState('09:30 AM (Shubh Choghadiya)');
 
+  // Dynamic PostgreSQL Pandits & Pujas
+  const [panditsList, setPanditsList] = useState<any[]>(FEATURED_PANDITS_DATA);
+  const [pujasList, setPujasList] = useState<any[]>(POPULAR_PUJA_CATEGORIES_DATA);
+
   // Initialize from searchParams
   useEffect(() => {
     const serviceParam = searchParams.get('service') || searchParams.get('puja') || searchParams.get('slug');
     if (serviceParam) {
       const match = POPULAR_PUJA_CATEGORIES_DATA.find(p => p.slug === serviceParam || p.name.toLowerCase().includes(serviceParam.toLowerCase()));
       if (match) setSelectedPujaSlug(match.slug);
+    }
+    const panditParam = searchParams.get('panditId') || searchParams.get('pandit');
+    if (panditParam) {
+      setSelectedPanditId(panditParam);
     }
     const cityParam = searchParams.get('city');
     if (cityParam) setCity(cityParam);
@@ -55,6 +63,29 @@ function BookingContent() {
         else setCalMonthIndex(0);
       }
     }
+
+    // Fetch live Pandits from PostgreSQL
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+    fetch(`${apiBase}/pandits`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const data = json?.data || json;
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((p: any) => ({
+            id: p.id,
+            name: p.fullName || 'Vedic Pandit',
+            avatarUrl: p.avatarUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
+            city: p.city || 'Pune',
+            experienceYears: p.experienceYears || 10,
+            languages: Array.isArray(p.languages) ? p.languages : ['Marathi', 'Hindi', 'Sanskrit'],
+            specializations: Array.isArray(p.specializations) ? p.specializations : ['Vedic Rituals'],
+            baseDakshina: p.basePrice ? Number(p.basePrice) : 2100,
+            isAvailableToday: p.isAvailable ?? true,
+          }));
+          setPanditsList(mapped);
+        }
+      })
+      .catch(() => {});
   }, [searchParams]);
 
   // Custom Time AM/PM State
@@ -89,7 +120,9 @@ function BookingContent() {
     POPULAR_PUJA_CATEGORIES_DATA[0];
 
   const selectedPandit =
+    panditsList.find((p) => p.id === selectedPanditId) ||
     FEATURED_PANDITS_DATA.find((p) => p.id === selectedPanditId) ||
+    panditsList[0] ||
     FEATURED_PANDITS_DATA[0];
 
   // Shastric calculation per selection
@@ -590,7 +623,7 @@ function BookingContent() {
                   </div>
 
                   <div className="space-y-3">
-                    {FEATURED_PANDITS_DATA.map((pandit) => (
+                    {panditsList.map((pandit) => (
                       <button
                         type="button"
                         key={pandit.id}
@@ -844,7 +877,7 @@ function BookingContent() {
                       Back
                     </button>
                     <Link
-                      href={`/checkout?amount=${totalAmount}&puja=${selectedPuja.slug}&title=${encodeURIComponent(selectedPuja.name)}&date=${pujaDate}&slot=${encodeURIComponent(timeSlot)}&city=${encodeURIComponent(city)}&address=${encodeURIComponent(addressLine)}&pincode=${pincode}&samagri=${includeSamagri}`}
+                      href={`/checkout?amount=${totalAmount}&puja=${selectedPuja.slug}&title=${encodeURIComponent(selectedPuja.name)}&panditId=${encodeURIComponent(selectedPandit.id)}&panditName=${encodeURIComponent(selectedPandit.name)}&date=${pujaDate}&slot=${encodeURIComponent(timeSlot)}&city=${encodeURIComponent(city)}&address=${encodeURIComponent(addressLine)}&pincode=${pincode}&samagri=${includeSamagri}`}
                       className="flex-1 py-3 bg-maroon hover:bg-maroon-800 text-ivory font-bold text-xs rounded-xl shadow-sacred transition flex items-center justify-center gap-2 border border-gold/40 text-center"
                     >
                       <CreditCard className="w-4 h-4 text-gold-300" />

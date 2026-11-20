@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import DevSutraLogo from '@/components/ui/DevSutraLogo';
 import { getSavedUserProfile, getClientToken, AuthUser } from '@/lib/auth';
+import AdminLayout from '@/components/admin/AdminLayout';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
@@ -149,7 +150,9 @@ export default function AdminPanditsPage() {
 
     try {
       setActionLoading('saving_pandit');
+      const fullName = `${modalForm.firstName} ${modalForm.lastName}`.trim();
       const payload = {
+        fullName: fullName || 'Vedic Purohit',
         firstName: modalForm.firstName.trim(),
         lastName: modalForm.lastName.trim(),
         email: modalForm.email.trim(),
@@ -374,44 +377,35 @@ export default function AdminPanditsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-deep-maroon text-beige font-sans flex flex-col">
-      {/* Top Header */}
-      <header className="h-16 border-b border-gold/30 bg-maroon-900 px-6 flex items-center justify-between sticky top-0 z-20">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/admin/dashboard"
-            className="p-2 rounded-xl bg-maroon-950 hover:bg-maroon-800 text-ivory border border-gold/30 transition"
-            title="Return to Admin Dashboard"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <DevSutraLogo variant="dark" size="sm" showTagline={false} />
-          <span className="font-heading font-bold text-sm tracking-wide text-ivory border-l border-gold/30 pl-3">
-            Admin Pandit Management & Directory
-          </span>
+    <AdminLayout>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              Pandit Verification & Directory
+            </h1>
+            <p className="text-xs text-stone-400">
+              Live Vedic purohit roster, Shastric credentials verification, availability, and onboarding
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchPandits()}
+              className="px-3.5 py-2 bg-stone-900 hover:bg-stone-800 border border-stone-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 text-stone-300 hover:text-white transition cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+            <button
+              onClick={openAddModal}
+              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold rounded-xl text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add New Pandit</span>
+            </button>
+          </div>
         </div>
-
-        <div className="flex items-center gap-3 text-xs">
-          <button
-            onClick={openAddModal}
-            className="px-3.5 py-2 bg-gradient-to-r from-gold to-orange-500 hover:from-gold-300 hover:to-orange-400 text-maroon-950 font-bold rounded-lg shadow-md transition flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add New Pandit</span>
-          </button>
-
-          <button
-            onClick={() => fetchPandits()}
-            className="px-3 py-1.5 bg-maroon-950 hover:bg-maroon-800 text-beige hover:text-ivory rounded-lg border border-gold/30 transition flex items-center gap-1.5"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Refresh</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main className="flex-1 p-6 max-w-7xl w-full mx-auto space-y-6">
         {/* Banner Alert Message */}
         {bannerMessage && (
           <div
@@ -673,7 +667,7 @@ export default function AdminPanditsPage() {
             </button>
           </div>
         )}
-      </main>
+      </div>
 
       {/* ----------------------------------------------------------------- */}
       {/* MODAL 1: ADD / EDIT PANDIT MODAL */}
@@ -940,6 +934,6 @@ export default function AdminPanditsPage() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }

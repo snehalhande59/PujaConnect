@@ -8,6 +8,8 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   loginCustomer: (email: string, pass: string) => Promise<any>;
+  sendCustomerOtp: (identifier: string, channel?: 'email' | 'sms') => Promise<any>;
+  loginCustomerWithOtp: (identifier: string, otp: string, fullName?: string) => Promise<any>;
   registerCustomer: (params: any) => Promise<any>;
   loginPandit: (email: string, pass: string) => Promise<any>;
   registerPandit: (params: any) => Promise<any>;
@@ -45,6 +47,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const handleLoginCustomer = async (email: string, pass: string) => {
     const res = await api.loginCustomer(email, pass);
+    setUser(res.user);
+    setRole(res.user.role);
+    setToken(res.token);
+    return res;
+  };
+
+  const handleSendCustomerOtp = async (identifier: string, channel: 'email' | 'sms' = 'email') => {
+    return await api.sendCustomerOtp(identifier, channel);
+  };
+
+  const handleLoginCustomerWithOtp = async (identifier: string, otp: string, fullName?: string) => {
+    const res = await api.verifyCustomerOtp(identifier, otp, fullName);
     setUser(res.user);
     setRole(res.user.role);
     setToken(res.token);
@@ -103,6 +117,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         isLoading,
         loginCustomer: handleLoginCustomer,
+        sendCustomerOtp: handleSendCustomerOtp,
+        loginCustomerWithOtp: handleLoginCustomerWithOtp,
         registerCustomer: handleRegisterCustomer,
         loginPandit: handleLoginPandit,
         registerPandit: handleRegisterPandit,

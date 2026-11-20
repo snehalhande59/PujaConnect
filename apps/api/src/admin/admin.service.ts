@@ -5,7 +5,7 @@
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { VerificationStatus, Role, Prisma } from '@prisma/client';
+import { VerificationStatus, Role, BookingStatus, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { QueryPanditsDto } from './dto/query-pandits.dto';
 import { CreatePanditDto } from './dto/create-pandit.dto';
@@ -303,6 +303,11 @@ export class AdminService {
    * Admin-Only: Add a new verified Pandit directly to PostgreSQL database
    */
   async createPandit(dto: CreatePanditDto) {
+    const fullName = (dto.fullName || `${dto.firstName || ''} ${dto.lastName || ''}`).trim();
+    if (!fullName) {
+      throw new BadRequestException('Pandit full name is required.');
+    }
+
     const email = dto.email.toLowerCase().trim();
     const phoneNumber = dto.phoneNumber.trim();
 
@@ -328,7 +333,7 @@ export class AdminService {
     // Create User & PanditProfile with VERIFIED status and isAvailable=true
     const pandit = await this.prisma.panditProfile.create({
       data: {
-        fullName: dto.fullName.trim(),
+        fullName,
         avatarUrl: dto.avatarUrl || null,
         experienceYears: dto.experienceYears ?? 1,
         languages: dto.languages && dto.languages.length > 0 ? dto.languages : ['Hindi', 'Sanskrit'],
@@ -431,7 +436,8 @@ export class AdminService {
 
     // Update PanditProfile fields
     const profileUpdates: any = {};
-    if (dto.fullName) profileUpdates.fullName = dto.fullName.trim();
+    const fullName = dto.fullName || (dto.firstName || dto.lastName ? `${dto.firstName || ''} ${dto.lastName || ''}`.trim() : undefined);
+    if (fullName) profileUpdates.fullName = fullName.trim();
     if (dto.avatarUrl !== undefined) profileUpdates.avatarUrl = dto.avatarUrl;
     if (dto.experienceYears !== undefined) profileUpdates.experienceYears = dto.experienceYears;
     if (dto.languages) profileUpdates.languages = dto.languages;
@@ -549,6 +555,7 @@ export class AdminService {
       totalPandits,
       pendingPandits,
       approvedPandits,
+      rejectedPandits,
       totalPujas,
       totalBookings,
       pendingBookings,
@@ -570,6 +577,9 @@ export class AdminService {
       this.prisma.panditProfile.count({
         where: { verificationStatus: VerificationStatus.VERIFIED, user: { isDeleted: false } },
       }),
+      this.prisma.panditProfile.count({
+        where: { verificationStatus: VerificationStatus.REJECTED, user: { isDeleted: false } },
+      }),
       this.prisma.puja.count({ where: { isActive: true } }),
       this.prisma.booking.count(),
       this.prisma.booking.count({ where: { status: 'PENDING' } }),
@@ -590,7 +600,9 @@ export class AdminService {
           customerProfile: {
             include: { user: { select: { email: true, phoneNumber: true } } },
           },
-          panditProfile: true,
+          panditProfile: {
+            include: { user: { select: { email: true, phoneNumber: true } } },
+          },
           puja: true,
           payments: true,
         },
@@ -599,7 +611,8 @@ export class AdminService {
         take: 10,
         orderBy: { createdAt: 'desc' },
         include: {
-          user: { select: { email: true, phoneNumber: true, createdAt: true } },
+          user: { select: { email: true, phoneNumber: true, createdAt: true, isActive: true } },
+          _count: { select: { bookings: true } },
         },
       }),
     ]);
@@ -609,14 +622,20 @@ export class AdminService {
       0
     );
 
+    const activePandits = approvedPandits;
+    const inactivePandits = Math.max(0, totalPandits - approvedPandits);
+
     return {
       customers: {
         total: totalCustomers,
       },
       pandits: {
         total: totalPandits,
+        active: activePandits,
+        inactive: inactivePandits,
         pending: pendingPandits,
         approved: approvedPandits,
+        rejected: rejectedPandits,
       },
       pujas: {
         total: totalPujas,
@@ -757,46 +776,138 @@ export class AdminService {
   }
 
   /**
-   * Update booking status
+   * Update booking status with audit trail in BookingStatusHistory
    */
-  async updateBookingStatus(id: string, status: string) {
+  async updateBookingStatus(id: string, status: string | BookingStatus, reason?: string) {
     const booking = await this.prisma.booking.findUnique({ where: { id } });
     if (!booking) {
       throw new NotFoundException(`Booking '${id}' not found.`);
     }
 
-    return this.prisma.booking.update({
-      where: { id },
-      data: { status: status.toUpperCase() as any },
-      include: {
-        customerProfile: true,
-        panditProfile: true,
-        puja: true,
-        payments: true,
-      },
-    });
+    const targetStatus = (typeof status === 'string' ? status.toUpperCase() : status) as BookingStatus;
+    const isCancelled = targetStatus === BookingStatus.CANCELLED || targetStatus === BookingStatus.REJECTED;
+
+    const [updatedBooking] = await this.prisma.$transaction([
+      this.prisma.booking.update({
+        where: { id },
+        data: {
+          status: targetStatus,
+          cancellationReason: isCancelled ? (reason || 'Cancelled by Admin') : booking.cancellationReason,
+        },
+        include: {
+          customerProfile: true,
+          panditProfile: true,
+          puja: true,
+          payments: true,
+        },
+      }),
+      this.prisma.bookingStatusHistory.create({
+        data: {
+          bookingId: id,
+          fromStatus: booking.status,
+          toStatus: targetStatus,
+          action: isCancelled ? 'CANCEL' : 'STATUS_UPDATE',
+          changedBy: 'ADMIN',
+          reason: reason || null,
+        },
+      }),
+    ]);
+
+    return updatedBooking;
   }
 
   /**
-   * Reassign a Pandit to a booking
+   * Reassign a Pandit to a booking with slot conflict validation and audit trail
    */
-  async assignPandit(bookingId: string, panditProfileId: string) {
-    const [booking, pandit] = await Promise.all([
-      this.prisma.booking.findUnique({ where: { id: bookingId } }),
-      this.prisma.panditProfile.findUnique({ where: { id: panditProfileId } }),
+  async reassignPandit(bookingId: string, newPanditProfileId: string, reason?: string) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { panditProfile: true },
+    });
+    if (!booking) {
+      throw new NotFoundException(`Booking '${bookingId}' not found.`);
+    }
+
+    if (booking.panditProfileId === newPanditProfileId) {
+      throw new BadRequestException('The selected Pandit is already assigned to this booking.');
+    }
+
+    const newPandit = await this.prisma.panditProfile.findUnique({
+      where: { id: newPanditProfileId },
+      include: { user: true },
+    });
+
+    if (!newPandit || !newPandit.user.isActive || newPandit.user.isDeleted) {
+      throw new NotFoundException('The selected Pandit does not exist or is currently inactive.');
+    }
+
+    if (newPandit.verificationStatus !== VerificationStatus.VERIFIED) {
+      throw new BadRequestException('Cannot assign Pandit: selected scholar is not verified.');
+    }
+
+    // Check if newPandit already has a conflicting booking on this date and time slot
+    const conflictingBooking = await this.prisma.booking.findFirst({
+      where: {
+        id: { not: booking.id },
+        panditProfileId: newPandit.id,
+        pujaDate: booking.pujaDate,
+        pujaTimeSlot: booking.pujaTimeSlot,
+        status: { in: [BookingStatus.CONFIRMED, BookingStatus.ACCEPTED, BookingStatus.PENDING] },
+      },
+    });
+
+    if (conflictingBooking) {
+      throw new BadRequestException(
+        `Pt. ${newPandit.fullName} is already booked for ${booking.pujaTimeSlot} on ${booking.pujaDate.toISOString().split('T')[0]}. Please select another Pandit.`,
+      );
+    }
+
+    const [updatedBooking] = await this.prisma.$transaction([
+      this.prisma.booking.update({
+        where: { id: bookingId },
+        data: { panditProfileId: newPandit.id },
+        include: {
+          customerProfile: true,
+          panditProfile: true,
+          puja: true,
+        },
+      }),
+      this.prisma.bookingStatusHistory.create({
+        data: {
+          bookingId,
+          fromStatus: booking.status,
+          toStatus: booking.status,
+          action: 'REASSIGN_PANDIT',
+          changedBy: 'ADMIN',
+          reason: reason || 'Pandit reassigned by Admin',
+          metadata: {
+            previousPanditId: booking.panditProfileId,
+            previousPanditName: booking.panditProfile?.fullName || 'Previous Purohit',
+            newPanditId: newPandit.id,
+            newPanditName: newPandit.fullName,
+          },
+        },
+      }),
     ]);
 
-    if (!booking) throw new NotFoundException('Booking not found.');
-    if (!pandit) throw new NotFoundException('Pandit profile not found.');
+    return updatedBooking;
+  }
 
-    return this.prisma.booking.update({
+  /**
+   * Get complete audit history for a booking
+   */
+  async getBookingAuditHistory(bookingId: string) {
+    const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      data: { panditProfileId },
-      include: {
-        customerProfile: true,
-        panditProfile: true,
-        puja: true,
-      },
+      select: { id: true, bookingNumber: true },
+    });
+    if (!booking) {
+      throw new NotFoundException(`Booking '${bookingId}' not found.`);
+    }
+
+    return this.prisma.bookingStatusHistory.findMany({
+      where: { bookingId },
+      orderBy: { createdAt: 'desc' },
     });
   }
 

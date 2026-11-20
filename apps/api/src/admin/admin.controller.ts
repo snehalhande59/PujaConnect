@@ -25,6 +25,8 @@ import { RejectPanditDto } from './dto/reject-pandit.dto';
 import { QueryPanditsDto } from './dto/query-pandits.dto';
 import { CreatePanditDto } from './dto/create-pandit.dto';
 import { UpdatePanditDto } from './dto/update-pandit.dto';
+import { ReassignBookingDto } from './dto/reassign-booking.dto';
+import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -135,21 +137,37 @@ export class AdminController {
   }
 
   @Patch('bookings/:id/status')
-  @ApiOperation({ summary: 'Update status of a booking' })
+  @ApiOperation({ summary: 'Update status of a booking with audit log' })
   async updateBookingStatus(
     @Param('id') id: string,
-    @Body('status') status: string,
+    @Body() dto: UpdateBookingStatusDto,
   ) {
-    return this.adminService.updateBookingStatus(id, status);
+    return this.adminService.updateBookingStatus(id, dto.status, dto.reason);
+  }
+
+  @Patch('bookings/:id/reassign')
+  @ApiOperation({ summary: 'Reassign Pandit to booking with slot conflict validation and audit' })
+  async reassignPandit(
+    @Param('id') id: string,
+    @Body() dto: ReassignBookingDto,
+  ) {
+    return this.adminService.reassignPandit(id, dto.newPanditProfileId, dto.reason);
   }
 
   @Patch('bookings/:id/assign-pandit')
-  @ApiOperation({ summary: 'Assign or reassign a Pandit to a booking' })
+  @ApiOperation({ summary: 'Assign or reassign a Pandit to a booking (alias)' })
   async assignPandit(
     @Param('id') id: string,
-    @Body('panditProfileId') panditProfileId: string,
+    @Body() body: any,
   ) {
-    return this.adminService.assignPandit(id, panditProfileId);
+    const newPanditId = body.panditProfileId || body.newPanditProfileId;
+    return this.adminService.reassignPandit(id, newPanditId, body.reason);
+  }
+
+  @Get('bookings/:id/history')
+  @ApiOperation({ summary: 'Get booking status and reassignment audit history' })
+  async getBookingAuditHistory(@Param('id') id: string) {
+    return this.adminService.getBookingAuditHistory(id);
   }
 
   // ==========================================

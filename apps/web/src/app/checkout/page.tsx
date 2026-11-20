@@ -34,6 +34,8 @@ function CheckoutContent() {
   const amountStr = searchParams.get('amount') || '5100';
   const pujaSlug = searchParams.get('puja') || 'satyanarayan-puja';
   const pujaTitle = searchParams.get('title') || 'Satyanarayan Mahapuja & Katha';
+  const panditId = searchParams.get('panditId') || null;
+  const panditName = searchParams.get('panditName') || null;
   const pujaDate = searchParams.get('date') || '2026-11-25';
   const pujaSlot = searchParams.get('slot') || '09:00 AM (Shubh Choghadiya)';
   const venueCity = searchParams.get('city') || 'Pune';
@@ -62,25 +64,31 @@ function CheckoutContent() {
 
     try {
       // 1. Send real booking request to backend API
+      const bookingPayload: any = {
+        pujaId: pujaSlug,
+        pujaDate: pujaDate,
+        pujaTimeSlot: pujaSlot,
+        pujaLanguage: 'Marathi',
+        venueAddress: venueAddress,
+        city: venueCity,
+        pincode: venuePincode,
+        includeSamagri: includeSamagri,
+        customerName: 'Snehal Hande',
+        customerPhone: '8459369260',
+        customerEmail: 'snehalhande59@gmail.com',
+        paymentMethod: paymentMethod,
+        paymentStatus: paymentMethod === 'CASH' ? 'PENDING' : 'PAID',
+        transactionId: generatedTxnId,
+      };
+
+      if (panditId && panditId.length > 10) {
+        bookingPayload.panditProfileId = panditId;
+      }
+
       const res = await fetch(`${API_BASE_URL}/bookings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pujaId: pujaSlug,
-          pujaDate: pujaDate,
-          pujaTimeSlot: pujaSlot,
-          pujaLanguage: 'Marathi',
-          venueAddress: venueAddress,
-          city: venueCity,
-          pincode: venuePincode,
-          includeSamagri: includeSamagri,
-          customerName: 'Snehal Hande',
-          customerPhone: '8459369260',
-          customerEmail: 'snehalhande59@gmail.com',
-          paymentMethod: paymentMethod,
-          paymentStatus: paymentMethod === 'CASH' ? 'PENDING' : 'PAID',
-          transactionId: generatedTxnId,
-        }),
+        body: JSON.stringify(bookingPayload),
       }).catch(() => null);
 
       let createdData = null;

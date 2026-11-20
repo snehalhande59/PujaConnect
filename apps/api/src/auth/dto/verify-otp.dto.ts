@@ -2,23 +2,44 @@ import { IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class VerifyOtpDto {
-  @ApiProperty({ example: '+919822012345', description: 'Indian mobile number (+91 or 10 digits)' })
+  @ApiPropertyOptional({ example: 'monica20@gmail.com', description: 'Customer email address' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Mobile number is required.' })
-  phoneNumber: string;
+  email?: string;
 
-  @ApiProperty({ example: '123456', description: '6-digit OTP code' })
+  @ApiPropertyOptional({ example: '+919822012345', description: 'Indian mobile number' })
+  @IsOptional()
   @IsString()
-  @Length(6, 6, { message: 'OTP must be exactly 6 digits.' })
+  phoneNumber?: string;
+
+  @ApiPropertyOptional({ example: '+919822012345', description: 'Alternative mobile number field' })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiPropertyOptional({ example: 'monica20@gmail.com', description: 'Unified identifier (email or phone number)' })
+  @IsOptional()
+  @IsString()
+  identifier?: string;
+
+  @ApiProperty({ example: '123456', description: '6-digit verification code' })
+  @IsNotEmpty({ message: 'Verification code is required.' })
+  @IsString({ message: 'Verification code must be a string.' })
+  @Length(6, 6, { message: 'Verification code must be exactly 6 digits.' })
   otp: string;
 
-  @ApiPropertyOptional({ example: 'Rahul Sharma', description: 'Full name for new customer registration' })
+  @ApiPropertyOptional({ example: 'Monica Pardeshi', description: 'Full name for new customer registration' })
   @IsOptional()
   @IsString()
   fullName?: string;
 
-  @ApiPropertyOptional({ example: 'rahul.sharma@example.com', description: 'Email address' })
+  @ApiPropertyOptional({ example: 'email', enum: ['email', 'sms'], description: 'Delivery channel' })
   @IsOptional()
   @IsString()
-  email?: string;
+  channel?: string;
+
+  @ApiPropertyOptional({ example: 'LOGIN', enum: ['LOGIN', 'REGISTER'] })
+  @IsOptional()
+  @IsString()
+  purpose?: string;
 }

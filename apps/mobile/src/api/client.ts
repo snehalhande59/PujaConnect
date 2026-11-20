@@ -13,30 +13,28 @@ import {
   Address,
 } from '../types';
 
+declare const process: any;
+declare const __DEV__: boolean;
+
 export const PRODUCTION_API_URL = 'https://pujaconnect-api-he9b.onrender.com/api/v1';
+export const DEV_API_URL = 'http://192.168.1.3:3001/api/v1';
 
-// Dynamic host determination for Android Device vs Emulator vs Local Web
-const getLocalBaseUrl = (): string => {
-  // Extract host IP dynamically from Expo Go connection if available
-  const hostUri =
-    Constants.expoConfig?.hostUri ||
-    (Constants as any).manifest?.debuggerHost ||
-    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
-
-  if (hostUri) {
-    const ip = hostUri.split(':')[0];
-    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
-      return `http://${ip}:3001/api/v1`;
-    }
+// Dynamic host determination:
+// 1. Explicit EXPO_PUBLIC_API_URL environment variable has top priority.
+// 2. Development builds (__DEV__) default to local LAN backend (http://192.168.1.3:3001/api/v1).
+// 3. Production builds preserve the live production Render API URL.
+export const getApiBaseUrl = (): string => {
+  if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
   }
-
-  if (Platform.OS === 'android') {
-    return 'http://192.168.1.3:3001/api/v1';
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    return DEV_API_URL;
   }
-  return 'http://localhost:3001/api/v1';
+  const extraUrl = Constants.expoConfig?.extra?.apiUrl;
+  return extraUrl || PRODUCTION_API_URL;
 };
 
-export const API_BASE_URL = getLocalBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
 
 // Storage keys
 const TOKEN_KEY = 'pujaconnect_auth_token';
@@ -166,7 +164,10 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
     const errorMsg = Array.isArray(payload.message)
       ? payload.message.join(', ')
       : payload.message || `Request failed with status ${response.status}`;
-    throw new Error(errorMsg);
+    const err: any = new Error(errorMsg);
+    err.isApiError = true;
+    err.status = response.status;
+    throw err;
   }
 
   // NestJS TransformInterceptor wraps in { success: true, data: ... }
@@ -192,28 +193,41 @@ async function apiRequest<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  // 1. First attempt: Primary URL (Local LAN in DEV or Production)
+  // Determine appropriate timeout: 30s for production (handles Render cold start), 8s for local
+  const isProd = API_BASE_URL === PRODUCTION_API_URL;
+  const timeoutMs = isProd ? 30000 : 8000;
+
+  // 1. First attempt: Primary URL
   const primaryUrl = `${API_BASE_URL}${endpoint}`;
   try {
-    const response = await fetchWithTimeout(primaryUrl, options, headers, 4000);
+    const response = await fetchWithTimeout(primaryUrl, options, headers, timeoutMs);
     return await handleApiResponse<T>(response);
   } catch (primaryErr: any) {
-    // 2. If primary was local LAN and failed (e.g. device on cellular, connection reset, timeout),
-    // automatically fallback to live Render production API!
-    if (API_BASE_URL !== PRODUCTION_API_URL) {
+    // If the server answered with an HTTP validation or business error, throw it immediately (do not fallback)
+    if (primaryErr?.isApiError) {
+      throw primaryErr;
+    }
+
+    // 2. If primary was unreachable and we are NOT in local development (__DEV__ is false), fallback to production API
+    const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+    if (!isProd && !isDev) {
       const fallbackUrl = `${PRODUCTION_API_URL}${endpoint}`;
       try {
         const fallbackRes = await fetchWithTimeout(fallbackUrl, options, headers, 30000);
         return await handleApiResponse<T>(fallbackRes);
       } catch (fallbackErr: any) {
-        const isSocketReset =
-          primaryErr?.message?.includes('SocketException') ||
-          primaryErr?.message?.includes('Connection reset') ||
-          primaryErr?.message?.includes('Network request failed');
+        if (fallbackErr?.isApiError) {
+          throw fallbackErr;
+        }
+        const isNetworkErr =
+          fallbackErr?.message?.includes('SocketException') ||
+          fallbackErr?.message?.includes('Connection reset') ||
+          fallbackErr?.message?.includes('Network request failed') ||
+          fallbackErr?.message?.includes('fetch failed');
 
-        if (isSocketReset) {
+        if (isNetworkErr) {
           throw new Error(
-            'Cannot reach PujaConnect server. Please check your internet connection or verify Wi-Fi.',
+            'Cannot reach PujaConnect server. Please check your internet connection.',
           );
         }
         throw new Error(
@@ -224,14 +238,16 @@ async function apiRequest<T = any>(
       }
     }
 
-    const isSocketReset =
+    const isNetworkErr =
       primaryErr?.message?.includes('SocketException') ||
       primaryErr?.message?.includes('Connection reset') ||
-      primaryErr?.message?.includes('Network request failed');
+      primaryErr?.message?.includes('Network request failed') ||
+      primaryErr?.message?.includes('fetch failed') ||
+      primaryErr?.name === 'AbortError';
 
-    if (isSocketReset) {
+    if (isNetworkErr) {
       throw new Error(
-        'Cannot reach PujaConnect server. Please check your internet connection.',
+        `Cannot reach PujaConnect server at ${API_BASE_URL}. Please ensure your mobile device and computer are on the same Wi-Fi network and the backend server is running.`,
       );
     }
     throw primaryErr;
@@ -248,6 +264,56 @@ export const api = {
     const res = await apiRequest('/auth/customer/login', {
       method: 'POST',
       body: JSON.stringify({ email: email.trim(), password }),
+    });
+    if (res.token && res.user) {
+      await storage.setToken(res.token);
+      await storage.setUser(res.user);
+    }
+    return res;
+  },
+
+  async sendCustomerOtp(identifier: string, channel: 'email' | 'sms' = 'email') {
+    const trimmed = identifier.trim();
+    const isEmail = trimmed.includes('@');
+    const resolvedChannel = channel || (isEmail ? 'email' : 'sms');
+
+    const body: Record<string, any> = {
+      identifier: trimmed,
+      channel: resolvedChannel,
+    };
+    if (isEmail) {
+      body.email = trimmed;
+    } else {
+      body.phoneNumber = trimmed;
+    }
+
+    return apiRequest('/auth/customer/send-otp', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async verifyCustomerOtp(identifier: string, otp: string, fullName?: string) {
+    const trimmed = identifier.trim();
+    const isEmail = trimmed.includes('@');
+
+    const body: Record<string, any> = {
+      identifier: trimmed,
+      channel: isEmail ? 'email' : 'sms',
+      otp: otp.trim(),
+    };
+    if (isEmail) {
+      body.email = trimmed;
+    } else {
+      body.phoneNumber = trimmed;
+    }
+    if (fullName && fullName.trim()) {
+      body.fullName = fullName.trim();
+    }
+
+    const res = await apiRequest('/auth/customer/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify(body),
     });
     if (res.token && res.user) {
       await storage.setToken(res.token);
