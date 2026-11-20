@@ -70,15 +70,22 @@ function BookingContent() {
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
         const data = json?.data || json;
+        const fallbackPanditImages = [
+          '/images/pandits/pandit-acharya.jpg',
+          '/images/pandits/pandit-vidyadhar.jpg',
+          '/images/pandits/pandit-anant.jpg',
+          '/images/pandits/pandit-girish.jpg',
+          '/images/pandits/pandit-rameshwar.jpg',
+        ];
         if (Array.isArray(data) && data.length > 0) {
-          const mapped = data.map((p: any) => ({
+          const mapped = data.map((p: any, idx: number) => ({
             id: p.id,
             name: p.fullName || 'Vedic Pandit',
-            avatarUrl: p.avatarUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
+            avatarUrl: p.avatarUrl || fallbackPanditImages[idx % fallbackPanditImages.length],
             city: p.city || 'Pune',
             experienceYears: p.experienceYears || 10,
-            languages: Array.isArray(p.languages) ? p.languages : ['Marathi', 'Hindi', 'Sanskrit'],
-            specializations: Array.isArray(p.specializations) ? p.specializations : ['Vedic Rituals'],
+            languages: Array.isArray(p.languages) && p.languages.length > 0 ? p.languages : ['Marathi', 'Hindi', 'Sanskrit'],
+            specializations: Array.isArray(p.specializations) && p.specializations.length > 0 ? p.specializations : ['Vedic Rituals'],
             baseDakshina: p.basePrice ? Number(p.basePrice) : 2100,
             isAvailableToday: p.isAvailable ?? true,
           }));
