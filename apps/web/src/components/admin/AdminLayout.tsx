@@ -91,7 +91,7 @@ export default function AdminLayout({ children, pendingPanditsCount = 0 }: Admin
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
           <div className="flex items-center gap-2 sm:gap-3">
-            <DevSutraLogo variant="dark" size="sm" showTagline={false} />
+            <DevSutraLogo variant="icon" size="sm" showTagline={false} />
             <div className="border-l border-stone-800 pl-3">
               <h1 className="font-bold text-sm sm:text-base text-white tracking-tight leading-tight">
                 DevSutra

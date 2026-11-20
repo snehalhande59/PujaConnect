@@ -12,9 +12,9 @@ export default function SupportDashboardPage() {
     <div className="min-h-screen bg-deep-maroon text-beige flex flex-col font-sans">
       <header className="h-16 border-b border-gold/30 bg-maroon-900 px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <DevSutraLogo variant="dark" size="sm" showTagline={false} />
+          <DevSutraLogo variant="icon" size="sm" showTagline={false} />
           <span className="font-heading font-bold text-sm tracking-wide text-ivory border-l border-gold/30 pl-3">
-            Devotee Seva Helpdesk
+            DevSutra Devotee Seva Helpdesk
           </span>
         </div>
         <div className="flex items-center gap-3 text-xs">

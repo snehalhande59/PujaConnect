@@ -42,7 +42,7 @@ export default function AdminLoginPage() {
       <div className="w-full max-w-md bg-maroon-900 border border-gold/30 rounded-3xl p-8 sm:p-10 shadow-2xl space-y-6">
         <div className="text-center space-y-3">
           <div className="flex justify-center">
-            <DevSutraLogo variant="dark" size="lg" showTagline={false} />
+            <DevSutraLogo variant="icon" size="lg" />
           </div>
           <h1 className="text-2xl font-heading font-bold text-ivory tracking-tight">
             DevSutra Admin Console

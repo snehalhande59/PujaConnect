@@ -498,7 +498,7 @@ export default function AdminDashboardPage() {
       {/* Top Navbar */}
       <header className="h-16 border-b border-gold/30 bg-maroon-900 px-6 flex items-center justify-between sticky top-0 z-20">
         <div className="flex items-center gap-3">
-          <DevSutraLogo variant="dark" size="sm" showTagline={false} />
+          <DevSutraLogo variant="icon" size="sm" showTagline={false} />
           <div className="border-l border-gold/30 pl-3">
             <span className="font-heading font-bold text-sm tracking-wide text-ivory block leading-tight">
               DevSutra

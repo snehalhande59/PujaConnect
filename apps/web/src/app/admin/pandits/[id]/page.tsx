@@ -213,9 +213,9 @@ export default function AdminPanditDetailPage() {
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <DevSutraLogo variant="dark" size="sm" showTagline={false} />
+          <DevSutraLogo variant="icon" size="sm" showTagline={false} />
           <span className="font-heading font-bold text-sm tracking-wide text-ivory border-l border-gold/30 pl-3">
-            Pandit Verification Review
+            DevSutra Pandit Verification
           </span>
         </div>
 
