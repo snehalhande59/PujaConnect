@@ -448,7 +448,7 @@ export const NEXT_30_DAYS_PANCHANG: PanchangMuhuratItem[] = [
     badge: '★ Recommended',
     badgeType: 'recommended',
     icon: 'kalash',
-    description: 'Popular family pooja for prosperity, peace & family harmony.',
+    description: 'Popular family puja for prosperity, peace & family harmony.',
     pujaSlug: 'satyanarayan-puja',
   },
   {
@@ -600,7 +600,7 @@ export const POPULAR_SERVICES_WEB: PopularServiceVisual[] = [
   { id: 'satyanarayan', name: 'Satyanarayan Puja', devanagariName: 'सत्यनारायण पूजा', slug: 'satyanarayan-puja', category: 'Regular Puja', iconType: 'kalash' },
   { id: 'rudrabhishek', name: 'Rudrabhishek', devanagariName: 'रुद्राभिषेक', slug: 'rudrabhishek', category: 'Regular Puja', iconType: 'om' },
   { id: 'ganesh-puja', name: 'Ganesh Puja', devanagariName: 'गणेश पूजन', slug: 'ganesh-puja', category: 'All Hawan', iconType: 'ganesh' },
-  { id: 'lakshmi-pooja', name: 'Lakshmi Pooja', devanagariName: 'महालक्ष्मी पूजन', slug: 'lakshmi-puja', category: 'Festive Puja', iconType: 'lotus' },
+  { id: 'lakshmi-puja', name: 'Lakshmi Puja', devanagariName: 'महालक्ष्मी पूजन', slug: 'lakshmi-puja', category: 'Festive Puja', iconType: 'lotus' },
 ];
 
 export const PILGRIMAGE_CITIES_WEB = [

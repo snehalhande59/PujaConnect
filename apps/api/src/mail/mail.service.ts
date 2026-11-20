@@ -92,7 +92,7 @@ export class MailService {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>[TEST] PujaConnect SMTP Verification</title>
+  <title>[TEST] DevSutra SMTP Verification</title>
   <style>
     body {
       margin: 0;
@@ -201,22 +201,22 @@ export class MailService {
   <div class="wrapper">
     <div class="container">
       <div class="header">
-        <h1 class="brand-name">PujaConnect</h1>
+        <h1 class="brand-name">DevSutra</h1>
         <div class="brand-tagline">Vedic Rituals & Certified Pandits</div>
       </div>
       <div class="content">
         <span class="test-badge">⚠️ Automated Delivery Test</span>
         <h2 class="title">SMTP Configuration Test</h2>
-        <p class="subtitle">This is an automated test email to confirm that the PujaConnect email service is correctly configured and operational.</p>
+        <p class="subtitle">This is an automated test email to confirm that the DevSutra email service is correctly configured and operational.</p>
         <div class="otp-box">
           <div class="otp-code">${testCode}</div>
         </div>
         <div class="warning">
-          <strong>Security Notice:</strong> This is a temporary test-only code. It is NOT a real login OTP and cannot be used to sign in to PujaConnect.
+          <strong>Security Notice:</strong> This is a temporary test-only code. It is NOT a real login OTP and cannot be used to sign in to DevSutra.
         </div>
       </div>
       <div class="footer">
-        © ${new Date().getFullYear()} PujaConnect. All rights reserved.
+        © ${new Date().getFullYear()} DevSutra. All rights reserved.
       </div>
     </div>
   </div>
@@ -228,8 +228,8 @@ export class MailService {
       const info = await this.transporter.sendMail({
         from: fromAddress,
         to: toEmail,
-        subject: `[TEST] PujaConnect SMTP Verification`,
-        text: `This is an automated test email from PujaConnect. Test Code: ${testCode}. This is for SMTP verification only and cannot be used to log in.`,
+        subject: `[TEST] DevSutra SMTP Verification`,
+        text: `This is an automated test email from DevSutra. Test Code: ${testCode}. This is for SMTP verification only and cannot be used to log in.`,
         html: htmlContent,
       });
 
@@ -312,7 +312,7 @@ export class MailService {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PujaConnect Verification Code</title>
+  <title>DevSutra Verification Code</title>
   <style>
     body {
       margin: 0;

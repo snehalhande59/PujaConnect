@@ -739,7 +739,7 @@ function BookingContent() {
                           I Will Arrange Puja Samagri Myself (₹0)
                         </h4>
                         <p className="text-xs text-brown/70 mt-1 leading-relaxed">
-                          DevSutra will email you an itemized Shastric samagri checklist so you can procure ingredients from your local pooja bhandar.
+                          DevSutra will email you an itemized Shastric samagri checklist so you can procure ingredients from your local puja bhandar.
                         </p>
                       </div>
                     </div>

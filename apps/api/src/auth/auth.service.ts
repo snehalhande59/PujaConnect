@@ -643,7 +643,7 @@ export class AuthService {
     return {
       success: true,
       message: isNewCustomer
-        ? 'Welcome to PujaConnect! Account created successfully.'
+        ? 'Welcome to DevSutra! Account created successfully.'
         : 'Logged in successfully!',
       token,
       isNewCustomer,

@@ -1,5 +1,5 @@
 /**
- * PujaConnect Standardized Date and Time Formatting Utility
+ * DevSutra Standardized Date and Time Formatting Utility
  * Ensures consistent, clean, and exact date-time formatting across mobile screens.
  */
 

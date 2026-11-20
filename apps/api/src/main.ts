@@ -49,7 +49,7 @@ async function bootstrap() {
   SwaggerModule.setup(`${apiPrefix}/docs`, app, document);
 
   await app.listen(port, '0.0.0.0');
-  logger.log(`🚀 PujaConnect API running on: http://localhost:${port}/${apiPrefix}`);
+  logger.log(`🚀 DevSutra API running on: http://localhost:${port}/${apiPrefix}`);
   logger.log(`📚 Swagger Docs available at: http://localhost:${port}/${apiPrefix}/docs`);
   logger.log(`🩺 Health check available at: http://localhost:${port}/${apiPrefix}/health`);
 }

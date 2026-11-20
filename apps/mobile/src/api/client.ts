@@ -37,9 +37,9 @@ export const getApiBaseUrl = (): string => {
 export const API_BASE_URL = getApiBaseUrl();
 
 // Storage keys
-const TOKEN_KEY = 'pujaconnect_auth_token';
-const USER_KEY = 'pujaconnect_user_profile';
-const BOOKINGS_KEY = 'pujaconnect_local_bookings';
+const TOKEN_KEY = 'devsutra_auth_token';
+const USER_KEY = 'devsutra_user_profile';
+const BOOKINGS_KEY = 'devsutra_local_bookings';
 
 // In-memory fallback for platforms where SecureStore is not accessible
 let memoryToken: string | null = null;

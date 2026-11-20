@@ -121,7 +121,7 @@ export class SmsService {
       const body = new URLSearchParams({
         To: to,
         From: this.twilioFrom,
-        Body: `Your PujaConnect DevSutra verification OTP is ${otp}. Valid for 10 minutes. Do not share this code with anyone.`,
+        Body: `Your DevSutra verification OTP is ${otp}. Valid for 10 minutes. Do not share this code with anyone.`,
       });
 
       const auth = Buffer.from(`${this.twilioSid}:${this.twilioToken}`).toString('base64');

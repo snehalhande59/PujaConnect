@@ -9,7 +9,7 @@ export default function AdminProductsPage() {
   const products = [
     { name: 'Vedic Griha Pravesh Samagri Kit (60+ Sacred Items)', category: 'Puja Kits', price: '₹1,899', stock: 120, status: 'IN_STOCK' },
     { name: 'Satyanarayan Mahapuja Complete Samagri Box', category: 'Puja Kits', price: '₹1,499', stock: 85, status: 'IN_STOCK' },
-    { name: 'Brass Sacred Pooja Thali Set (Panchpatra + Achmani)', category: 'Pooja Thali', price: '₹1,249', stock: 45, status: 'IN_STOCK' },
+    { name: 'Brass Sacred Puja Thali Set (Panchpatra + Achmani)', category: 'Puja Thali', price: '₹1,249', stock: 45, status: 'IN_STOCK' },
     { name: 'Pure Desi Cow Ghee Diya Wicks (Pack of 100)', category: 'Diya & Kapoor', price: '₹399', stock: 260, status: 'IN_STOCK' },
     { name: 'Bhimseni Pure Camphor (Flake Grade)', category: 'Diya & Kapoor', price: '₹299', stock: 180, status: 'IN_STOCK' },
     { name: 'Authentic Gangajal & Panchamrit Containers', category: 'Pavitra Jal', price: '₹199', stock: 320, status: 'IN_STOCK' },

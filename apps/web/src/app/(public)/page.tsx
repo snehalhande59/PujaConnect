@@ -504,7 +504,7 @@ export default function HomePage() {
               className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-ivory border border-gold/60 text-maroon hover:bg-gold/15 text-xs font-bold transition shadow-sm"
             >
               <Gift className="w-3.5 h-3.5 text-saffron" />
-              <span>Pooja Packages</span>
+              <span>Puja Packages</span>
             </Link>
             <Link
               href="/pujas"

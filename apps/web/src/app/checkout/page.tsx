@@ -137,7 +137,7 @@ function CheckoutContent() {
 
       // Save to localStorage for client-side persistence
       try {
-        const existing = JSON.parse(localStorage.getItem('devsutra_web_bookings') || localStorage.getItem('pujaconnect_web_bookings') || '[]');
+        const existing = JSON.parse(localStorage.getItem('devsutra_web_bookings') || '[]');
         localStorage.setItem('devsutra_web_bookings', JSON.stringify([finalBooking, ...existing]));
       } catch {
         // ignore
