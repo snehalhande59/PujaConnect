@@ -112,7 +112,7 @@ export const DevSutraLogo: React.FC<DevSutraLogoProps> = ({
               },
             ]}
           >
-            Puja<Text style={{ color: colors.gold }}>Connect</Text>
+            Dev<Text style={{ color: colors.gold }}>Sutra</Text>
           </Text>
         </View>
 

@@ -27,6 +27,7 @@ import { CreatePanditDto } from './dto/create-pandit.dto';
 import { UpdatePanditDto } from './dto/update-pandit.dto';
 import { ReassignBookingDto } from './dto/reassign-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
+import { UpdateCustomerDto } from './dto/update-customer.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -124,6 +125,18 @@ export class AdminController {
   @ApiOperation({ summary: 'Get registered customers with booking count' })
   async getCustomers(@Query() query: any) {
     return this.adminService.getCustomers(query);
+  }
+
+  @Get('customers/:id')
+  @ApiOperation({ summary: 'Get single customer details, bookings, and addresses' })
+  async getCustomerDetails(@Param('id') id: string) {
+    return this.adminService.getCustomerDetails(id);
+  }
+
+  @Patch('customers/:id')
+  @ApiOperation({ summary: 'Update customer details and active status' })
+  async updateCustomer(@Param('id') id: string, @Body() dto: UpdateCustomerDto) {
+    return this.adminService.updateCustomer(id, dto);
   }
 
   // ==========================================

@@ -727,6 +727,87 @@ export class AdminService {
   }
 
   /**
+   * Get single customer with bookings and addresses
+   */
+  async getCustomerDetails(id: string) {
+    const customer = await this.prisma.customerProfile.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        addresses: true,
+        bookings: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            puja: true,
+            panditProfile: true,
+            payments: true,
+          },
+        },
+      },
+    });
+
+    if (!customer) {
+      throw new NotFoundException(`Customer '${id}' not found.`);
+    }
+
+    return customer;
+  }
+
+  /**
+   * Update customer profile and active status
+   */
+  async updateCustomer(id: string, data: any) {
+    const customer = await this.prisma.customerProfile.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+
+    if (!customer) {
+      throw new NotFoundException(`Customer '${id}' not found.`);
+    }
+
+    const updated = await this.prisma.customerProfile.update({
+      where: { id },
+      data: {
+        firstName: data.firstName !== undefined ? data.firstName.trim() : customer.firstName,
+        lastName: data.lastName !== undefined ? data.lastName.trim() : customer.lastName,
+        city: data.city !== undefined ? data.city : customer.city,
+        state: data.state !== undefined ? data.state : customer.state,
+        pincode: data.pincode !== undefined ? data.pincode : customer.pincode,
+        user: {
+          update: {
+            isActive: data.isActive !== undefined ? Boolean(data.isActive) : customer.user.isActive,
+            phoneNumber: data.phoneNumber !== undefined ? data.phoneNumber.trim() : customer.user.phoneNumber,
+          },
+        },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            phoneNumber: true,
+            isActive: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    return updated;
+  }
+
+  /**
    * Get all bookings across the platform with filtering
    */
   async getBookings(query: {

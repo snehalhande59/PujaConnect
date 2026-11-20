@@ -158,7 +158,7 @@ export default function DevSutraLogo({
               letterSpacing: '0.08em',
             }}
           >
-            Puja<span style={{ color: goldColor }}>Connect</span>
+            Dev<span style={{ color: goldColor }}>Sutra</span>
           </span>
           {showTagline && (
             <p
@@ -169,7 +169,7 @@ export default function DevSutraLogo({
                 letterSpacing: '0.22em',
               }}
             >
-              Authentic Vedic Puja & Pandit Booking
+              Vedic Rituals & Certified Gurukul Pandits
             </p>
           )}
         </div>
@@ -190,7 +190,7 @@ export default function DevSutraLogo({
             letterSpacing: '0.04em',
           }}
         >
-          Puja<span style={{ color: goldColor }}>Connect</span>
+          Dev<span style={{ color: goldColor }}>Sutra</span>
         </span>
         {showTagline && (
           <span
@@ -201,7 +201,7 @@ export default function DevSutraLogo({
               letterSpacing: '0.18em',
             }}
           >
-            Authentic Vedic Puja & Pandit Booking
+            Vedic Rituals & Certified Gurukul Pandits
           </span>
         )}
       </div>
