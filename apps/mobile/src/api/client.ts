@@ -27,11 +27,14 @@ export const getApiBaseUrl = (): string => {
   if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
+  const extraUrl = Constants.expoConfig?.extra?.apiUrl;
+  if (extraUrl) {
+    return extraUrl;
+  }
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
     return DEV_API_URL;
   }
-  const extraUrl = Constants.expoConfig?.extra?.apiUrl;
-  return extraUrl || PRODUCTION_API_URL;
+  return PRODUCTION_API_URL;
 };
 
 export const API_BASE_URL = getApiBaseUrl();

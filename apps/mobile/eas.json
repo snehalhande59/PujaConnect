@@ -1,4 +1,3 @@
-
 {
   "cli": {
     "version": ">= 27.10.0",
@@ -16,12 +15,27 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://pujaconnect-api-he9b.onrender.com/api/v1"
+      }
+    },
+    "production-apk": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://pujaconnect-api-he9b.onrender.com/api/v1"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://pujaconnect-api-he9b.onrender.com/api/v1"
       }
     }
   },
