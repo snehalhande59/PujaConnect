@@ -18,6 +18,11 @@ export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter | null = null;
   private isConfigured = false;
+  private host?: string;
+  private port: number = 587;
+  private secure: boolean = false;
+  private user?: string;
+  private pass?: string;
   private lastVerificationResult: {
     verified: boolean;
     timestamp: string;
@@ -58,6 +63,12 @@ export class MailService implements OnModuleInit {
     const secure =
       this.configService.get<string>('SMTP_SECURE') === 'true' ||
       port === 465;
+
+    this.host = host;
+    this.port = port;
+    this.secure = secure;
+    this.user = user;
+    this.pass = pass;
 
     if (host && user && pass) {
       try {
@@ -104,10 +115,10 @@ export class MailService implements OnModuleInit {
         this.lastVerificationResult = {
           verified: true,
           timestamp: new Date().toISOString(),
-          message: 'SMTP connection verified successfully. Ready to deliver emails.',
+          message: `SMTP connection verified successfully on port ${this.port} (secure: ${this.secure}). Ready to deliver emails.`,
         };
         this.logger.log(
-          'SMTP connection verified successfully. Ready to deliver emails.',
+          `SMTP connection verified successfully on port ${this.port}. Ready to deliver emails.`,
         );
       } catch (err: any) {
         const code = err?.code || 'UNKNOWN';
@@ -127,8 +138,47 @@ export class MailService implements OnModuleInit {
           message: sanitizedMsg,
         };
         this.logger.warn(
-          `[SMTP Startup Verification Warning] Connection check failed (code=${code}, responseCode=${responseCode}, command=${command}): ${sanitizedMsg}`,
+          `[SMTP Startup Verification Warning] Connection check on port ${this.port} failed (code=${code}, responseCode=${responseCode}, command=${command}): ${sanitizedMsg}`,
         );
+
+        // If port was 587 and failed with ETIMEDOUT / ECONNREFUSED, test port 465 (SSL direct)
+        if (this.port === 587 && (code === 'ETIMEDOUT' || code === 'ECONNREFUSED' || code === 'ESOCKET')) {
+          this.logger.log('Port 587 timed out. Testing port 465 (SSL direct) as fallback...');
+          try {
+            const sslTransporter = nodemailer.createTransport({
+              host: this.host,
+              port: 465,
+              secure: true,
+              auth: {
+                user: this.user,
+                pass: this.pass,
+              },
+              connectionTimeout: 10000,
+              greetingTimeout: 10000,
+              socketTimeout: 15000,
+            });
+            await sslTransporter.verify();
+            this.transporter = sslTransporter;
+            this.port = 465;
+            this.secure = true;
+            this.lastVerificationResult = {
+              verified: true,
+              timestamp: new Date().toISOString(),
+              message: 'SMTP connection verified successfully on fallback port 465 (SSL). Ready to deliver emails.',
+            };
+            this.logger.log('SMTP connection verified successfully on fallback port 465 (SSL).');
+          } catch (sslErr: any) {
+            const sslCode = sslErr?.code || 'UNKNOWN';
+            const sslMsg = sslErr?.message || 'Port 465 verification failed';
+            this.lastVerificationResult = {
+              verified: false,
+              timestamp: new Date().toISOString(),
+              code: sslCode,
+              message: `Port 587 failed (${code}), and fallback port 465 also failed (${sslCode}): ${sslMsg}`,
+            };
+            this.logger.warn(`Port 465 fallback also failed: code=${sslCode}, message=${sslMsg}`);
+          }
+        }
       }
     } else {
       this.lastVerificationResult = {
@@ -582,6 +632,47 @@ export class MailService implements OnModuleInit {
         messageId: info.messageId,
       };
     } catch (err: any) {
+      // If port 587 timed out during send and we haven't switched to 465 yet, try port 465 once
+      if (this.port === 587 && this.host && this.user && this.pass && (err?.code === 'ETIMEDOUT' || err?.code === 'ECONNREFUSED' || err?.code === 'ESOCKET')) {
+        this.logger.warn(`sendMail timed out on port 587. Attempting retry via port 465 (SSL direct)...`);
+        try {
+          const sslTransporter = nodemailer.createTransport({
+            host: this.host,
+            port: 465,
+            secure: true,
+            auth: {
+              user: this.user,
+              pass: this.pass,
+            },
+            connectionTimeout: 10000,
+            greetingTimeout: 10000,
+            socketTimeout: 15000,
+          });
+          const info = await sslTransporter.sendMail({
+            from: fromAddress,
+            to: toEmail,
+            subject: `${otp} is your DevSutra verification code`,
+            text: `Your DevSutra verification code is: ${otp}. This code is valid for 5 minutes. Never share this code with anyone.`,
+            html: htmlContent,
+          });
+          this.transporter = sslTransporter;
+          this.port = 465;
+          this.secure = true;
+          this.lastSendResult = {
+            success: true,
+            timestamp: new Date().toISOString(),
+            message: `OTP email delivered via port 465 (messageId: ${info.messageId})`,
+          };
+          this.logger.log(`OTP email sent successfully via port 465 to ${masked} (messageId: ${info.messageId})`);
+          return {
+            success: true,
+            messageId: info.messageId,
+          };
+        } catch (retryErr: any) {
+          this.logger.error(`Port 465 retry also failed: ${retryErr?.code} ${retryErr?.message}`);
+        }
+      }
+
       const code = err?.code || 'UNKNOWN';
       const responseCode = err?.responseCode || 'N/A';
       const command = err?.command || 'N/A';
