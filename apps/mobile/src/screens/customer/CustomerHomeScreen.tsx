@@ -12,6 +12,7 @@ import {
   StatusBar,
   Linking,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +40,7 @@ const { width } = Dimensions.get('window');
 interface CustomerHomeScreenProps {
   onNavigatePujaDetail: (puja: Puja) => void;
   onNavigatePanditDetail: (pandit: PanditProfile) => void;
+  onNavigateFindPandits?: () => void;
   onNavigateCategory: (categoryName: string) => void;
   onNavigateStore: () => void;
   onNavigateCart: () => void;
@@ -54,6 +56,7 @@ interface CustomerHomeScreenProps {
 export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
   onNavigatePujaDetail,
   onNavigatePanditDetail,
+  onNavigateFindPandits,
   onNavigateCategory,
   onNavigateStore,
   onNavigateCart,
@@ -73,6 +76,7 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
     : Math.max(insets.top, 20) + 6;
 
   const [featuredPandits, setFeaturedPandits] = useState<PanditProfile[]>([]);
+  const [panditsLoading, setPanditsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showKundaliModal, setShowKundaliModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -110,9 +114,14 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
 
   const loadData = async () => {
     try {
+      setPanditsLoading(true);
       const panditsRes = await api.getPandits({ city: selectedCity });
       if (panditsRes && panditsRes.length > 0) {
-        setFeaturedPandits(panditsRes.slice(0, 5));
+        setFeaturedPandits(panditsRes.slice(0, 8));
+      } else {
+        // Fallback to all pandits if current city has no specific listings yet
+        const allPandits = await api.getPandits();
+        setFeaturedPandits(allPandits || []);
       }
       const myBookings = await api.getMyBookings();
       if (myBookings && myBookings.length > 0) {
@@ -124,6 +133,7 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
     } catch (e) {
       console.warn('Error loading data:', e);
     } finally {
+      setPanditsLoading(false);
       setRefreshing(false);
     }
   };
@@ -236,49 +246,14 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
         showsVerticalScrollIndicator={false}
       >
         {/* Search Bar Prompt */}
-        <TouchableOpacity style={styles.searchBar} activeOpacity={0.9} onPress={onNavigateExplore}>
+        <TouchableOpacity
+          style={styles.searchBar}
+          activeOpacity={0.9}
+          onPress={onNavigateFindPandits || onNavigateExplore}
+        >
           <Ionicons name="search" size={18} color="#8C7A70" style={{ marginRight: 8 }} />
           <Text style={styles.searchPlaceholder}>Search Puja / पूजेचा शोध घ्या...</Text>
         </TouchableOpacity>
-
-        {/* Active / Upcoming Puja Booking Card */}
-        {upcomingBooking && (
-          <TouchableOpacity
-            style={styles.upcomingBookingCard}
-            activeOpacity={0.88}
-            onPress={onNavigateBookings}
-          >
-            <View style={styles.upcomingHeader}>
-              <View style={styles.upcomingBadge}>
-                <Ionicons name="checkmark-circle" size={14} color="#166534" />
-                <Text style={styles.upcomingBadgeText}>आपली आगामी पूजा (CONFIRMED)</Text>
-              </View>
-              <Text style={styles.upcomingRef}>Ref: #{upcomingBooking.id.slice(0, 8).toUpperCase()}</Text>
-            </View>
-
-            <View style={styles.upcomingBody}>
-              <View style={styles.upcomingIconCircle}>
-                <Ionicons name="flame" size={22} color={colors.primary} />
-              </View>
-              <View style={styles.upcomingTextCol}>
-                <Text style={styles.upcomingPujaTitle}>
-                  {upcomingBooking.puja?.title || 'पवित्र वैदिक पूजा'}
-                </Text>
-                <Text style={styles.upcomingPanditName}>
-                  पुरोहित: {upcomingBooking.panditProfile?.fullName || 'आचार्य देवेंद्र शास्त्री'}
-                </Text>
-                <Text style={styles.upcomingDateTime}>
-                  📅 {formatStandardDate(upcomingBooking.pujaDate || upcomingBooking.bookingDate)} • ⏰ {formatStandardTime(upcomingBooking.pujaTimeSlot || upcomingBooking.timeSlot)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.upcomingActionRow}>
-              <Text style={styles.upcomingActionText}>माझ्या पूजा डॅशबोर्डवर जा (View Booking)</Text>
-              <Ionicons name="arrow-forward" size={14} color={colors.primary} />
-            </View>
-          </TouchableOpacity>
-        )}
 
         {/* Authentic Indian Vedic Ritual Hero Banner */}
         <View style={styles.heroBannerContainer}>
@@ -426,7 +401,7 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
             <TouchableOpacity
               style={styles.findPanditsBtn}
               activeOpacity={0.85}
-              onPress={onNavigateExplore}
+              onPress={onNavigateFindPandits || onNavigateExplore}
             >
               <Ionicons name="search" size={15} color="#FFFFFF" />
               <Text style={styles.findPanditsBtnText}>Find Pandits</Text>
@@ -671,6 +646,42 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
           </ScrollView>
         </View>
 
+        {/* Compact Upcoming Booking Card (Below Main Panchang & Services) */}
+        {upcomingBooking && (
+          <TouchableOpacity
+            style={styles.compactUpcomingCard}
+            activeOpacity={0.88}
+            onPress={onNavigateBookings}
+          >
+            <View style={styles.compactUpcomingRow}>
+              <View style={styles.compactUpcomingIcon}>
+                <Ionicons name="flame" size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1, marginHorizontal: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <View style={styles.compactUpcomingBadge}>
+                    <Ionicons name="checkmark-circle" size={11} color="#15803D" />
+                    <Text style={styles.compactUpcomingBadgeText}>Upcoming Ritual</Text>
+                  </View>
+                  <Text style={styles.compactUpcomingRef}>
+                    #{upcomingBooking.id.slice(0, 8).toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={styles.compactUpcomingTitle} numberOfLines={1}>
+                  {upcomingBooking.puja?.title || 'पवित्र वैदिक पूजा'}
+                </Text>
+                <Text style={styles.compactUpcomingDateTime} numberOfLines={1}>
+                  📅 {formatStandardDate(upcomingBooking.pujaDate || upcomingBooking.bookingDate)} • ⏰ {formatStandardTime(upcomingBooking.pujaTimeSlot || upcomingBooking.timeSlot)}
+                </Text>
+              </View>
+              <View style={styles.compactUpcomingAction}>
+                <Text style={styles.compactUpcomingActionText}>View</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* 3 Quick Category Chips - Speedy Pandit Style */}
         <View style={styles.categoryChipsRow}>
           {/* 1. Regular Puja */}
@@ -807,18 +818,23 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
             <Text style={styles.sectionHeaderTitle}>Verified Vedic Pandits</Text>
             <Text style={styles.sectionHeaderSubtitle}>Available Purohits in {selectedCity}</Text>
           </View>
-          <TouchableOpacity onPress={onNavigateExplore}>
-            <Text style={styles.viewAllText}>View All</Text>
+          <TouchableOpacity onPress={onNavigateFindPandits || onNavigateExplore}>
+            <Text style={styles.viewAllText}>View All Pandits</Text>
           </TouchableOpacity>
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.panditsScroll}
-        >
-          {featuredPandits.length > 0 ? (
-            featuredPandits.map((pandit) => (
+        {panditsLoading ? (
+          <View style={styles.panditsLoadingBox}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.panditsLoadingText}>Connecting verified scholars...</Text>
+          </View>
+        ) : featuredPandits.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.panditsScroll}
+          >
+            {featuredPandits.map((pandit) => (
               <TouchableOpacity
                 key={pandit.id}
                 style={styles.panditCard}
@@ -840,30 +856,24 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
                 <Text style={styles.panditExp}>{pandit.experienceYears || 15}+ Yrs Exp</Text>
                 <Text style={styles.panditPrice}>₹{pandit.basePrice || 2100} Dakshina</Text>
               </TouchableOpacity>
-            ))
-          ) : (
-            <View style={styles.fallbackPanditsRow}>
-              {[
-                { name: 'Pt. Rameshwar Shastri', exp: '22+ Yrs', img: APP_IMAGES.panditRameshwar },
-                { name: 'Pt. Vidyadhar Joshi', exp: '18+ Yrs', img: APP_IMAGES.panditVidyadhar },
-                { name: 'Acharya Anant Dixit', exp: '25+ Yrs', img: APP_IMAGES.panditAnant },
-              ].map((p, idx) => (
-                <View key={idx} style={styles.panditCard}>
-                  <Image source={p.img} style={styles.panditAvatar} resizeMode="cover" />
-                  <View style={styles.panditBadgeRow}>
-                    <Ionicons name="checkmark-circle" size={12} color="#15803D" />
-                    <Text style={styles.panditVerifiedText}>Vedic Certified</Text>
-                  </View>
-                  <Text style={styles.panditName} numberOfLines={1}>
-                    {p.name}
-                  </Text>
-                  <Text style={styles.panditExp}>{p.exp} Experience</Text>
-                  <Text style={styles.panditPrice}>Verified Purohit</Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </ScrollView>
+            ))}
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyPanditsCard}>
+            <Ionicons name="school-outline" size={32} color={colors.goldDark} />
+            <Text style={styles.emptyPanditsTitle}>Verified Vedic Scholars</Text>
+            <Text style={styles.emptyPanditsSubtitle}>
+              Browse certified Vedic scholars and Purohits for your family rituals.
+            </Text>
+            <TouchableOpacity
+              style={styles.browseAllPanditsBtn}
+              onPress={onNavigateFindPandits || onNavigateExplore}
+            >
+              <Text style={styles.browseAllPanditsBtnText}>Browse Available Pandits</Text>
+              <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Puja Samagri Store Banner */}
         <TouchableOpacity
@@ -1629,6 +1639,130 @@ const styles = StyleSheet.create({
   storeCtaImage: {
     flex: 1,
     height: 120,
+  },
+  // Compact Upcoming Booking Card Styles (Non-Intrusive, Below Main Section)
+  compactUpcomingCard: {
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  compactUpcomingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  compactUpcomingIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactUpcomingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  compactUpcomingBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  compactUpcomingRef: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.textLight,
+  },
+  compactUpcomingTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 2,
+  },
+  compactUpcomingDateTime: {
+    fontSize: 10.5,
+    color: '#475569',
+    marginTop: 2,
+  },
+  compactUpcomingAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  compactUpcomingActionText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  panditsLoadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 24,
+  },
+  panditsLoadingText: {
+    fontSize: 12,
+    color: colors.textLight,
+  },
+  emptyPanditsCard: {
+    marginHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  emptyPanditsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 8,
+  },
+  emptyPanditsSubtitle: {
+    fontSize: 11.5,
+    color: colors.textLight,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 14,
+    lineHeight: 16,
+    maxWidth: 280,
+  },
+  browseAllPanditsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  browseAllPanditsBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
   },
   // Upcoming Booking Card Styles
   upcomingBookingCard: {

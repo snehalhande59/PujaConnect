@@ -3,9 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   ScrollView,
   SafeAreaView,
+  TouchableOpacity,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,13 +14,13 @@ import { Button } from '../../components/common/Button';
 import { DevSutraLogo } from '../../components/common/DevSutraLogo';
 
 interface WelcomeScreenProps {
-  onSelectRole: (role: 'CUSTOMER' | 'PANDIT') => void;
-  onLanguagePress: () => void;
+  onSelectUser: () => void;
+  onLanguagePress?: () => void;
   currentLanguage?: string;
 }
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
-  onSelectRole,
+  onSelectUser,
   onLanguagePress,
   currentLanguage = 'English',
 }) => {
@@ -30,55 +30,59 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       <ScrollView contentContainerStyle={styles.container} bounces={false}>
         {/* Top Hero Banner */}
         <View style={styles.heroSection}>
-          <View style={styles.langRow}>
-            <Button
-              title={`🌐 ${currentLanguage}`}
-              variant="outline"
-              size="sm"
-              onPress={onLanguagePress}
-              style={styles.langBtn}
-              textStyle={styles.langBtnText}
-            />
-          </View>
+          {onLanguagePress && (
+            <View style={styles.langRow}>
+              <Button
+                title={`🌐 ${currentLanguage}`}
+                variant="outline"
+                size="sm"
+                onPress={onLanguagePress}
+                style={styles.langBtn}
+                textStyle={styles.langBtnText}
+              />
+            </View>
+          )}
 
           <View style={{ marginVertical: 12, alignItems: 'center' }}>
             <DevSutraLogo variant="vertical" size="xl" />
           </View>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.gold, marginBottom: 6 }}>
-            ॥ ॐ श्री गणेशाय नमः ॥
-          </Text>
+          <Text style={styles.mantraText}>॥ ॐ श्री गणेशाय नमः ॥</Text>
           <Text style={styles.brandTagline}>Your Sacred Journey, Simplified.</Text>
           <Text style={styles.heroDesc}>
-            India&apos;s premier online puja booking and certified Vedic pandit marketplace.
+            India&apos;s premier platform for authentic Vedic rituals, certified pandits & shuddh samagri.
           </Text>
         </View>
 
-        {/* Action Selection Cards */}
+        {/* Action Selection Cards - Customer User Entry Only */}
         <View style={styles.cardsSection}>
           <Text style={styles.selectionPrompt}>Welcome to DevSutra</Text>
 
-          {/* Devotee / Customer Card */}
-          <View style={styles.portalCard}>
+          {/* Devotee / Customer Single Entry Card */}
+          <TouchableOpacity
+            style={styles.portalCard}
+            activeOpacity={0.9}
+            onPress={onSelectUser}
+          >
             <View style={styles.cardHeader}>
               <View style={[styles.cardIconBg, { backgroundColor: colors.secondaryLight }]}>
-                <Ionicons name="people" size={24} color={colors.secondary} />
+                <Ionicons name="person" size={24} color={colors.secondary} />
               </View>
               <View style={styles.cardTextCol}>
-                <Text style={styles.cardTitle}>Devotee Portal</Text>
+                <Text style={styles.cardTitle}>I am User</Text>
                 <Text style={styles.cardSubtitle}>
-                  Discover rituals, book verified pandits & order complete puja samagri kits.
+                  Book verified Vedic pandits, personalized rituals & certified samagri for your family.
                 </Text>
               </View>
             </View>
 
             <Button
-              title="Continue as Devotee"
+              title="I am User"
               variant="primary"
               size="lg"
-              onPress={() => onSelectRole('CUSTOMER')}
+              onPress={onSelectUser}
               icon={<Ionicons name="arrow-forward" size={18} color={colors.textWhite} />}
             />
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Bottom Trust Indicators */}
@@ -132,36 +136,25 @@ const styles = StyleSheet.create({
     color: colors.background,
     fontSize: 11,
   },
-  iconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(196, 154, 69, 0.15)',
-    borderWidth: 2,
-    borderColor: colors.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  brandTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: colors.background,
-    letterSpacing: 0.5,
+  mantraText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.gold,
+    marginBottom: 6,
   },
   brandTagline: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.gold,
-    fontWeight: '600',
+    fontWeight: '700',
     marginTop: 2,
   },
   heroDesc: {
     fontSize: 12,
-    color: 'rgba(255, 248, 236, 0.8)',
+    color: 'rgba(255, 248, 236, 0.85)',
     textAlign: 'center',
     marginTop: 10,
     lineHeight: 18,
-    maxWidth: 290,
+    maxWidth: 300,
   },
   cardsSection: {
     padding: 20,
@@ -179,7 +172,7 @@ const styles = StyleSheet.create({
   portalCard: {
     backgroundColor: colors.card,
     borderRadius: 24,
-    padding: 20,
+    padding: 22,
     borderWidth: 1.5,
     borderColor: colors.border,
     marginBottom: 16,
@@ -189,13 +182,10 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 3,
   },
-  panditCard: {
-    borderColor: colors.goldLight,
-  },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   cardIconBg: {
     width: 48,
@@ -209,15 +199,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardTitle: {
-    fontSize: 17,
+    fontSize: 19,
     fontWeight: '800',
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   cardSubtitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: colors.textLight,
-    lineHeight: 17,
+    lineHeight: 18,
   },
   trustFooter: {
     flexDirection: 'row',

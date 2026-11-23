@@ -19,7 +19,9 @@ import { Badge } from '../../components/common/Badge';
 interface CustomerExploreScreenProps {
   onNavigatePanditDetail: (pandit: PanditProfile) => void;
   onNavigatePujaDetail: (puja: Puja) => void;
+  onBack?: () => void;
   initialQuery?: string;
+  initialTab?: 'PANDITS' | 'PUJAS';
 }
 
 const CITIES = ['All Cities', 'Pune', 'Mumbai', 'Nashik', 'Varanasi', 'Bengaluru'];
@@ -27,9 +29,11 @@ const CITIES = ['All Cities', 'Pune', 'Mumbai', 'Nashik', 'Varanasi', 'Bengaluru
 export const CustomerExploreScreen: React.FC<CustomerExploreScreenProps> = ({
   onNavigatePanditDetail,
   onNavigatePujaDetail,
+  onBack,
   initialQuery = '',
+  initialTab = 'PANDITS',
 }) => {
-  const [activeTab, setActiveTab] = useState<'PANDITS' | 'PUJAS'>('PANDITS');
+  const [activeTab, setActiveTab] = useState<'PANDITS' | 'PUJAS'>(initialTab);
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [selectedCity, setSelectedCity] = useState('All Cities');
 
@@ -74,7 +78,17 @@ export const CustomerExploreScreen: React.FC<CustomerExploreScreenProps> = ({
     <SafeAreaView style={styles.safe}>
       {/* Top Search Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Discover Vedic Services</Text>
+        <View style={styles.headerTopRow}>
+          {onBack && (
+            <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityLabel="Back">
+              <Ionicons name="arrow-back" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+          <Text style={styles.title}>
+            {activeTab === 'PANDITS' ? 'Find Certified Pandits' : 'Discover Sacred Pujas'}
+          </Text>
+          {onBack && <View style={{ width: 36 }} />}
+        </View>
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color={colors.textSecondary} />
           <TextInput
@@ -331,11 +345,24 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: colors.textPrimary,
-    marginBottom: 10,
   },
   searchContainer: {
     flexDirection: 'row',

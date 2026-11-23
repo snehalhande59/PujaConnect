@@ -18,38 +18,35 @@ import { DevSutraLogo } from '../../components/common/DevSutraLogo';
 
 interface CustomerLoginScreenProps {
   onBack: () => void;
-  onNavigateRegister: () => void;
-  onNavigateForgotPassword: () => void;
-  onSwitchToPandit: () => void;
+  onLoginSuccess: (user: any, isNewCustomer: boolean) => void;
+  onNavigateForgotPassword?: () => void;
 }
 
 export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
   onBack,
-  onNavigateRegister,
+  onLoginSuccess,
   onNavigateForgotPassword,
-  onSwitchToPandit,
 }) => {
-  const { loginCustomer, sendCustomerOtp, loginCustomerWithOtp } = useAuth();
+  const { sendCustomerOtp, loginCustomerWithOtp, loginCustomer } = useAuth();
 
-  // Mode: 'otp' (primary) vs 'password'
+  // Mode: 'otp' (primary Email OTP) vs 'password' (fallback)
   const [authMode, setAuthMode] = useState<'otp' | 'password'>('otp');
 
-  // OTP Fields
-  const [identifier, setIdentifier] = useState('');
+  // Email OTP state
+  const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
-  const [fullName, setFullName] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
-  // Password Fields
+  // Password login state
   const [password, setPassword] = useState('');
 
-  // Status
+  // Status & loading
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Cooldown countdown
+  // Cooldown countdown timer
   useEffect(() => {
     if (cooldown <= 0) return;
     const interval = setInterval(() => {
@@ -58,29 +55,28 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     return () => clearInterval(interval);
   }, [cooldown]);
 
-  // Mask email for display
-  const getMaskedIdentifier = (val: string) => {
-    if (!val.includes('@')) return val;
+  // Mask email for display (e.g. s***e@gmail.com)
+  const maskEmail = (val: string) => {
+    if (!val || !val.includes('@')) return val;
     const [local, domain] = val.split('@');
     if (local.length <= 2) return `${local[0]}***@${domain}`;
     return `${local[0]}***${local[local.length - 1]}@${domain}`;
   };
 
-  // 1. Send OTP
+  // 1. Send OTP Request
   const handleSendOtp = async () => {
     setError(null);
     setSuccess(null);
 
-    const trimmed = identifier.trim();
+    const trimmed = email.trim();
     if (!trimmed) {
       setError('Please enter your email address.');
       return;
     }
 
-    if (!trimmed.includes('@')) {
-      setError(
-        'Mobile SMS OTP is temporarily unavailable. Please enter your email address to sign in.',
-      );
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) {
+      setError('Please enter a valid email address (e.g. devotee@example.com).');
       return;
     }
 
@@ -89,53 +85,57 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
       const res = await sendCustomerOtp(trimmed, 'email');
       setOtpSent(true);
       setCooldown(res?.cooldownSeconds || 60);
-      setSuccess(res?.message || '6-digit verification code has been sent to your email.');
+      setSuccess(
+        res?.message || `A 6-digit verification code has been sent to ${maskEmail(trimmed)}.`,
+      );
     } catch (e: any) {
-      setError(e.message || 'Unable to send OTP. Please check your email and try again.');
+      setError(
+        e.message ||
+          'Failed to deliver verification code. Please check your email and try again.',
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  // 2. Verify OTP
+  // 2. Verify OTP Request
   const handleVerifyOtp = async () => {
     setError(null);
     setSuccess(null);
 
-    const trimmedOtp = otp.trim();
-    if (!trimmedOtp || trimmedOtp.length !== 6) {
-      setError('Please enter the full 6-digit verification code.');
+    const cleanOtp = otp.trim().replace(/[^0-9]/g, '');
+    if (!cleanOtp || cleanOtp.length !== 6) {
+      setError('Please enter the complete 6-digit verification code.');
       return;
     }
 
     try {
       setLoading(true);
-      await loginCustomerWithOtp(
-        identifier.trim(),
-        trimmedOtp,
-        fullName.trim() || undefined,
-      );
-      setSuccess('Verification successful! Opening your account...');
+      const res = await loginCustomerWithOtp(email.trim(), cleanOtp);
+      setSuccess('Verification successful!');
+      onLoginSuccess(res.user, Boolean(res.isNewCustomer));
     } catch (e: any) {
-      setError(e.message || 'Invalid or expired OTP. Please try again.');
+      setError(e.message || 'Invalid or expired verification code. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // 3. Password Login
+  // 3. Password Login Fallback
   const handlePasswordLogin = async () => {
     setError(null);
     setSuccess(null);
 
-    if (!identifier.trim() || !password) {
+    const trimmed = email.trim();
+    if (!trimmed || !password) {
       setError('Please enter your email and password.');
       return;
     }
 
     try {
       setLoading(true);
-      await loginCustomer(identifier.trim(), password);
+      const res = await loginCustomer(trimmed, password);
+      onLoginSuccess(res.user, false);
     } catch (e: any) {
       setError(e.message || 'Login failed. Please check your credentials.');
     } finally {
@@ -154,7 +154,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
           <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityLabel="Back">
             <Ionicons name="arrow-back" size={20} color={colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.topBarTitle}>Customer Sign In</Text>
+          <Text style={styles.topBarTitle}>Devotee Sign In</Text>
           <View style={{ width: 36 }} />
         </View>
 
@@ -169,7 +169,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             <Text style={styles.mantraText}>॥ ॐ श्री गणेशाय नमः ॥</Text>
             <Text style={styles.title}>Welcome to DevSutra</Text>
             <Text style={styles.subtitle}>
-              Sign in to book certified Vedic pandits, view rituals & order pure samagri.
+              Sign in to book certified Vedic priests, sacred rituals & pure samagri for your family.
             </Text>
           </View>
 
@@ -194,7 +194,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                 Email OTP
               </Text>
               <View style={styles.recommendedBadge}>
-                <Text style={styles.recommendedBadgeText}>Fast</Text>
+                <Text style={styles.recommendedBadgeText}>Instant</Text>
               </View>
             </TouchableOpacity>
 
@@ -222,7 +222,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Notification / Error / Success Messages */}
+          {/* Error Message Box */}
           {error && (
             <View style={styles.errorBox}>
               <Ionicons name="alert-circle" size={18} color={colors.error} />
@@ -230,6 +230,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             </View>
           )}
 
+          {/* Success Message Box */}
           {success && (
             <View style={styles.successBox}>
               <Ionicons name="checkmark-circle" size={18} color={colors.success} />
@@ -237,19 +238,19 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             </View>
           )}
 
-          {/* Form Card */}
+          {/* Main Form Card */}
           <View style={styles.formCard}>
             {authMode === 'otp' ? (
-              // --- OTP MODE ---
+              // --- EMAIL OTP FLOW ---
               !otpSent ? (
-                // Step 1: Request OTP
+                // Step 1: Email Input
                 <View>
                   <Input
-                    label="Email Address or Mobile Number"
-                    placeholder="devotee@example.com or 9876543210"
-                    value={identifier}
+                    label="Email Address *"
+                    placeholder="devotee@example.com"
+                    value={email}
                     onChangeText={(val) => {
-                      setIdentifier(val);
+                      setEmail(val);
                       setError(null);
                     }}
                     keyboardType="email-address"
@@ -259,9 +260,9 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   />
 
                   <View style={styles.infoRow}>
-                    <Ionicons name="shield-checkmark-outline" size={14} color={colors.goldDark} />
+                    <Ionicons name="shield-checkmark-outline" size={15} color={colors.goldDark} />
                     <Text style={styles.infoRowText}>
-                      We will email you a 6-digit verification code. No password needed!
+                      We will email you a 6-digit verification code. No password required!
                     </Text>
                   </View>
 
@@ -271,21 +272,34 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                     size="lg"
                     loading={loading}
                     onPress={handleSendOtp}
+                    icon={<Ionicons name="paper-plane-outline" size={18} color={colors.textWhite} />}
                     style={{ marginTop: 16 }}
                   />
                 </View>
               ) : (
-                // Step 2: Verify OTP
+                // Step 2: 6-Digit OTP Input
                 <View>
                   <View style={styles.verifyTargetBox}>
-                    <Text style={styles.verifyTargetLabel}>Code sent to:</Text>
-                    <Text style={styles.verifyTargetEmail}>
-                      {getMaskedIdentifier(identifier)}
-                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.verifyTargetLabel}>Verification code sent to:</Text>
+                      <Text style={styles.verifyTargetEmail}>{maskEmail(email)}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setOtpSent(false);
+                        setOtp('');
+                        setError(null);
+                        setSuccess(null);
+                      }}
+                      style={styles.editEmailBtn}
+                    >
+                      <Ionicons name="pencil" size={13} color={colors.primary} />
+                      <Text style={styles.editEmailBtnText}>Change</Text>
+                    </TouchableOpacity>
                   </View>
 
                   <Input
-                    label="Enter 6-Digit OTP"
+                    label="Enter 6-Digit Verification Code *"
                     placeholder="• • • • • •"
                     value={otp}
                     onChangeText={(val) => {
@@ -298,65 +312,47 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                     style={styles.otpInputText}
                   />
 
-                  <Input
-                    label="Your Name (Optional)"
-                    placeholder="Enter full name"
-                    value={fullName}
-                    onChangeText={setFullName}
-                    leftIcon="person-outline"
-                    autoCapitalize="words"
-                  />
-
                   <Button
-                    title="Verify & Sign In"
+                    title="Verify & Continue"
                     variant="primary"
                     size="lg"
                     loading={loading}
                     onPress={handleVerifyOtp}
+                    icon={<Ionicons name="arrow-forward" size={18} color={colors.textWhite} />}
                     style={{ marginTop: 12 }}
                   />
 
-                  {/* Resend and Edit Actions */}
+                  {/* Resend Action Row */}
                   <View style={styles.otpActionsRow}>
                     {cooldown > 0 ? (
                       <View style={styles.cooldownWrap}>
-                        <Ionicons name="time-outline" size={14} color={colors.textMuted} />
-                        <Text style={styles.cooldownText}>Resend in {cooldown}s</Text>
+                        <Ionicons name="time-outline" size={14} color={colors.textLight} />
+                        <Text style={styles.cooldownText}>Resend code in {cooldown}s</Text>
                       </View>
                     ) : (
-                      <TouchableOpacity onPress={handleSendOtp} disabled={loading}>
+                      <TouchableOpacity onPress={handleSendOtp} disabled={loading} style={styles.resendBtn}>
+                        <Ionicons name="refresh" size={14} color={colors.primary} />
                         <Text style={styles.resendLink}>Resend Code</Text>
                       </TouchableOpacity>
                     )}
-
-                    <TouchableOpacity
-                      onPress={() => {
-                        setOtpSent(false);
-                        setOtp('');
-                        setError(null);
-                        setSuccess(null);
-                      }}
-                    >
-                      <Text style={styles.changeEmailLink}>Change Email</Text>
-                    </TouchableOpacity>
                   </View>
                 </View>
               )
             ) : (
-              // --- PASSWORD MODE ---
+              // --- PASSWORD LOGIN FALLBACK ---
               <View>
                 <Input
-                  label="Email Address or Mobile Number"
-                  placeholder="devotee@example.com or 9876543210"
-                  value={identifier}
-                  onChangeText={setIdentifier}
+                  label="Email Address *"
+                  placeholder="devotee@example.com"
+                  value={email}
+                  onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   leftIcon="mail-outline"
                 />
 
                 <Input
-                  label="Password"
+                  label="Password *"
                   placeholder="••••••••••••"
                   value={password}
                   onChangeText={setPassword}
@@ -364,9 +360,11 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   leftIcon="lock-closed-outline"
                 />
 
-                <TouchableOpacity onPress={onNavigateForgotPassword} style={styles.forgotBtn}>
-                  <Text style={styles.forgotText}>Forgot Password?</Text>
-                </TouchableOpacity>
+                {onNavigateForgotPassword && (
+                  <TouchableOpacity onPress={onNavigateForgotPassword} style={styles.forgotBtn}>
+                    <Text style={styles.forgotText}>Forgot Password?</Text>
+                  </TouchableOpacity>
+                )}
 
                 <Button
                   title="Sign In with Password"
@@ -380,18 +378,13 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             )}
           </View>
 
-          {/* Footer Clean Actions */}
-          <View style={styles.footerRow}>
-            <Text style={styles.footerText}>New to DevSutra? </Text>
-            <TouchableOpacity onPress={onNavigateRegister}>
-              <Text style={styles.registerLink}>Create Account</Text>
-            </TouchableOpacity>
+          {/* Trust Footnote */}
+          <View style={styles.footerTrust}>
+            <Ionicons name="shield-checkmark" size={14} color={colors.success} />
+            <Text style={styles.footerTrustText}>
+              End-to-End Secure • Vedic Gurukul Certified • 100% Shuddh Samagri
+            </Text>
           </View>
-
-          <TouchableOpacity onPress={onSwitchToPandit} style={styles.switchRoleBtn}>
-            <Ionicons name="school-outline" size={16} color={colors.secondary} />
-            <Text style={styles.switchRoleText}>Are you a Pandit? Sign in to Pandit Portal</Text>
-          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -404,11 +397,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   topBar: {
-    height: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     backgroundColor: colors.card,
@@ -417,11 +410,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.background,
+    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   topBarTitle: {
     fontSize: 16,
@@ -430,108 +421,109 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    flexGrow: 1,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginVertical: 14,
+    marginBottom: 20,
   },
   mantraText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     color: colors.gold,
     marginTop: 8,
     marginBottom: 4,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
     color: colors.text,
+    textAlign: 'center',
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.textLight,
     textAlign: 'center',
-    marginTop: 4,
     lineHeight: 18,
-    maxWidth: 290,
+    maxWidth: 320,
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.cardAlt,
-    borderRadius: 12,
+    backgroundColor: 'rgba(128, 0, 32, 0.06)',
+    borderRadius: 14,
     padding: 4,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   tabButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
     gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
   tabButtonActive: {
     backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
   },
   tabButtonText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.textLight,
   },
   tabButtonTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: colors.card,
   },
   recommendedBadge: {
-    backgroundColor: colors.secondary,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 8,
+    backgroundColor: '#F7D070',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
   },
   recommendedBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#800020',
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
     backgroundColor: colors.errorLight,
     borderWidth: 1,
-    borderColor: 'rgba(185, 28, 28, 0.25)',
+    borderColor: colors.error,
     borderRadius: 12,
     padding: 12,
-    marginBottom: 14,
-    gap: 8,
+    marginBottom: 16,
   },
   errorBoxText: {
     flex: 1,
     fontSize: 12,
     color: colors.error,
     fontWeight: '600',
-    lineHeight: 16,
   },
   successBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.successLight,
+    gap: 8,
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: 'rgba(21, 128, 61, 0.25)',
+    borderColor: '#A7F3D0',
     borderRadius: 12,
     padding: 12,
-    marginBottom: 14,
-    gap: 8,
+    marginBottom: 16,
   },
   successBoxText: {
     flex: 1,
     fontSize: 12,
-    color: colors.success,
+    color: '#065F46',
     fontWeight: '600',
-    lineHeight: 16,
   },
   formCard: {
     backgroundColor: colors.card,
@@ -543,109 +535,110 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1,
     shadowRadius: 10,
-    elevation: 2,
+    elevation: 3,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.goldLight,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 10,
     gap: 6,
+    marginTop: 2,
+    marginBottom: 8,
   },
   infoRowText: {
     flex: 1,
-    fontSize: 11,
-    color: colors.text,
-    lineHeight: 15,
+    fontSize: 11.5,
+    color: colors.textLight,
+    lineHeight: 16,
   },
   verifyTargetBox: {
-    backgroundColor: colors.cardAlt,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background,
+    borderRadius: 12,
     padding: 12,
-    borderRadius: 10,
-    marginBottom: 14,
     borderWidth: 1,
     borderColor: colors.border,
+    marginBottom: 16,
   },
   verifyTargetLabel: {
     fontSize: 11,
-    color: colors.textMuted,
+    color: colors.textLight,
   },
   verifyTargetEmail: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.text,
     marginTop: 2,
   },
-  otpInputText: {
-    letterSpacing: 4,
-    fontSize: 18,
+  editEmailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  editEmailBtnText: {
+    fontSize: 11,
     fontWeight: '700',
+    color: colors.primary,
+  },
+  otpInputText: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 6,
+    textAlign: 'center',
+    color: colors.primary,
   },
   otpActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     marginTop: 16,
-    paddingHorizontal: 4,
   },
   cooldownWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   cooldownText: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.textLight,
+  },
+  resendBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
   resendLink: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: colors.secondary,
-  },
-  changeEmailLink: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textLight,
-    textDecorationLine: 'underline',
+    color: colors.primary,
   },
   forgotBtn: {
     alignSelf: 'flex-end',
     marginBottom: 16,
+    marginTop: -4,
   },
   forgotText: {
     fontSize: 12,
-    color: colors.secondary,
-    fontWeight: '700',
-  },
-  footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  footerText: {
-    fontSize: 13,
-    color: colors.textLight,
-  },
-  registerLink: {
-    fontSize: 13,
-    fontWeight: '800',
     color: colors.primary,
+    fontWeight: '600',
   },
-  switchRoleBtn: {
+  footerTrust: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 14,
-    paddingVertical: 10,
     gap: 6,
+    marginTop: 24,
   },
-  switchRoleText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.secondary,
+  footerTrustText: {
+    fontSize: 10.5,
+    color: colors.textLight,
+    textAlign: 'center',
   },
 });

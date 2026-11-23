@@ -18,11 +18,14 @@ import { Puja, PanditProfile, Booking } from '../types';
 // Auth Screens
 import { WelcomeScreen } from '../screens/auth/WelcomeScreen';
 import { CustomerLoginScreen } from '../screens/auth/CustomerLoginScreen';
+import { CustomerPersonalDetailsScreen } from '../screens/auth/CustomerPersonalDetailsScreen';
+import { CustomerAddressDetailsScreen } from '../screens/auth/CustomerAddressDetailsScreen';
 import { CustomerRegisterScreen } from '../screens/auth/CustomerRegisterScreen';
 import { PanditLoginScreen } from '../screens/auth/PanditLoginScreen';
 import { PanditRegisterScreen } from '../screens/auth/PanditRegisterScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { LanguageModal, LanguageOption } from '../screens/auth/LanguageModal';
+import { api } from '../api/client';
 
 // Customer Screens
 import { CustomerHomeScreen } from '../screens/customer/CustomerHomeScreen';
@@ -81,8 +84,19 @@ export const RootNavigator: React.FC = () => {
   const [showPlusModal, setShowPlusModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showKundaliModal, setShowKundaliModal] = useState(false);
+
+  // Customer Profile Registration Stepper (Post-OTP)
+  const [registrationStep, setRegistrationStep] = useState<'none' | 'personal' | 'address'>('none');
+  const [registrationPending, setRegistrationPending] = useState<{
+    fullName: string;
+    phoneNumber: string;
+  }>({
+    fullName: '',
+    phoneNumber: '',
+  });
+
   const [customerDetailView, setCustomerDetailView] = useState<{
-    type: 'none' | 'puja_detail' | 'pandit_detail' | 'booking_flow' | 'booking_confirm' | 'cart' | 'orders' | 'bookings' | 'addresses' | 'notification' | 'store' | 'profile';
+    type: 'none' | 'puja_detail' | 'pandit_detail' | 'booking_flow' | 'booking_confirm' | 'cart' | 'orders' | 'bookings' | 'addresses' | 'notification' | 'store' | 'profile' | 'pandit_list';
     puja?: Puja;
     pandit?: PanditProfile;
     booking?: Booking;
@@ -92,9 +106,55 @@ export const RootNavigator: React.FC = () => {
   const [panditTab, setPanditTab] = useState<'dashboard' | 'bookings' | 'availability' | 'earnings' | 'profile'>('dashboard');
   const [panditDetailView, setPanditDetailView] = useState<'none' | 'verification'>('none');
 
+  // Check customer profile completeness whenever authenticated as CUSTOMER
+  useEffect(() => {
+    if (user && role === 'CUSTOMER') {
+      const checkCompleteness = async () => {
+        try {
+          const profile = await api.getCustomerProfile();
+          const hasName = Boolean(
+            profile?.firstName &&
+            profile.firstName.trim().toLowerCase() !== 'devotee' &&
+            profile.firstName.trim() !== ''
+          );
+          const hasAddresses = Boolean(profile?.addresses && profile.addresses.length > 0);
+
+          if (!hasName) {
+            setRegistrationStep('personal');
+          } else if (!hasAddresses) {
+            setRegistrationPending((prev) => ({
+              ...prev,
+              fullName: `${profile.firstName} ${profile.lastName || ''}`.trim(),
+              phoneNumber: profile.user?.phoneNumber || prev.phoneNumber || '',
+            }));
+            setRegistrationStep('address');
+          } else {
+            setRegistrationStep('none');
+          }
+        } catch (e) {
+          if (!user.firstName || user.firstName.toLowerCase() === 'devotee') {
+            setRegistrationStep('personal');
+          } else {
+            setRegistrationStep('none');
+          }
+        }
+      };
+
+      checkCompleteness();
+    } else {
+      setRegistrationStep('none');
+    }
+  }, [user?.id, role]);
+
   // --- HARDWARE & GESTURE BACK BUTTON HANDLER FOR ANDROID ---
   useEffect(() => {
     const onBackPress = () => {
+      // 0. Handle Registration Stepper Back
+      if (registrationStep === 'address') {
+        setRegistrationStep('personal');
+        return true;
+      }
+
       // 1. Close open modals first
       if (showKundaliModal) {
         setShowKundaliModal(false);
@@ -181,6 +241,7 @@ export const RootNavigator: React.FC = () => {
     customerTab,
     panditTab,
     authRoute,
+    registrationStep,
     user,
     role,
   ]);
@@ -204,10 +265,7 @@ export const RootNavigator: React.FC = () => {
       <>
         {authRoute === 'welcome' && (
           <WelcomeScreen
-            onSelectRole={(chosenRole) => {
-              if (chosenRole === 'CUSTOMER') setAuthRoute('customer_login');
-              else setAuthRoute('pandit_login');
-            }}
+            onSelectUser={() => setAuthRoute('customer_login')}
             onLanguagePress={() => setShowLanguageModal(true)}
             currentLanguage={currentLanguage}
           />
@@ -216,9 +274,12 @@ export const RootNavigator: React.FC = () => {
         {authRoute === 'customer_login' && (
           <CustomerLoginScreen
             onBack={() => setAuthRoute('welcome')}
-            onNavigateRegister={() => setAuthRoute('customer_register')}
+            onLoginSuccess={(loggedUser, isNew) => {
+              if (isNew) {
+                setRegistrationStep('personal');
+              }
+            }}
             onNavigateForgotPassword={() => setAuthRoute('forgot_password')}
-            onSwitchToPandit={() => setAuthRoute('pandit_login')}
           />
         )}
 
@@ -260,6 +321,53 @@ export const RootNavigator: React.FC = () => {
 
   // --- CUSTOMER PORTAL ---
   if (role === 'CUSTOMER') {
+    // Registration flow steps (Post-OTP)
+    if (registrationStep === 'personal') {
+      return (
+        <CustomerPersonalDetailsScreen
+          userEmail={user.email}
+          initialFullName={
+            user.firstName && user.firstName.toLowerCase() !== 'devotee'
+              ? `${user.firstName} ${user.lastName || ''}`.trim()
+              : ''
+          }
+          initialPhoneNumber={user.phoneNumber || ''}
+          onNext={(details) => {
+            setRegistrationPending(details);
+            setRegistrationStep('address');
+          }}
+        />
+      );
+    }
+
+    if (registrationStep === 'address') {
+      return (
+        <CustomerAddressDetailsScreen
+          personalDetails={registrationPending}
+          userEmail={user.email}
+          onBack={() => setRegistrationStep('personal')}
+          onComplete={() => {
+            setRegistrationStep('none');
+          }}
+        />
+      );
+    }
+
+    // Pandit List Detail View
+    if (customerDetailView.type === 'pandit_list') {
+      return (
+        <CustomerExploreScreen
+          onBack={() => setCustomerDetailView({ type: 'none' })}
+          onNavigatePanditDetail={(pandit) =>
+            setCustomerDetailView({ type: 'pandit_detail', pandit })
+          }
+          onNavigatePujaDetail={(puja) =>
+            setCustomerDetailView({ type: 'puja_detail', puja })
+          }
+          initialTab="PANDITS"
+        />
+      );
+    }
     // Handle Customer Sub-views (Modals / Full Stacks)
     if (customerDetailView.type === 'puja_detail' && customerDetailView.puja) {
       return (
@@ -387,10 +495,11 @@ export const RootNavigator: React.FC = () => {
               onNavigatePanditDetail={(p) =>
                 setCustomerDetailView({ type: 'pandit_detail', pandit: p })
               }
+              onNavigateFindPandits={() => setCustomerDetailView({ type: 'pandit_list' })}
               onNavigateCategory={(cat) => setCustomerTab('puja')}
               onNavigateStore={() => setCustomerDetailView({ type: 'store' })}
               onNavigateCart={() => setCustomerDetailView({ type: 'cart' })}
-              onNavigateExplore={() => setCustomerTab('puja')}
+              onNavigateExplore={() => setCustomerDetailView({ type: 'pandit_list' })}
               onNavigateNotifications={() => setCustomerDetailView({ type: 'notification' })}
               onNavigateWallet={() => setCustomerTab('wallet')}
               onNavigateBookings={() => setCustomerDetailView({ type: 'bookings' })}
