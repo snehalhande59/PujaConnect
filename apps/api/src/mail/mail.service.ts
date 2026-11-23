@@ -105,10 +105,61 @@ export class MailService implements OnModuleInit {
   }
 
   /**
-   * Verify SMTP transporter on application startup.
+   * Verify email delivery readiness on application startup.
+   * If Vercel Gmail Relay is configured, verifies relay health.
+   * Otherwise verifies direct SMTP transporter.
    * Catches errors and logs structured diagnostic warnings; NEVER crashes the application.
    */
   async onModuleInit() {
+    const relayUrl = this.configService.get<string>('GMAIL_RELAY_URL')?.trim();
+    const relaySecret = this.configService.get<string>('GMAIL_RELAY_SECRET')?.trim();
+
+    if (relayUrl && relaySecret) {
+      this.logger.log(`Verifying Vercel Gmail Relay at ${relayUrl}...`);
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(relayUrl, {
+          method: 'GET',
+          headers: {
+            'x-relay-secret': relaySecret,
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.status === 'ok') {
+          this.lastVerificationResult = {
+            verified: true,
+            timestamp: new Date().toISOString(),
+            message: `Vercel Gmail Relay verified successfully (${data.relay || 'Relay active'}, port: ${data.port}, user: ${data.userConfigured ? 'yes' : 'no'}). Ready to deliver emails.`,
+          };
+          this.logger.log('Vercel Gmail Relay verified successfully. Ready to deliver emails.');
+          return;
+        } else {
+          const errMsg = data?.error || `HTTP ${res.status}`;
+          this.logger.warn(`Vercel Relay verification warning: ${errMsg}`);
+          this.lastVerificationResult = {
+            verified: false,
+            timestamp: new Date().toISOString(),
+            code: `HTTP_${res.status}`,
+            message: `Relay responded with: ${errMsg}`,
+          };
+        }
+      } catch (err: any) {
+        const isTimeout = err?.name === 'AbortError';
+        const msg = isTimeout ? 'Relay health check timed out after 10s' : (err?.message || 'Relay health check failed');
+        this.logger.warn(`Vercel Relay verification warning: ${msg}. Direct SMTP will be checked as fallback.`);
+        this.lastVerificationResult = {
+          verified: false,
+          timestamp: new Date().toISOString(),
+          code: isTimeout ? 'TIMEOUT' : 'FETCH_ERROR',
+          message: msg,
+        };
+      }
+    }
+
     if (this.isConfigured && this.transporter) {
       try {
         await this.transporter.verify();
@@ -190,7 +241,7 @@ export class MailService implements OnModuleInit {
   }
 
   /**
-   * Get safe SMTP status without exposing passwords or secrets
+   * Get safe SMTP and Relay status without exposing passwords or secrets
    */
   public getSmtpStatus() {
     const rawHost = this.configService.get<string>('SMTP_HOST');
@@ -199,9 +250,13 @@ export class MailService implements OnModuleInit {
     const rawPass = this.configService.get<string>('SMTP_PASS');
     const rawSecure = this.configService.get<string>('SMTP_SECURE');
     const rawFrom = this.configService.get<string>('SMTP_FROM');
+    const relayUrl = this.configService.get<string>('GMAIL_RELAY_URL')?.trim();
+    const relaySecret = this.configService.get<string>('GMAIL_RELAY_SECRET')?.trim();
 
     return {
-      configured: this.isConfigured,
+      configured: this.isConfigured || Boolean(relayUrl && relaySecret),
+      relayConfigured: Boolean(relayUrl && relaySecret),
+      relayUrl: relayUrl || null,
       host: rawHost ? rawHost.trim() : null,
       port: Number(rawPort) || 587,
       secure: rawSecure === 'true' || Number(rawPort) === 465,
@@ -216,10 +271,97 @@ export class MailService implements OnModuleInit {
   }
 
   /**
-   * Check whether SMTP credentials are fully configured
+   * Check whether email delivery service is operational (via relay or direct SMTP)
    */
   public getIsConfigured(): boolean {
-    return this.isConfigured;
+    const relayConfigured = Boolean(
+      this.configService.get<string>('GMAIL_RELAY_URL')?.trim() &&
+      this.configService.get<string>('GMAIL_RELAY_SECRET')?.trim(),
+    );
+    return relayConfigured || this.isConfigured;
+  }
+
+  /**
+   * Send email via internal HTTPS relay (e.g. Vercel)
+   * Returns null if relay is not configured so caller can fall back to direct SMTP.
+   */
+  private async sendViaRelay(params: {
+    to: string;
+    subject: string;
+    html: string;
+    text?: string;
+    purpose?: string;
+  }): Promise<SendEmailResult | null> {
+    const relayUrl = this.configService.get<string>('GMAIL_RELAY_URL')?.trim();
+    const relaySecret = this.configService.get<string>('GMAIL_RELAY_SECRET')?.trim();
+
+    if (!relayUrl || !relaySecret) {
+      return null;
+    }
+
+    const masked = this.maskEmail(params.to);
+    try {
+      this.logger.log(`Dispatching email to ${masked} via Vercel Gmail Relay...`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+      const res = await fetch(relayUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-relay-secret': relaySecret,
+        },
+        body: JSON.stringify(params),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        this.lastSendResult = {
+          success: true,
+          timestamp: new Date().toISOString(),
+          message: `Email delivered via Vercel Relay (messageId: ${data.messageId})`,
+        };
+        this.logger.log(
+          `Email successfully delivered via relay to ${masked} (messageId: ${data.messageId})`,
+        );
+        return {
+          success: true,
+          messageId: data.messageId,
+        };
+      }
+
+      const errMsg = data?.error || `Relay responded with HTTP ${res.status}`;
+      this.lastSendResult = {
+        success: false,
+        timestamp: new Date().toISOString(),
+        code: data?.code || `HTTP_${res.status}`,
+        message: errMsg,
+      };
+      this.logger.error(`Vercel Relay dispatch failed for ${masked}: ${errMsg}`);
+      return {
+        success: false,
+        error: errMsg,
+      };
+    } catch (err: any) {
+      const isTimeout = err?.name === 'AbortError';
+      const msg = isTimeout
+        ? 'Relay request timed out after 20s'
+        : (err?.message || 'Relay request failed');
+      this.lastSendResult = {
+        success: false,
+        timestamp: new Date().toISOString(),
+        code: isTimeout ? 'TIMEOUT' : 'FETCH_ERROR',
+        message: msg,
+      };
+      this.logger.error(`Vercel Relay request error for ${masked}: ${msg}`);
+      return {
+        success: false,
+        error: msg,
+      };
+    }
   }
 
   /**
@@ -236,7 +378,7 @@ export class MailService implements OnModuleInit {
       ? rawFrom.trim()
       : (smtpUser ? `DevSutra <${smtpUser.trim()}>` : 'DevSutra <no-reply@devsutra.in>');
 
-    if (!this.isConfigured || !this.transporter) {
+    if (!this.getIsConfigured()) {
       return {
         success: false,
         error:
@@ -382,6 +524,27 @@ export class MailService implements OnModuleInit {
 </html>
     `;
 
+    // 1. Try Vercel Gmail Relay first if configured
+    const relayResult = await this.sendViaRelay({
+      to: toEmail,
+      subject: `[TEST] DevSutra SMTP Verification`,
+      html: htmlContent,
+      text: `This is an automated test email from DevSutra. Test Code: ${testCode}. This is for SMTP verification only and cannot be used to log in.`,
+      purpose: 'test',
+    });
+
+    if (relayResult !== null) {
+      return relayResult;
+    }
+
+    if (!this.isConfigured || !this.transporter) {
+      return {
+        success: false,
+        error:
+          'Email service is currently unavailable. SMTP configuration is missing.',
+      };
+    }
+
     try {
       const info = await this.transporter.sendMail({
         from: fromAddress,
@@ -421,7 +584,7 @@ export class MailService implements OnModuleInit {
    * Verify SMTP readiness or throw ServiceUnavailableException
    */
   public assertConfigured(): void {
-    if (!this.isConfigured || !this.transporter) {
+    if (!this.getIsConfigured()) {
       throw new ServiceUnavailableException(
         'Email service is currently unavailable. SMTP configuration is missing.',
       );
@@ -458,9 +621,9 @@ export class MailService implements OnModuleInit {
       ? rawFrom.trim()
       : (smtpUser ? `DevSutra <${smtpUser.trim()}>` : 'DevSutra <no-reply@devsutra.in>');
 
-    if (!this.isConfigured || !this.transporter) {
+    if (!this.getIsConfigured()) {
       this.logger.error(
-        `Email OTP delivery aborted for ${masked}: SMTP service is not configured.`,
+        `Email OTP delivery aborted for ${masked}: Email service is not configured.`,
       );
       if (throwOnError) {
         throw new ServiceUnavailableException(
@@ -610,6 +773,35 @@ export class MailService implements OnModuleInit {
 </html>
     `;
 
+    // 1. Try Vercel Gmail Relay first if configured
+    const relayResult = await this.sendViaRelay({
+      to: toEmail,
+      subject: `${otp} is your DevSutra verification code`,
+      html: htmlContent,
+      text: `Your DevSutra verification code is: ${otp}. This code is valid for 5 minutes. Never share this code with anyone.`,
+      purpose: 'otp',
+    });
+
+    if (relayResult !== null) {
+      if (relayResult.success) {
+        return relayResult;
+      }
+      if (throwOnError) {
+        throw new ServiceUnavailableException(
+          'Failed to deliver verification email. Please try again later.',
+        );
+      }
+      return relayResult;
+    }
+
+    if (!this.isConfigured || !this.transporter) {
+      return {
+        success: false,
+        error:
+          'Email service is currently unavailable. SMTP configuration is missing.',
+      };
+    }
+
     try {
       const info = await this.transporter.sendMail({
         from: fromAddress,
@@ -727,9 +919,9 @@ export class MailService implements OnModuleInit {
       ? rawFrom.trim()
       : (smtpUser ? `DevSutra <${smtpUser.trim()}>` : 'DevSutra <no-reply@devsutra.in>');
 
-    if (!this.isConfigured || !this.transporter) {
-      this.logger.warn(`SMTP not configured. Skipping status email to ${masked}`);
-      return { success: false, error: 'SMTP not configured' };
+    if (!this.getIsConfigured()) {
+      this.logger.warn(`Email service not configured. Skipping status email to ${masked}`);
+      return { success: false, error: 'Email service not configured' };
     }
 
     const isConfirmed = details.status === 'CONFIRMED';
@@ -821,6 +1013,27 @@ export class MailService implements OnModuleInit {
 </body>
 </html>
     `;
+
+    // 1. Try Vercel Gmail Relay first if configured
+    const relayResult = await this.sendViaRelay({
+      to: toEmail,
+      subject,
+      html: htmlContent,
+      text: `Namaste ${details.customerName},\n\nYour booking #${details.bookingNumber} for ${details.pujaName} is now ${details.status}.\n\nDevSutra Vedic Platform`,
+      purpose: 'booking_status',
+    });
+
+    if (relayResult !== null) {
+      return relayResult;
+    }
+
+    if (!this.isConfigured || !this.transporter) {
+      return {
+        success: false,
+        error:
+          'Email service is currently unavailable. SMTP configuration is missing.',
+      };
+    }
 
     try {
       const info = await this.transporter.sendMail({
