@@ -17,12 +17,11 @@ declare const process: any;
 declare const __DEV__: boolean;
 
 export const PRODUCTION_API_URL = 'https://pujaconnect-api-he9b.onrender.com/api/v1';
-export const DEV_API_URL = 'http://192.168.1.3:3001/api/v1';
 
 // Dynamic host determination:
 // 1. Explicit EXPO_PUBLIC_API_URL environment variable has top priority.
-// 2. Development builds (__DEV__) default to local LAN backend (http://192.168.1.3:3001/api/v1).
-// 3. Production builds preserve the live production Render API URL.
+// 2. Constants extra apiUrl from app.json
+// 3. Defaults to live HTTPS production Render API URL.
 export const getApiBaseUrl = (): string => {
   if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
@@ -30,9 +29,6 @@ export const getApiBaseUrl = (): string => {
   const extraUrl = Constants.expoConfig?.extra?.apiUrl;
   if (extraUrl) {
     return extraUrl;
-  }
-  if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    return DEV_API_URL;
   }
   return PRODUCTION_API_URL;
 };
@@ -148,7 +144,7 @@ function fetchWithTimeout(
   url: string,
   options: RequestInit,
   headers: Record<string, string>,
-  timeoutMs: number = 7000,
+  timeoutMs: number = 45000,
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -181,7 +177,7 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-// Generic fetch wrapper with automatic fallback between local network and live production API
+// Production HTTPS API fetch wrapper (supports any Wi-Fi network and Cellular Mobile Data worldwide)
 async function apiRequest<T = any>(
   endpoint: string,
   options: RequestInit = {},
@@ -196,64 +192,42 @@ async function apiRequest<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  // Determine appropriate timeout: 30s for production (handles Render cold start), 8s for local
-  const isProd = API_BASE_URL === PRODUCTION_API_URL;
-  const timeoutMs = isProd ? 30000 : 8000;
+  // 45s timeout handles cloud cold-starts comfortably across Mobile Data and Wi-Fi
+  const timeoutMs = 45000;
+  const targetUrl = `${API_BASE_URL}${endpoint}`;
 
-  // 1. First attempt: Primary URL
-  const primaryUrl = `${API_BASE_URL}${endpoint}`;
   try {
-    const response = await fetchWithTimeout(primaryUrl, options, headers, timeoutMs);
+    const response = await fetchWithTimeout(targetUrl, options, headers, timeoutMs);
     return await handleApiResponse<T>(response);
-  } catch (primaryErr: any) {
-    // If the server answered with an HTTP validation or business error, throw it immediately (do not fallback)
-    if (primaryErr?.isApiError) {
-      throw primaryErr;
+  } catch (err: any) {
+    // If the server answered with an HTTP validation or business error, return it immediately
+    if (err?.isApiError) {
+      throw err;
     }
 
-    // 2. If primary was unreachable and we are NOT in local development (__DEV__ is false), fallback to production API
-    const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
-    if (!isProd && !isDev) {
-      const fallbackUrl = `${PRODUCTION_API_URL}${endpoint}`;
-      try {
-        const fallbackRes = await fetchWithTimeout(fallbackUrl, options, headers, 30000);
-        return await handleApiResponse<T>(fallbackRes);
-      } catch (fallbackErr: any) {
-        if (fallbackErr?.isApiError) {
-          throw fallbackErr;
-        }
-        const isNetworkErr =
-          fallbackErr?.message?.includes('SocketException') ||
-          fallbackErr?.message?.includes('Connection reset') ||
-          fallbackErr?.message?.includes('Network request failed') ||
-          fallbackErr?.message?.includes('fetch failed');
-
-        if (isNetworkErr) {
-          throw new Error(
-            'Cannot reach DevSutra server. Please check your internet connection.',
-          );
-        }
-        throw new Error(
-          fallbackErr.message ||
-            primaryErr.message ||
-            'Connection failed. Please check network.',
-        );
-      }
+    if (err?.name === 'AbortError') {
+      throw new Error(
+        'Connecting to DevSutra cloud server timed out. If the server is waking up, please retry in a few moments.',
+      );
     }
 
     const isNetworkErr =
-      primaryErr?.message?.includes('SocketException') ||
-      primaryErr?.message?.includes('Connection reset') ||
-      primaryErr?.message?.includes('Network request failed') ||
-      primaryErr?.message?.includes('fetch failed') ||
-      primaryErr?.name === 'AbortError';
+      err?.message?.includes('SocketException') ||
+      err?.message?.includes('Connection reset') ||
+      err?.message?.includes('Network request failed') ||
+      err?.message?.includes('fetch failed') ||
+      err?.message?.includes('Failed to fetch') ||
+      err?.message?.includes('Network Error');
 
     if (isNetworkErr) {
       throw new Error(
-        `Cannot reach DevSutra server at ${API_BASE_URL}. Please ensure your mobile device and computer are on the same Wi-Fi network and the backend server is running.`,
+        'Unable to connect to DevSutra servers. Please check your internet connection (Wi-Fi or Mobile Data) and try again.',
       );
     }
-    throw primaryErr;
+
+    throw new Error(
+      err?.message || 'Unable to connect to DevSutra servers. Please try again.',
+    );
   }
 }
 

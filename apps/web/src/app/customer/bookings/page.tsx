@@ -4,134 +4,143 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/navbar/Navbar';
 import Footer from '@/components/layout/Footer';
-import { Calendar, Clock, MapPin, Download, CheckCircle2 } from 'lucide-react';
+import { getClientToken, getSavedUserProfile } from '@/lib/auth';
+import { Calendar, Clock, MapPin, Download, CheckCircle2, Loader2, BookOpen, AlertCircle } from 'lucide-react';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
 export default function CustomerBookingsPage() {
   const [allBookings, setAllBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const defaultBookings = [
-      {
-        id: 'DS-928114-101',
-        pujaName: 'Griha Pravesh Puja & Vastu Havan',
-        panditName: 'Pt. Radheshyam Joshi',
-        date: '24 Nov 2026',
-        timeSlot: '09:30 AM',
-        city: 'Pune',
-        totalAmount: '₹6,999',
-        status: 'CONFIRMED',
-      },
-      {
-        id: 'DS-821034-202',
-        pujaName: 'Satyanarayan Mahapuja & Katha',
-        panditName: 'Acharya Devendra Shastri',
-        date: '12 Oct 2026',
-        timeSlot: '05:00 PM',
-        city: 'Mumbai',
-        totalAmount: '₹3,499',
-        status: 'COMPLETED',
-      },
-    ];
-
-    try {
-      const stored = localStorage.getItem('devsutra_web_bookings');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const formatted = parsed.map((b) => ({
-            id: b.bookingNumber || b.id,
-            pujaName: b.puja?.title || b.pujaTitle || 'Sacred Vedic Ceremony',
-            panditName: b.panditProfile?.fullName || 'Pt. Radheshyam Joshi (Gurukul Certified)',
-            date: b.pujaDate || 'Selected Date',
-            timeSlot: b.pujaTimeSlot || 'Morning Muhurat',
-            city: b.city || 'Pune',
-            totalAmount: `₹${Number(b.totalAmount || 5100).toLocaleString()}`,
-            status: b.status || 'CONFIRMED',
-          }));
-          setAllBookings([...formatted, ...defaultBookings]);
-          return;
-        }
+    async function loadBookings() {
+      const token = getClientToken();
+      if (!token) {
+        setLoading(false);
+        return;
       }
-    } catch {
-      // ignore
+
+      try {
+        setLoading(true);
+        const res = await fetch(`${API_BASE_URL}/bookings/my`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          const items = Array.isArray(json) ? json : (json.data || []);
+          if (Array.isArray(items)) {
+            const mapped = items.map((b: any) => ({
+              id: b.bookingNumber || b.id,
+              pujaName: b.puja?.title || 'Vedic Ceremony',
+              panditName: b.panditProfile?.fullName || 'Assigned Gurukul Pandit',
+              date: b.pujaDate ? new Date(b.pujaDate).toLocaleDateString() : 'Scheduled Date',
+              timeSlot: b.pujaTimeSlot || 'Morning Muhurat',
+              city: b.city || 'India',
+              totalAmount: `₹${Number(b.totalAmount || b.basePrice || 0).toLocaleString('en-IN')}`,
+              status: b.status || 'CONFIRMED',
+            }));
+            setAllBookings(mapped);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load real customer bookings:', e);
+      } finally {
+        setLoading(false);
+      }
     }
 
-    setAllBookings(defaultBookings);
+    loadBookings();
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-ivory text-brown">
+    <div className="min-h-screen flex flex-col bg-ivory text-brown font-sans">
       <Navbar />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1 w-full space-y-6">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1 w-full space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold font-heading text-maroon">My Sacred Puja Bookings</h1>
-            <p className="text-xs text-brown/70">माझ्या पूजा • Track upcoming rituals, purohit assignments & receipts</p>
+            <h1 className="text-2xl font-bold font-heading text-maroon">My Sacred Bookings</h1>
+            <p className="text-xs text-brown/70">
+              Track ceremony schedules, assigned Gurukul priests, and dakshina receipts
+            </p>
           </div>
           <Link
-            href="/pujas"
-            className="px-5 py-2.5 bg-gradient-to-r from-amber-600 to-maroon hover:from-amber-700 hover:to-maroon-800 text-ivory text-xs font-bold rounded-xl shadow transition self-start sm:self-auto"
+            href="/booking"
+            className="px-4 py-2.5 bg-maroon hover:bg-maroon-800 text-ivory text-xs font-semibold rounded-xl shadow transition self-start sm:self-auto"
           >
-            + Book Another Puja
+            + Book New Ceremony
           </Link>
         </div>
 
-        <div className="space-y-4">
-          {allBookings.map((b) => (
-            <div
-              key={b.id}
-              className="bg-white p-6 rounded-2xl border border-beige hover:border-gold/60 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition"
+        {loading ? (
+          <div className="py-20 text-center bg-white rounded-3xl border border-beige shadow-sacred">
+            <Loader2 className="w-8 h-8 text-gold-600 animate-spin mx-auto mb-3" />
+            <p className="text-xs font-semibold text-brown/70">Loading your bookings from DevSutra database...</p>
+          </div>
+        ) : allBookings.length === 0 ? (
+          <div className="py-16 text-center bg-white rounded-3xl border border-beige p-8 shadow-sacred max-w-lg mx-auto">
+            <BookOpen className="w-12 h-12 text-gold-600 mx-auto mb-3 opacity-60" />
+            <h3 className="font-heading font-bold text-lg text-maroon">No Sacred Ceremonies Yet</h3>
+            <p className="text-xs text-brown/70 mt-1 mb-6">
+              You haven&apos;t booked any Vedic rituals yet. Book your first puja with certified Gurukul priests.
+            </p>
+            <Link
+              href="/booking"
+              className="px-6 py-2.5 bg-maroon text-ivory text-xs font-bold rounded-xl shadow-sacred hover:bg-maroon-800 transition"
             >
-              <div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono font-bold text-maroon bg-gold/15 px-2.5 py-0.5 rounded-md">
-                    Ref #{b.id}
-                  </span>
-                  <span
-                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                      b.status === 'CONFIRMED'
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                        : b.status === 'COMPLETED'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}
-                  >
+              Explore Pujas & Book
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {allBookings.map((b) => (
+              <div
+                key={b.id}
+                className="bg-white rounded-3xl p-6 border border-beige hover:border-gold shadow-sacred transition space-y-4"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-beige/60 pb-3">
+                  <div>
+                    <span className="text-[10px] font-mono text-brown/50 uppercase font-semibold">
+                      Booking ID: {b.id}
+                    </span>
+                    <h3 className="text-base font-bold font-heading text-maroon">{b.pujaName}</h3>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 self-start sm:self-auto">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
                     {b.status}
                   </span>
                 </div>
-                <h3 className="text-base font-bold font-heading text-brown mt-1.5">{b.pujaName}</h3>
-                <p className="text-xs text-brown/70 mt-0.5">
-                  Assigned Pandit: <strong className="text-maroon">{b.panditName}</strong>
-                </p>
-                <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-brown/80 font-sans">
-                  <span className="flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-amber-600" /> {b.date}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-amber-600" /> {b.timeSlot}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-amber-600" /> {b.city}
-                  </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs text-brown/80">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] uppercase font-bold text-brown/50 block">Purohit / Pandit</span>
+                    <p className="font-semibold text-brown">{b.panditName}</p>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] uppercase font-bold text-brown/50 block">Muhurat Date & Time</span>
+                    <div className="flex items-center gap-1.5 text-brown">
+                      <Calendar className="w-3.5 h-3.5 text-gold-600 shrink-0" />
+                      <span>{b.date} • {b.timeSlot}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] uppercase font-bold text-brown/50 block">Location</span>
+                    <div className="flex items-center gap-1 text-brown">
+                      <MapPin className="w-3.5 h-3.5 text-gold-600 shrink-0" />
+                      <span>{b.city}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-0.5 sm:text-right">
+                    <span className="text-[10px] uppercase font-bold text-brown/50 block">Total Dakshina</span>
+                    <p className="text-base font-extrabold text-maroon">{b.totalAmount}</p>
+                  </div>
                 </div>
               </div>
-
-              <div className="text-left sm:text-right border-t sm:border-t-0 pt-3 sm:pt-0 border-beige">
-                <span className="text-[11px] text-brown/50 block">Dakshina</span>
-                <p className="text-lg font-bold text-maroon">{b.totalAmount}</p>
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="mt-2 px-3 py-1.5 border border-beige hover:border-gold text-maroon hover:bg-gold/10 text-xs font-semibold rounded-lg flex items-center gap-1.5 sm:ml-auto transition"
-                >
-                  <Download className="w-3.5 h-3.5 text-saffron" />
-                  <span>View Receipt</span>
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </main>
 
       <Footer />

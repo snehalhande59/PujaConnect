@@ -10,7 +10,10 @@
     },
     "android": {
       "package": "com.pujaconnect.app",
-      "usesCleartextTraffic": true
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ]
     },
     "androidStatusBar": {
       "barStyle": "dark-content",

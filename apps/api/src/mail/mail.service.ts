@@ -1,6 +1,7 @@
 import {
   Injectable,
   Logger,
+  OnModuleInit,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -13,7 +14,7 @@ export interface SendEmailResult {
 }
 
 @Injectable()
-export class MailService {
+export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter | null = null;
   private isConfigured = false;
@@ -23,39 +24,83 @@ export class MailService {
   }
 
   private initializeTransporter() {
-    const host = this.configService.get<string>('SMTP_HOST');
-    const port = this.configService.get<number>('SMTP_PORT', 587);
-    const user = this.configService.get<string>('SMTP_USER');
-    const pass = this.configService.get<string>('SMTP_PASS');
+    const rawHost = this.configService.get<string>('SMTP_HOST');
+    const rawPort = this.configService.get<number | string>('SMTP_PORT', 587);
+    const rawUser = this.configService.get<string>('SMTP_USER');
+    const rawPass = this.configService.get<string>('SMTP_PASS');
+
+    // Trim host and user
+    const host = rawHost ? rawHost.trim() : undefined;
+    const port = Number(rawPort) || 587;
+    const user = rawUser ? rawUser.trim() : undefined;
+
+    // Trim pass and remove all whitespace (including spaces in Google App Passwords)
+    const pass = rawPass
+      ? rawPass.trim().replace(/\s+/g, '').replace(/^["']|["']$/g, '')
+      : undefined;
+
     const secure =
       this.configService.get<string>('SMTP_SECURE') === 'true' ||
-      Number(port) === 465;
+      port === 465;
 
     if (host && user && pass) {
       try {
         this.transporter = nodemailer.createTransport({
           host,
-          port: Number(port),
+          port,
           secure,
           auth: {
             user,
             pass,
           },
+          // Standard socket timeouts to prevent indefinite hanging
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 15000,
         });
         this.isConfigured = true;
         this.logger.log(
-          `SMTP transport initialized for host ${host}:${port} (secure: ${secure})`,
+          `SMTP transport initialized: host=${host}, port=${port}, secure=${secure}, userConfigured=true, passLength=${pass.length}`,
         );
       } catch (err: any) {
-        this.logger.error(`Failed to initialize SMTP transport: ${err?.message}`);
+        this.logger.error(
+          `Failed to initialize SMTP transport: code=${err?.code || 'UNKNOWN'}, message=${err?.message || 'Initialization error'}`,
+        );
         this.isConfigured = false;
         this.transporter = null;
       }
     } else {
       this.logger.warn(
-        'SMTP configuration is missing or incomplete. Email delivery service is disabled.',
+        `SMTP configuration is incomplete: hostConfigured=${Boolean(host)}, userConfigured=${Boolean(user)}, passConfigured=${Boolean(pass)}. Email delivery service is disabled.`,
       );
       this.isConfigured = false;
+    }
+  }
+
+  /**
+   * Verify SMTP transporter on application startup.
+   * Catches errors and logs structured diagnostic warnings; NEVER crashes the application.
+   */
+  async onModuleInit() {
+    if (this.isConfigured && this.transporter) {
+      try {
+        await this.transporter.verify();
+        this.logger.log(
+          'SMTP connection verified successfully. Ready to deliver emails.',
+        );
+      } catch (err: any) {
+        const code = err?.code || 'UNKNOWN';
+        const responseCode = err?.responseCode || 'N/A';
+        const command = err?.command || 'N/A';
+        const rawMsg = err?.message || 'SMTP verification failed';
+        const sanitizedMsg = rawMsg.replace(
+          /([a-zA-Z0-9_\-\.]{3,})@([a-zA-Z0-9_\-\.]+)/g,
+          '***@$2',
+        );
+        this.logger.warn(
+          `[SMTP Startup Verification Warning] Connection check failed (code=${code}, responseCode=${responseCode}, command=${command}): ${sanitizedMsg}`,
+        );
+      }
     }
   }
 
@@ -241,12 +286,20 @@ export class MailService {
         messageId: info.messageId,
       };
     } catch (err: any) {
+      const code = err?.code || 'UNKNOWN';
+      const responseCode = err?.responseCode || 'N/A';
+      const command = err?.command || 'N/A';
+      const rawMsg = err?.message || 'Failed to deliver test email';
+      const sanitizedMsg = rawMsg.replace(
+        /([a-zA-Z0-9_\-\.]{3,})@([a-zA-Z0-9_\-\.]+)/g,
+        '***@$2',
+      );
       this.logger.error(
-        `Failed to send test email to ${masked}: ${err?.message}`,
+        `Failed to send test email to ${masked}: code=${code}, responseCode=${responseCode}, command=${command}, message=${sanitizedMsg}`,
       );
       return {
         success: false,
-        error: err?.message || 'Failed to deliver test email',
+        error: 'Failed to deliver test email. Please check server logs for details.',
       };
     }
   }
@@ -459,17 +512,26 @@ export class MailService {
         messageId: info.messageId,
       };
     } catch (err: any) {
+      const code = err?.code || 'UNKNOWN';
+      const responseCode = err?.responseCode || 'N/A';
+      const command = err?.command || 'N/A';
+      const rawMsg = err?.message || 'Failed to deliver OTP email';
+      const sanitizedMsg = rawMsg.replace(
+        /([a-zA-Z0-9_\-\.]{3,})@([a-zA-Z0-9_\-\.]+)/g,
+        '***@$2',
+      );
       this.logger.error(
-        `Failed to send OTP email to ${masked}: ${err?.message}`,
+        `Failed to send OTP email to ${masked}: code=${code}, responseCode=${responseCode}, command=${command}, message=${sanitizedMsg}`,
       );
       if (throwOnError) {
+        // Generic customer-facing error: never expose internal SMTP error codes or stack traces
         throw new ServiceUnavailableException(
           'Failed to deliver verification email. Please try again later.',
         );
       }
       return {
         success: false,
-        error: err?.message || 'Failed to deliver OTP email',
+        error: 'Failed to deliver verification email. Please try again later.',
       };
     }
   }
@@ -601,8 +663,18 @@ export class MailService {
       this.logger.log(`Booking status email [${details.status}] sent to ${masked} (messageId: ${info.messageId})`);
       return { success: true, messageId: info.messageId };
     } catch (err: any) {
-      this.logger.error(`Failed to send booking status email to ${masked}: ${err?.message}`);
-      return { success: false, error: err?.message };
+      const code = err?.code || 'UNKNOWN';
+      const responseCode = err?.responseCode || 'N/A';
+      const command = err?.command || 'N/A';
+      const rawMsg = err?.message || 'Failed to send booking status email';
+      const sanitizedMsg = rawMsg.replace(
+        /([a-zA-Z0-9_\-\.]{3,})@([a-zA-Z0-9_\-\.]+)/g,
+        '***@$2',
+      );
+      this.logger.error(
+        `Failed to send booking status email to ${masked}: code=${code}, responseCode=${responseCode}, command=${command}, message=${sanitizedMsg}`,
+      );
+      return { success: false, error: 'Failed to deliver booking status email' };
     }
   }
 }
