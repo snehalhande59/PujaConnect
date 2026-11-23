@@ -18,6 +18,22 @@ export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter | null = null;
   private isConfigured = false;
+  private lastVerificationResult: {
+    verified: boolean;
+    timestamp: string;
+    code?: string;
+    responseCode?: string;
+    command?: string;
+    message?: string;
+  } | null = null;
+  private lastSendResult: {
+    success: boolean;
+    timestamp: string;
+    code?: string;
+    responseCode?: string;
+    command?: string;
+    message?: string;
+  } | null = null;
 
   constructor(private readonly configService: ConfigService) {
     this.initializeTransporter();
@@ -85,6 +101,11 @@ export class MailService implements OnModuleInit {
     if (this.isConfigured && this.transporter) {
       try {
         await this.transporter.verify();
+        this.lastVerificationResult = {
+          verified: true,
+          timestamp: new Date().toISOString(),
+          message: 'SMTP connection verified successfully. Ready to deliver emails.',
+        };
         this.logger.log(
           'SMTP connection verified successfully. Ready to deliver emails.',
         );
@@ -97,11 +118,51 @@ export class MailService implements OnModuleInit {
           /([a-zA-Z0-9_\-\.]{3,})@([a-zA-Z0-9_\-\.]+)/g,
           '***@$2',
         );
+        this.lastVerificationResult = {
+          verified: false,
+          timestamp: new Date().toISOString(),
+          code,
+          responseCode,
+          command,
+          message: sanitizedMsg,
+        };
         this.logger.warn(
           `[SMTP Startup Verification Warning] Connection check failed (code=${code}, responseCode=${responseCode}, command=${command}): ${sanitizedMsg}`,
         );
       }
+    } else {
+      this.lastVerificationResult = {
+        verified: false,
+        timestamp: new Date().toISOString(),
+        message: 'SMTP configuration is incomplete in environment variables.',
+      };
     }
+  }
+
+  /**
+   * Get safe SMTP status without exposing passwords or secrets
+   */
+  public getSmtpStatus() {
+    const rawHost = this.configService.get<string>('SMTP_HOST');
+    const rawPort = this.configService.get<number | string>('SMTP_PORT', 587);
+    const rawUser = this.configService.get<string>('SMTP_USER');
+    const rawPass = this.configService.get<string>('SMTP_PASS');
+    const rawSecure = this.configService.get<string>('SMTP_SECURE');
+    const rawFrom = this.configService.get<string>('SMTP_FROM');
+
+    return {
+      configured: this.isConfigured,
+      host: rawHost ? rawHost.trim() : null,
+      port: Number(rawPort) || 587,
+      secure: rawSecure === 'true' || Number(rawPort) === 465,
+      userConfigured: Boolean(rawUser && rawUser.trim()),
+      userMasked: rawUser ? this.maskEmail(rawUser.trim()) : null,
+      passConfigured: Boolean(rawPass && rawPass.trim()),
+      passLength: rawPass ? rawPass.trim().replace(/\s+/g, '').length : 0,
+      fromConfigured: Boolean(rawFrom && rawFrom.trim()),
+      verification: this.lastVerificationResult,
+      lastSend: this.lastSendResult,
+    };
   }
 
   /**
@@ -119,9 +180,11 @@ export class MailService implements OnModuleInit {
     testCode: string = '123456',
   ): Promise<SendEmailResult> {
     const masked = this.maskEmail(toEmail);
-    const fromAddress =
-      this.configService.get<string>('SMTP_FROM') ||
-      'DevSutra <no-reply@devsutra.in>';
+    const rawFrom = this.configService.get<string>('SMTP_FROM');
+    const smtpUser = this.configService.get<string>('SMTP_USER');
+    const fromAddress = rawFrom
+      ? rawFrom.trim()
+      : (smtpUser ? `DevSutra <${smtpUser.trim()}>` : 'DevSutra <no-reply@devsutra.in>');
 
     if (!this.isConfigured || !this.transporter) {
       return {
@@ -339,9 +402,11 @@ export class MailService implements OnModuleInit {
     throwOnError: boolean = false,
   ): Promise<SendEmailResult> {
     const masked = this.maskEmail(toEmail);
-    const fromAddress =
-      this.configService.get<string>('SMTP_FROM') ||
-      'DevSutra <no-reply@devsutra.in>';
+    const rawFrom = this.configService.get<string>('SMTP_FROM');
+    const smtpUser = this.configService.get<string>('SMTP_USER');
+    const fromAddress = rawFrom
+      ? rawFrom.trim()
+      : (smtpUser ? `DevSutra <${smtpUser.trim()}>` : 'DevSutra <no-reply@devsutra.in>');
 
     if (!this.isConfigured || !this.transporter) {
       this.logger.error(
@@ -504,6 +569,11 @@ export class MailService implements OnModuleInit {
         html: htmlContent,
       });
 
+      this.lastSendResult = {
+        success: true,
+        timestamp: new Date().toISOString(),
+        message: `OTP email delivered (messageId: ${info.messageId})`,
+      };
       this.logger.log(
         `OTP email sent successfully to ${masked} (messageId: ${info.messageId})`,
       );
@@ -520,6 +590,14 @@ export class MailService implements OnModuleInit {
         /([a-zA-Z0-9_\-\.]{3,})@([a-zA-Z0-9_\-\.]+)/g,
         '***@$2',
       );
+      this.lastSendResult = {
+        success: false,
+        timestamp: new Date().toISOString(),
+        code,
+        responseCode,
+        command,
+        message: sanitizedMsg,
+      };
       this.logger.error(
         `Failed to send OTP email to ${masked}: code=${code}, responseCode=${responseCode}, command=${command}, message=${sanitizedMsg}`,
       );
@@ -552,9 +630,11 @@ export class MailService implements OnModuleInit {
     },
   ): Promise<SendEmailResult> {
     const masked = this.maskEmail(toEmail);
-    const fromAddress =
-      this.configService.get<string>('SMTP_FROM') ||
-      'DevSutra <no-reply@devsutra.in>';
+    const rawFrom = this.configService.get<string>('SMTP_FROM');
+    const smtpUser = this.configService.get<string>('SMTP_USER');
+    const fromAddress = rawFrom
+      ? rawFrom.trim()
+      : (smtpUser ? `DevSutra <${smtpUser.trim()}>` : 'DevSutra <no-reply@devsutra.in>');
 
     if (!this.isConfigured || !this.transporter) {
       this.logger.warn(`SMTP not configured. Skipping status email to ${masked}`);

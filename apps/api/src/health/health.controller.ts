@@ -1,11 +1,15 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'System Health Check' })
@@ -25,6 +29,7 @@ export class HealthController {
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
       database: dbStatus,
+      smtp: this.mailService.getSmtpStatus(),
     };
   }
 }
