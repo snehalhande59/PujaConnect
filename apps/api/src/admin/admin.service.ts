@@ -6,7 +6,7 @@
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
-import { VerificationStatus, Role, BookingStatus, Prisma } from '@prisma/client';
+import { VerificationStatus, Role, BookingStatus, OrderStatus, TicketStatus, TicketPriority, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { QueryPanditsDto } from './dto/query-pandits.dto';
 import { CreatePanditDto } from './dto/create-pandit.dto';
@@ -573,6 +573,9 @@ export class AdminService {
       paymentsWithAmount,
       recentBookings,
       recentCustomers,
+      recentPandits,
+      recentPayments,
+      recentStatusHistory,
     ] = await Promise.all([
       this.prisma.customerProfile.count({ where: { user: { isDeleted: false } } }),
       this.prisma.panditProfile.count({ where: { user: { isDeleted: false } } }),
@@ -618,6 +621,38 @@ export class AdminService {
         include: {
           user: { select: { email: true, phoneNumber: true, createdAt: true, isActive: true } },
           _count: { select: { bookings: true } },
+        },
+      }),
+      this.prisma.panditProfile.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: { select: { email: true, phoneNumber: true, createdAt: true, isActive: true } },
+        },
+      }),
+      this.prisma.payment.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          booking: {
+            include: {
+              customerProfile: true,
+              puja: true,
+            },
+          },
+        },
+      }),
+      this.prisma.bookingStatusHistory.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          booking: {
+            include: {
+              customerProfile: true,
+              panditProfile: true,
+              puja: true,
+            },
+          },
         },
       }),
     ]);
@@ -667,6 +702,71 @@ export class AdminService {
       },
       recentBookings,
       recentCustomers,
+      recentPandits,
+      recentPayments,
+      recentActivity: (() => {
+        const activityItems: any[] = [];
+
+        for (const c of recentCustomers) {
+          activityItems.push({
+            id: `cust-${c.id}`,
+            type: 'CUSTOMER_REGISTERED',
+            title: `New Customer: ${c.firstName} ${c.lastName}`,
+            description: `${c.user?.email || 'N/A'}${c.user?.phoneNumber ? ' • ' + c.user.phoneNumber : ''}`,
+            timestamp: c.user?.createdAt || c.createdAt,
+            metadata: { customerId: c.id, city: c.city },
+          });
+        }
+
+        for (const p of recentPandits) {
+          activityItems.push({
+            id: `pandit-${p.id}`,
+            type: 'PANDIT_REGISTERED',
+            title: `Pandit Application: Pt. ${p.fullName}`,
+            description: `City: ${p.city} • Status: ${p.verificationStatus}`,
+            timestamp: p.user?.createdAt || p.createdAt,
+            metadata: { panditId: p.id, status: p.verificationStatus },
+          });
+        }
+
+        for (const b of recentBookings) {
+          const custName = b.customerProfile ? `${b.customerProfile.firstName} ${b.customerProfile.lastName}` : 'Devotee';
+          const panditName = b.panditProfile ? `Pt. ${b.panditProfile.fullName}` : 'Unassigned';
+          activityItems.push({
+            id: `booking-${b.id}`,
+            type: 'BOOKING_RECORD',
+            title: `Booking #${b.bookingNumber}: ${b.puja?.title || 'Puja'}`,
+            description: `Devotee: ${custName} • Purohit: ${panditName} • ₹${Number(b.totalAmount || 0).toLocaleString()}`,
+            timestamp: b.createdAt,
+            metadata: { bookingId: b.id, status: b.status, amount: b.totalAmount },
+          });
+        }
+
+        for (const pay of recentPayments) {
+          activityItems.push({
+            id: `pay-${pay.id}`,
+            type: 'PAYMENT_RECORD',
+            title: `Payment ${pay.paymentStatus}: ₹${Number(pay.amount || 0).toLocaleString()}`,
+            description: `Txn: ${pay.paymentNumber} • Mode: ${pay.paymentMethod}`,
+            timestamp: pay.createdAt,
+            metadata: { paymentId: pay.id, status: pay.paymentStatus, amount: pay.amount },
+          });
+        }
+
+        for (const h of recentStatusHistory) {
+          activityItems.push({
+            id: `hist-${h.id}`,
+            type: 'STATUS_ACTION',
+            title: `Booking #${h.booking?.bookingNumber || ''} ${h.fromStatus ? h.fromStatus + ' ➔ ' : ''}${h.toStatus}`,
+            description: `Action: ${h.action} by ${h.changedBy}${h.reason ? ' • Reason: ' + h.reason : ''}`,
+            timestamp: h.createdAt,
+            metadata: { bookingId: h.bookingId, toStatus: h.toStatus },
+          });
+        }
+
+        activityItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        return activityItems.slice(0, 25);
+      })(),
     };
   }
 
@@ -1425,5 +1525,364 @@ export class AdminService {
       })),
       recentBookings,
     };
+  }
+
+  // ==========================================
+  // CATEGORIES MANAGEMENT
+  // ==========================================
+  async getCategories(query?: { search?: string }) {
+    const where: Prisma.PujaCategoryWhereInput = {};
+    if (query?.search) {
+      where.OR = [
+        { name: { contains: query.search.trim(), mode: 'insensitive' } },
+        { slug: { contains: query.search.trim(), mode: 'insensitive' } },
+      ];
+    }
+    return this.prisma.pujaCategory.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      include: {
+        _count: {
+          select: { pujas: true },
+        },
+      },
+    });
+  }
+
+  async createCategory(data: { name: string; slug?: string; description?: string; imageUrl?: string; isActive?: boolean }) {
+    const slug = data.slug?.trim() || data.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    return this.prisma.pujaCategory.create({
+      data: {
+        name: data.name.trim(),
+        slug,
+        description: data.description?.trim(),
+        imageUrl: data.imageUrl,
+        isActive: data.isActive !== undefined ? data.isActive : true,
+      },
+    });
+  }
+
+  async updateCategory(id: string, data: any) {
+    return this.prisma.pujaCategory.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteCategory(id: string) {
+    return this.prisma.pujaCategory.delete({
+      where: { id },
+    });
+  }
+
+  // ==========================================
+  // PRODUCTS / SAMAGRI MANAGEMENT
+  // ==========================================
+  async getProducts(query?: { search?: string; category?: string; page?: number; limit?: number }) {
+    const page = Number(query?.page) || 1;
+    const limit = Number(query?.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.ProductWhereInput = {
+      isDeleted: false,
+    };
+
+    if (query?.category && query.category !== 'ALL') {
+      where.category = query.category;
+    }
+
+    if (query?.search) {
+      where.OR = [
+        { name: { contains: query.search.trim(), mode: 'insensitive' } },
+        { category: { contains: query.search.trim(), mode: 'insensitive' } },
+        { slug: { contains: query.search.trim(), mode: 'insensitive' } },
+      ];
+    }
+
+    const [total, products] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      data: products,
+    };
+  }
+
+  async createProduct(data: any) {
+    const slug = data.slug?.trim() || data.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now().toString().slice(-4);
+    return this.prisma.product.create({
+      data: {
+        name: data.name.trim(),
+        slug,
+        description: data.description || '',
+        category: data.category || 'Puja Samagri',
+        price: new Prisma.Decimal(data.price),
+        discountPrice: data.discountPrice ? new Prisma.Decimal(data.discountPrice) : null,
+        stockQuantity: Number(data.stockQuantity || 0),
+        images: Array.isArray(data.images) ? data.images : [],
+        isActive: data.isActive !== undefined ? data.isActive : true,
+      },
+    });
+  }
+
+  async updateProduct(id: string, data: any) {
+    const updateData: any = { ...data };
+    if (updateData.price !== undefined) {
+      updateData.price = new Prisma.Decimal(updateData.price);
+    }
+    if (updateData.discountPrice !== undefined) {
+      updateData.discountPrice = updateData.discountPrice ? new Prisma.Decimal(updateData.discountPrice) : null;
+    }
+    if (updateData.stockQuantity !== undefined) {
+      updateData.stockQuantity = Number(updateData.stockQuantity);
+    }
+    return this.prisma.product.update({
+      where: { id },
+      data: updateData,
+    });
+  }
+
+  async deleteProduct(id: string) {
+    return this.prisma.product.update({
+      where: { id },
+      data: { isDeleted: true, deletedAt: new Date() },
+    });
+  }
+
+  // ==========================================
+  // ORDERS MANAGEMENT
+  // ==========================================
+  async getOrders(query?: { status?: string; search?: string; page?: number; limit?: number }) {
+    const page = Number(query?.page) || 1;
+    const limit = Number(query?.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.OrderWhereInput = {};
+
+    if (query?.status && query.status !== 'ALL') {
+      where.status = query.status as OrderStatus;
+    }
+
+    if (query?.search) {
+      const s = query.search.trim();
+      where.OR = [
+        { orderNumber: { contains: s, mode: 'insensitive' } },
+        { trackingNumber: { contains: s, mode: 'insensitive' } },
+        { customerProfile: { firstName: { contains: s, mode: 'insensitive' } } },
+        { customerProfile: { lastName: { contains: s, mode: 'insensitive' } } },
+        { customerProfile: { user: { email: { contains: s, mode: 'insensitive' } } } },
+      ];
+    }
+
+    const [total, orders] = await Promise.all([
+      this.prisma.order.count({ where }),
+      this.prisma.order.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          customerProfile: {
+            include: {
+              user: { select: { email: true, phoneNumber: true } },
+            },
+          },
+          shippingAddress: true,
+          orderItems: {
+            include: { product: true },
+          },
+          payments: true,
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      data: orders,
+    };
+  }
+
+  async updateOrderStatus(id: string, status: OrderStatus) {
+    return this.prisma.order.update({
+      where: { id },
+      data: { status },
+    });
+  }
+
+  async updateOrderTracking(id: string, trackingNumber: string) {
+    return this.prisma.order.update({
+      where: { id },
+      data: { trackingNumber: trackingNumber.trim() },
+    });
+  }
+
+  // ==========================================
+  // REVIEWS MANAGEMENT
+  // ==========================================
+  async getReviews(query?: { rating?: number; isPublished?: boolean; search?: string; page?: number; limit?: number }) {
+    const page = Number(query?.page) || 1;
+    const limit = Number(query?.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.ReviewWhereInput = {};
+
+    if (query?.rating) {
+      where.rating = Number(query.rating);
+    }
+    if (query?.isPublished !== undefined) {
+      where.isPublished = query.isPublished;
+    }
+
+    const [total, reviews] = await Promise.all([
+      this.prisma.review.count({ where }),
+      this.prisma.review.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          customer: {
+            select: { id: true, email: true, phoneNumber: true, customerProfile: true },
+          },
+          panditProfile: {
+            select: { id: true, fullName: true, city: true, avatarUrl: true },
+          },
+          booking: {
+            select: { id: true, bookingNumber: true, puja: { select: { title: true } } },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      data: reviews,
+    };
+  }
+
+  async toggleReviewPublish(id: string, isPublished: boolean) {
+    return this.prisma.review.update({
+      where: { id },
+      data: { isPublished },
+    });
+  }
+
+  async deleteReview(id: string) {
+    return this.prisma.review.delete({
+      where: { id },
+    });
+  }
+
+  // ==========================================
+  // SUPPORT TICKETS DESK
+  // ==========================================
+  async getSupportTickets(query?: { status?: string; priority?: string; page?: number; limit?: number }) {
+    const page = Number(query?.page) || 1;
+    const limit = Number(query?.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.SupportTicketWhereInput = {};
+
+    if (query?.status && query.status !== 'ALL') {
+      where.status = query.status as TicketStatus;
+    }
+    if (query?.priority && query.priority !== 'ALL') {
+      where.priority = query.priority as TicketPriority;
+    }
+
+    const [total, tickets] = await Promise.all([
+      this.prisma.supportTicket.count({ where }),
+      this.prisma.supportTicket.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: { id: true, email: true, phoneNumber: true, role: true, customerProfile: true, panditProfile: true },
+          },
+          assignedTo: {
+            select: { id: true, email: true },
+          },
+          booking: {
+            select: { id: true, bookingNumber: true },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      data: tickets,
+    };
+  }
+
+  async updateSupportTicket(id: string, data: { status?: TicketStatus; priority?: TicketPriority; assignedToId?: string }) {
+    return this.prisma.supportTicket.update({
+      where: { id },
+      data,
+    });
+  }
+
+  // ==========================================
+  // COUPONS MANAGEMENT
+  // ==========================================
+  async getCoupons() {
+    return this.prisma.coupon.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createCoupon(data: any) {
+    return this.prisma.coupon.create({
+      data: {
+        code: data.code.toUpperCase().trim(),
+        discountPct: data.discountPct ? new Prisma.Decimal(data.discountPct) : null,
+        discountAmount: data.discountAmount ? new Prisma.Decimal(data.discountAmount) : null,
+        minSpend: data.minSpend ? new Prisma.Decimal(data.minSpend) : null,
+        maxDiscount: data.maxDiscount ? new Prisma.Decimal(data.maxDiscount) : null,
+        validFrom: new Date(data.validFrom),
+        validUntil: new Date(data.validUntil),
+        usageLimit: data.usageLimit ? Number(data.usageLimit) : null,
+        isActive: data.isActive !== undefined ? data.isActive : true,
+      },
+    });
+  }
+
+  async updateCoupon(id: string, data: any) {
+    const updateData: any = { ...data };
+    if (updateData.discountPct !== undefined) updateData.discountPct = updateData.discountPct ? new Prisma.Decimal(updateData.discountPct) : null;
+    if (updateData.discountAmount !== undefined) updateData.discountAmount = updateData.discountAmount ? new Prisma.Decimal(updateData.discountAmount) : null;
+    if (updateData.validFrom) updateData.validFrom = new Date(updateData.validFrom);
+    if (updateData.validUntil) updateData.validUntil = new Date(updateData.validUntil);
+    return this.prisma.coupon.update({
+      where: { id },
+      data: updateData,
+    });
+  }
+
+  async deleteCoupon(id: string) {
+    return this.prisma.coupon.delete({
+      where: { id },
+    });
   }
 }

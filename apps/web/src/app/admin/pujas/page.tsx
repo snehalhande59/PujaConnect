@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   Plus,
   Loader2,
   Sparkles,
@@ -14,6 +13,10 @@ import {
   Package,
   Layers,
   Check,
+  CheckCircle2,
+  AlertCircle,
+  Edit,
+  Eye,
 } from 'lucide-react';
 import { getClientToken } from '@/lib/auth';
 import AdminLayout from '@/components/admin/AdminLayout';
@@ -75,7 +78,7 @@ export default function AdminPujasPage() {
         },
       });
       if (res.ok) {
-        setMsg({ type: 'success', text: 'Vedic categories and default puja catalog successfully seeded!' });
+        setMsg({ type: 'success', text: 'Vedic categories and default puja catalog successfully seeded in database!' });
         await fetchPujas();
       } else {
         const err = await res.json().catch(() => ({}));
@@ -118,7 +121,7 @@ export default function AdminPujasPage() {
       });
 
       if (res.ok) {
-        setMsg({ type: 'success', text: `Puja '${title}' successfully added to PostgreSQL database with complete ritual steps.` });
+        setMsg({ type: 'success', text: `Puja '${title}' successfully added to database.` });
         setShowAddModal(false);
         setTitle('');
         setDescription('');
@@ -137,267 +140,253 @@ export default function AdminPujasPage() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-              Puja Management
+            <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
+              Puja Catalog Management
             </h1>
-            <p className="text-xs text-stone-400">
+            <p className="text-xs text-stone-500 mt-0.5">
               Live Vedic rituals catalog, base dakshina, duration, and samagri kit fees in PostgreSQL
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={fetchPujas}
-              className="px-3.5 py-2 bg-stone-900 hover:bg-stone-800 border border-stone-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 text-stone-300 hover:text-white transition cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Refresh</span>
-            </button>
-            <button
               onClick={handleInitializeCatalog}
               disabled={initializing}
-              className="px-3.5 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+              className="px-3.5 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
             >
-              <Sparkles className={`w-3.5 h-3.5 ${initializing ? 'animate-spin' : ''}`} />
-              <span>{initializing ? 'Seeding Catalog...' : 'Seed Default Catalog'}</span>
+              {initializing ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" /> : <Sparkles className="w-3.5 h-3.5 text-amber-600" />}
+              <span>{initializing ? 'Seeding...' : 'Seed Default Catalog'}</span>
             </button>
+
             <button
               onClick={() => setShowAddModal(true)}
-              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold rounded-xl text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>Add New Puja</span>
+              <span>Create New Puja</span>
             </button>
           </div>
         </div>
 
         {msg && (
           <div
-            className={`p-3.5 rounded-xl text-xs flex items-center justify-between ${
+            className={`p-3.5 rounded-xl text-xs flex items-center justify-between shadow-xs ${
               msg.type === 'success'
-                ? 'bg-emerald-950/80 border border-emerald-500/40 text-emerald-200'
-                : 'bg-rose-950/80 border border-rose-500/40 text-rose-200'
+                ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
+                : 'bg-rose-50 border border-rose-200 text-rose-900'
             }`}
           >
-            <span>{msg.text}</span>
-            <button onClick={() => setMsg(null)} className="underline text-[10px] cursor-pointer">
+            <div className="flex items-center gap-2">
+              {msg.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              )}
+              <span className="font-medium">{msg.text}</span>
+            </div>
+            <button onClick={() => setMsg(null)} className="text-stone-400 hover:text-stone-700 font-bold">
               Dismiss
             </button>
           </div>
         )}
 
-        {/* Pujas Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Pujas Table */}
+        <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-xs">
           {loading ? (
-            <div className="col-span-full py-20 text-center">
-              <Loader2 className="w-8 h-8 text-amber-500 animate-spin mx-auto mb-3" />
-              <p className="text-xs text-stone-400">Loading rituals catalog from database...</p>
+            <div className="py-20 text-center">
+              <Loader2 className="w-8 h-8 text-amber-600 animate-spin mx-auto mb-3" />
+              <p className="text-xs text-stone-500">Loading Vedic ceremonies from database...</p>
             </div>
           ) : pujas.length === 0 ? (
-            <div className="col-span-full py-16 text-center text-xs text-stone-400">
-              <Sparkles className="w-8 h-8 text-stone-600 mx-auto mb-2" />
-              <p className="font-semibold text-stone-300">No rituals found</p>
-              <p className="text-[11px] text-stone-500 mt-1">Click &apos;Add New Puja&apos; to create your first ritual catalog item.</p>
+            <div className="py-16 text-center text-xs text-stone-500 space-y-2">
+              <Sparkles className="w-10 h-10 text-stone-300 mx-auto mb-2" />
+              <p className="font-bold text-stone-800 text-sm">No Pujas found in catalog</p>
+              <p className="text-stone-400">Click &quot;Seed Default Catalog&quot; to populate authentic Vedic ceremonies.</p>
             </div>
           ) : (
-            pujas.map((p) => (
-              <div
-                key={p.id}
-                className="bg-stone-900 border border-stone-800 hover:border-amber-500/40 rounded-2xl p-5 space-y-4 shadow-sm transition"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-600/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
-                    ACTIVE
-                  </span>
-                </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-stone-700">
+                <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200 tracking-wider">
+                  <tr>
+                    <th className="p-4">Puja Title</th>
+                    <th className="p-4">Category</th>
+                    <th className="p-4">Base Dakshina</th>
+                    <th className="p-4">Samagri Kit</th>
+                    <th className="p-4">Duration</th>
+                    <th className="p-4">Purohits Req.</th>
+                    <th className="p-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {pujas.map((p) => (
+                    <tr key={p.id} className="hover:bg-stone-50/80 transition">
+                      <td className="p-4 font-bold text-stone-900">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                          <span>{p.title}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-stone-400 block mt-0.5">
+                          slug: /{p.slug}
+                        </span>
+                      </td>
 
-                <div>
-                  <h3 className="font-bold text-white text-base leading-snug">{p.title}</h3>
-                  <p className="text-xs text-stone-400 mt-1 line-clamp-2 leading-relaxed">
-                    {p.description || 'Authentic Vedic ceremony performed by Gurukul-trained Purohits with complete Vidhi.'}
-                  </p>
-                </div>
+                      <td className="p-4">
+                        <span className="px-2.5 py-0.5 rounded-lg bg-stone-100 text-stone-800 font-semibold text-[11px]">
+                          {p.category?.name || 'Vedic Rituals'}
+                        </span>
+                      </td>
 
-                <div className="grid grid-cols-2 gap-2 pt-3 border-t border-stone-800 text-xs">
-                  <div>
-                    <span className="text-stone-500 text-[10px] block">Base Dakshina</span>
-                    <span className="font-bold text-white text-sm">
-                      ₹{Number(p.basePrice || 3501).toLocaleString()}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-stone-500 text-[10px] block">Samagri Kit</span>
-                    <span className="font-bold text-amber-300 text-sm">
-                      ₹{Number(p.samagriPrice || 1100).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
+                      <td className="p-4 font-bold text-stone-900">
+                        ₹{Number(p.basePrice || 0).toLocaleString()}
+                      </td>
 
-                <div className="flex items-center justify-between pt-2 border-t border-stone-800/60 text-[11px] text-stone-400">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-stone-500" />
-                    <span>{p.durationMinutes || 120} Mins</span>
-                  </span>
-                  <span className="font-mono text-stone-500 text-[10px]">
-                    /{p.slug}
-                  </span>
-                </div>
-              </div>
-            ))
+                      <td className="p-4 font-semibold text-emerald-700">
+                        ₹{Number(p.samagriPrice || 0).toLocaleString()}
+                      </td>
+
+                      <td className="p-4 text-stone-600 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-stone-400" />
+                        <span>{p.durationMinutes} mins</span>
+                      </td>
+
+                      <td className="p-4 text-stone-900 font-semibold">
+                        {p.requiredPandits} Pandit
+                      </td>
+
+                      <td className="p-4">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            p.isActive
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              : 'bg-stone-100 text-stone-600 border border-stone-200'
+                          }`}
+                        >
+                          {p.isActive ? 'ACTIVE' : 'INACTIVE'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
+      </div>
 
-        {/* Add Puja Modal */}
-        {showAddModal && (
-          <div className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg p-6 space-y-5 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-stone-800 pb-3">
-                <div className="flex items-center gap-2 text-amber-400 font-bold text-base">
-                  <Sparkles className="w-5 h-5" />
-                  <span>Add New Puja to Catalog</span>
-                </div>
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-stone-800 transition cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+      {/* Add Puja Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-xl text-xs text-stone-800 my-8">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <h3 className="font-bold text-sm text-stone-900 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-600" /> Add New Vedic Puja Service
+              </h3>
+              <button onClick={() => setShowAddModal(false)} className="text-stone-400 hover:text-stone-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePuja} className="space-y-3">
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">Puja Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Maha Ganapati Havan & Pujan"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
+                />
               </div>
 
-              <form onSubmit={handleCreatePuja} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-stone-300 font-medium block mb-1">
-                    Puja Title *
-                  </label>
+                  <label className="block font-semibold text-stone-700 mb-1">Category Name</label>
                   <input
                     type="text"
+                    value={categoryName}
+                    onChange={(e) => setCategoryName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-stone-700 mb-1">Duration (Minutes)</label>
+                  <input
+                    type="number"
+                    value={durationMinutes}
+                    onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-stone-700 mb-1">Base Dakshina (₹) *</label>
+                  <input
+                    type="number"
                     required
-                    placeholder="e.g. Navchandi Hawan & Mahapuja"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-600"
+                    value={basePrice}
+                    onChange={(e) => setBasePrice(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
                   />
                 </div>
-
                 <div>
-                  <label className="text-xs text-stone-300 font-medium block mb-1">
-                    Description & Shastric Significance
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Brief description of the ritual and auspicious occasions..."
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-600"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  <div>
-                    <label className="text-xs text-stone-300 font-medium block mb-1">
-                      Dakshina (₹) *
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min={500}
-                      value={basePrice}
-                      onChange={(e) => setBasePrice(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-100 focus:outline-none focus:border-amber-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-stone-300 font-medium block mb-1">
-                      Samagri Kit (₹)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={samagriPrice}
-                      onChange={(e) => setSamagriPrice(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-100 focus:outline-none focus:border-amber-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-stone-300 font-medium block mb-1">
-                      Duration (Mins)
-                    </label>
-                    <input
-                      type="number"
-                      min={30}
-                      value={durationMinutes}
-                      onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-100 focus:outline-none focus:border-amber-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-stone-300 font-medium block mb-1">
-                      Pandits Required
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={11}
-                      value={requiredPandits}
-                      onChange={(e) => setRequiredPandits(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-100 focus:outline-none focus:border-amber-600"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-stone-300 font-medium block mb-1">
-                    Essential Puja Samagri List (Comma separated)
-                  </label>
+                  <label className="block font-semibold text-stone-700 mb-1">Samagri Kit Price (₹)</label>
                   <input
-                    type="text"
-                    value={samagriItems}
-                    onChange={(e) => setSamagriItems(e.target.value)}
-                    placeholder="Ganga Jal, Roli, Akshat, Supari, Hawan Samagri, Pure Ghee..."
-                    className="w-full px-3.5 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-600"
+                    type="number"
+                    value={samagriPrice}
+                    onChange={(e) => setSamagriPrice(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="text-xs text-stone-300 font-medium block mb-1">
-                    Authentic Ritual Execution Steps
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={ritualSteps}
-                    onChange={(e) => setRitualSteps(e.target.value)}
-                    placeholder="1. Sankalpa & Kalash Sthapana&#10;2. Gauri Ganesh Pujan&#10;3. Navgraha Avahanam&#10;4. Mukhya Puja & Hawan&#10;5. Maha Aarti"
-                    className="w-full px-3.5 py-2 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-600 font-mono text-[11px]"
-                  />
-                </div>
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">Brief Description</label>
+                <textarea
+                  rows={2}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Significance and auspicious benefits of this ceremony..."
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
+                />
+              </div>
 
-                <div className="pt-3 border-t border-stone-800 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddModal(false)}
-                    className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl text-xs font-semibold transition cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold rounded-xl text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    <span>Save to PostgreSQL</span>
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">Required Samagri Items (comma separated)</label>
+                <input
+                  type="text"
+                  value={samagriItems}
+                  onChange={(e) => setSamagriItems(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold transition flex items-center gap-1.5"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <Check className="w-4 h-4" />}
+                  <span>Save Puja to Catalog</span>
+                </button>
+              </div>
+            </form>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }

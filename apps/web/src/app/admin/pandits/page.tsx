@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft,
   Check,
   X,
   ShieldCheck,
@@ -14,7 +13,6 @@ import {
   Loader2,
   FileText,
   AlertCircle,
-  ExternalLink,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
@@ -31,8 +29,10 @@ import {
   UserX,
   Clock,
   Sparkles,
+  CheckCircle2,
+  XCircle,
+  Star,
 } from 'lucide-react';
-import DevSutraLogo from '@/components/ui/DevSutraLogo';
 import { getSavedUserProfile, getClientToken, AuthUser } from '@/lib/auth';
 import AdminLayout from '@/components/admin/AdminLayout';
 
@@ -44,7 +44,7 @@ export default function AdminPanditsPage() {
   const [authorized, setAuthorized] = useState(false);
 
   // Filters & State
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'VERIFIED' | 'PENDING' | 'REJECTED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -63,8 +63,7 @@ export default function AdminPanditsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingPanditId, setEditingPanditId] = useState<string | null>(null);
   const [modalForm, setModalForm] = useState({
-    firstName: '',
-    lastName: '',
+    fullName: '',
     email: '',
     phoneNumber: '',
     experienceYears: 10,
@@ -72,10 +71,8 @@ export default function AdminPanditsPage() {
     specializations: 'Satyanarayan Mahapuja, Griha Pravesh, Ganesh Hawan',
     city: 'Pune',
     state: 'Maharashtra',
-    address: 'Shivaji Nagar, Pune',
     basePrice: 2100,
     bio: 'Vedic scholar with traditional Gurukul training and authentic Vidhi execution.',
-    serviceAreas: 'Pune, Pimpri-Chinchwad, Surrounding regions',
     isAvailable: true,
   });
 
@@ -120,7 +117,7 @@ export default function AdminPanditsPage() {
       setTotalPages(pages || 1);
     } catch (err: any) {
       console.error(err);
-      setBannerMessage({ type: 'error', text: err.message || 'Error loading directory.' });
+      setBannerMessage({ type: 'error', text: err.message || 'Error loading pandits.' });
     } finally {
       setLoading(false);
     }
@@ -142,74 +139,12 @@ export default function AdminPanditsPage() {
     }
   }, [authorized, fetchPandits]);
 
-  // Handle Add Pandit Submit
-  const handleSavePandit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const token = getClientToken();
-    if (!token) return;
-
-    try {
-      setActionLoading('saving_pandit');
-      const fullName = `${modalForm.firstName} ${modalForm.lastName}`.trim() || 'Vedic Purohit';
-      const addressNote = modalForm.address.trim() ? ` Location: ${modalForm.address.trim()}` : '';
-      const payload: Record<string, any> = {
-        fullName,
-        email: modalForm.email.trim(),
-        phoneNumber: modalForm.phoneNumber.trim(),
-        experienceYears: Number(modalForm.experienceYears) || 0,
-        languages: modalForm.languages.split(',').map((s) => s.trim()).filter(Boolean),
-        specializations: modalForm.specializations.split(',').map((s) => s.trim()).filter(Boolean),
-        city: modalForm.city.trim(),
-        state: modalForm.state.trim(),
-        basePrice: Number(modalForm.basePrice) || 2100,
-        bio: `${modalForm.bio.trim()}${addressNote}`.trim(),
-        serviceAreas: modalForm.serviceAreas.split(',').map((s) => s.trim()).filter(Boolean),
-        isAvailable: modalForm.isAvailable,
-      };
-
-      const url = isEditing && editingPanditId
-        ? `${API_BASE_URL}/admin/pandits/${editingPanditId}`
-        : `${API_BASE_URL}/admin/pandits`;
-      const method = isEditing ? 'PATCH' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || (isEditing ? 'Failed to update pandit' : 'Failed to create pandit'));
-      }
-
-      setBannerMessage({
-        type: 'success',
-        text: isEditing
-          ? `Pt. ${fullName} updated successfully in PostgreSQL!`
-          : `New Pandit Pt. ${fullName} registered and activated successfully!`,
-      });
-      setShowAddEditModal(false);
-      setIsEditing(false);
-      setEditingPanditId(null);
-      await fetchPandits();
-    } catch (err: any) {
-      setBannerMessage({ type: 'error', text: err.message || 'Operation failed.' });
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   // Open Edit Modal
   const openEditModal = (p: any) => {
     setIsEditing(true);
     setEditingPanditId(p.id);
     setModalForm({
-      firstName: p.user?.firstName || '',
-      lastName: p.user?.lastName || '',
+      fullName: p.fullName || `${p.user?.firstName || ''} ${p.user?.lastName || ''}`.trim(),
       email: p.user?.email || '',
       phoneNumber: p.user?.phoneNumber || '',
       experienceYears: p.experienceYears || 10,
@@ -217,10 +152,8 @@ export default function AdminPanditsPage() {
       specializations: Array.isArray(p.specializations) ? p.specializations.join(', ') : '',
       city: p.city || 'Pune',
       state: p.state || 'Maharashtra',
-      address: p.address || '',
-      basePrice: p.basePrice || 2100,
+      basePrice: Number(p.basePrice) || 2100,
       bio: p.bio || '',
-      serviceAreas: Array.isArray(p.serviceAreas) ? p.serviceAreas.join(', ') : '',
       isAvailable: p.isAvailable ?? true,
     });
     setShowAddEditModal(true);
@@ -231,8 +164,7 @@ export default function AdminPanditsPage() {
     setIsEditing(false);
     setEditingPanditId(null);
     setModalForm({
-      firstName: '',
-      lastName: '',
+      fullName: '',
       email: '',
       phoneNumber: '+91 ',
       experienceYears: 10,
@@ -240,13 +172,80 @@ export default function AdminPanditsPage() {
       specializations: 'Satyanarayan Mahapuja, Griha Pravesh, Ganesh Hawan',
       city: 'Pune',
       state: 'Maharashtra',
-      address: 'Shivaji Nagar, Pune',
       basePrice: 2100,
       bio: 'Vedic scholar with traditional Gurukul training and authentic Vidhi execution.',
-      serviceAreas: 'Pune, Pimpri-Chinchwad, Surrounding regions',
       isAvailable: true,
     });
     setShowAddEditModal(true);
+  };
+
+  // Submit Add / Edit Form
+  const handleModalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = getClientToken();
+    if (!token) return;
+
+    try {
+      setActionLoading('form-submit');
+      const payload: any = {
+        fullName: modalForm.fullName.trim(),
+        experienceYears: Number(modalForm.experienceYears),
+        languages: modalForm.languages.split(',').map((s) => s.trim()).filter(Boolean),
+        specializations: modalForm.specializations.split(',').map((s) => s.trim()).filter(Boolean),
+        city: modalForm.city.trim(),
+        state: modalForm.state.trim(),
+        basePrice: Number(modalForm.basePrice),
+        bio: modalForm.bio.trim(),
+        isAvailable: modalForm.isAvailable,
+      };
+
+      if (isEditing && editingPanditId) {
+        if (modalForm.email.trim()) payload.email = modalForm.email.trim();
+        if (modalForm.phoneNumber.trim()) payload.phoneNumber = modalForm.phoneNumber.trim();
+
+        const res = await fetch(`${API_BASE_URL}/admin/pandits/${editingPanditId}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.message || 'Failed to update pandit profile.');
+        }
+
+        setBannerMessage({ type: 'success', text: `Pt. ${modalForm.fullName} updated successfully.` });
+      } else {
+        payload.email = modalForm.email.trim();
+        payload.phoneNumber = modalForm.phoneNumber.trim();
+
+        const res = await fetch(`${API_BASE_URL}/admin/pandits`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.message || 'Failed to register pandit.');
+        }
+
+        setBannerMessage({ type: 'success', text: `Pt. ${modalForm.fullName} registered and verified successfully.` });
+      }
+
+      setShowAddEditModal(false);
+      await fetchPandits();
+    } catch (err: any) {
+      alert(err.message || 'Error processing request.');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   // Toggle Pandit Active Availability
@@ -254,7 +253,7 @@ export default function AdminPanditsPage() {
     const token = getClientToken();
     if (!token) return;
     const newStatus = !p.isAvailable;
-    const name = `Pt. ${p.user?.firstName || 'Purohit'} ${p.user?.lastName || ''}`.trim();
+    const name = `Pt. ${p.fullName || 'Purohit'}`;
 
     try {
       setActionLoading(p.id);
@@ -338,9 +337,45 @@ export default function AdminPanditsPage() {
     }
   };
 
-  // Delete Pandit
+  // Submit Rejection
+  const handleRejectConfirm = async () => {
+    if (!rejectReason.trim()) {
+      alert('Please provide a specific rejection reason.');
+      return;
+    }
+    const token = getClientToken();
+    if (!token || !rejectId) return;
+
+    try {
+      setActionLoading(rejectId);
+      const res = await fetch(`${API_BASE_URL}/admin/pandits/${rejectId}/reject`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason: rejectReason.trim() }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || 'Rejection failed.');
+      }
+
+      setBannerMessage({ type: 'success', text: 'Pandit application rejected. Notification sent.' });
+      setRejectId(null);
+      setRejectReason('');
+      await fetchPandits();
+    } catch (err: any) {
+      alert(err.message || 'Rejection failed.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Delete / Deactivate Pandit
   const handleDeletePandit = async (p: any) => {
-    const name = `Pt. ${p.user?.firstName || 'Purohit'} ${p.user?.lastName || ''}`.trim();
+    const name = `Pt. ${p.fullName || 'Purohit'}`;
     if (!confirm(`Are you sure you want to deactivate and remove ${name} from active Purohits?`)) return;
 
     const token = getClientToken();
@@ -366,23 +401,16 @@ export default function AdminPanditsPage() {
     }
   };
 
-  if (!authorized) {
-    return (
-      <div className="min-h-screen bg-deep-maroon flex items-center justify-center p-4 text-beige">
-        <Loader2 className="w-8 h-8 text-gold animate-spin" />
-      </div>
-    );
-  }
-
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Top Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
               Pandit Verification & Directory
             </h1>
-            <p className="text-xs text-stone-400">
+            <p className="text-xs text-stone-500 mt-0.5">
               Live Vedic purohit roster, Shastric credentials verification, availability, and onboarding
             </p>
           </div>
@@ -390,467 +418,466 @@ export default function AdminPanditsPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => fetchPandits()}
-              className="px-3.5 py-2 bg-stone-900 hover:bg-stone-800 border border-stone-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 text-stone-300 hover:text-white transition cursor-pointer"
+              className="px-3.5 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border border-stone-200 shadow-2xs"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-600' : ''}`} />
               <span>Refresh</span>
             </button>
             <button
               onClick={openAddModal}
-              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold rounded-xl text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add New Pandit</span>
             </button>
           </div>
         </div>
-        {/* Banner Alert Message */}
+
         {bannerMessage && (
           <div
-            className={`p-4 rounded-xl border flex items-center justify-between text-sm ${
+            className={`p-4 rounded-xl text-xs flex items-center justify-between shadow-xs ${
               bannerMessage.type === 'success'
-                ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-200'
-                : 'bg-rose-950/60 border-rose-500/40 text-rose-200'
+                ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
+                : 'bg-rose-50 border border-rose-200 text-rose-900'
             }`}
           >
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
               {bannerMessage.type === 'success' ? (
-                <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               ) : (
-                <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
               )}
-              <span>{bannerMessage.text}</span>
+              <span className="font-medium">{bannerMessage.text}</span>
             </div>
-            <button
-              onClick={() => setBannerMessage(null)}
-              className="text-xs opacity-75 hover:opacity-100 p-1"
-            >
-              <X className="w-4 h-4" />
+            <button onClick={() => setBannerMessage(null)} className="text-stone-500 hover:text-stone-800 text-xs font-bold">
+              Dismiss
             </button>
           </div>
         )}
 
-        {/* Directory Controls Bar */}
-        <div className="p-4 rounded-2xl bg-maroon-900/60 border border-gold/20 flex flex-wrap items-center justify-between gap-4">
+        {/* Status Tabs Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 bg-white p-2 rounded-2xl border border-stone-200 shadow-xs">
+          {[
+            { key: 'ALL', label: 'All Pandits' },
+            { key: 'PENDING', label: 'Pending Approval' },
+            { key: 'VERIFIED', label: 'Approved / Verified' },
+            { key: 'REJECTED', label: 'Rejected' },
+            { key: 'SUSPENDED', label: 'Suspended' },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => {
+                setStatusFilter(tab.key as any);
+                setPage(1);
+              }}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+                statusFilter === tab.key
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Search & City Filter Bar */}
+        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-3 flex-1 min-w-[280px]">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-3 text-gold/60" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
               <input
                 type="text"
                 placeholder="Search pandit name, phone, email, specializations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && fetchPandits()}
-                className="w-full bg-maroon-950 border border-gold/30 rounded-xl pl-9 pr-4 py-2 text-sm text-ivory placeholder-beige/40 focus:outline-none focus:border-gold"
+                className="w-full bg-white border border-stone-300 rounded-xl pl-9 pr-4 py-2 text-stone-900 placeholder-stone-400 focus:outline-none focus:border-amber-600"
               />
             </div>
 
             <div className="relative w-44">
-              <MapPin className="w-4 h-4 absolute left-3 top-3 text-gold/60" />
+              <MapPin className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
               <input
                 type="text"
-                placeholder="City (e.g. Pune)"
+                placeholder="Filter city..."
                 value={cityFilter}
                 onChange={(e) => setCityFilter(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && fetchPandits()}
-                className="w-full bg-maroon-950 border border-gold/30 rounded-xl pl-9 pr-3 py-2 text-sm text-ivory placeholder-beige/40 focus:outline-none focus:border-gold"
+                className="w-full bg-white border border-stone-300 rounded-xl pl-9 pr-4 py-2 text-stone-900 placeholder-stone-400 focus:outline-none focus:border-amber-600"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-beige/70 font-medium">Status:</span>
-            {(['ALL', 'VERIFIED', 'PENDING', 'REJECTED'] as const).map((st) => (
-              <button
-                key={st}
-                onClick={() => {
-                  setStatusFilter(st);
-                  setPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide border transition ${
-                  statusFilter === st
-                    ? 'bg-gold text-maroon-950 border-gold shadow-sm'
-                    : 'bg-maroon-950/80 text-beige/80 border-gold/20 hover:border-gold/50'
-                }`}
-              >
-                {st}
-              </button>
-            ))}
+          <div className="text-stone-500 font-medium">
+            Showing <span className="font-bold text-stone-900">{pandits.length}</span> of{' '}
+            <span className="font-bold text-stone-900">{totalCount}</span> Pandits
           </div>
         </div>
 
-        {/* Total Pandits Count Banner */}
-        <div className="flex items-center justify-between text-xs text-beige/70 px-1">
-          <span>
-            Total Pandits in PostgreSQL:{' '}
-            <strong className="text-gold font-bold">{totalCount}</strong> Purohits
-          </span>
-          <span>
-            Page {page} of {totalPages}
-          </span>
-        </div>
+        {/* Pandits Table */}
+        <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden shadow-xs">
+          {loading ? (
+            <div className="py-20 text-center">
+              <Loader2 className="w-8 h-8 text-amber-600 animate-spin mx-auto mb-3" />
+              <p className="text-xs text-stone-500">Loading Pandit records from PostgreSQL...</p>
+            </div>
+          ) : pandits.length === 0 ? (
+            <div className="py-16 text-center text-xs text-stone-500 space-y-2">
+              <ShieldCheck className="w-10 h-10 text-stone-300 mx-auto" />
+              <p className="font-bold text-stone-700 text-sm">No Pandit records found</p>
+              <p className="text-stone-400 max-w-sm mx-auto">
+                No Pandits match the current filter ({statusFilter}). Newly registered Pandits from the mobile app or website will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-stone-700">
+                <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200 tracking-wider">
+                  <tr>
+                    <th className="p-4">Pandit Name & City</th>
+                    <th className="p-4">Contact Info</th>
+                    <th className="p-4">Exp & Base Fee</th>
+                    <th className="p-4">Verification</th>
+                    <th className="p-4">Availability</th>
+                    <th className="p-4">Bookings & Rating</th>
+                    <th className="p-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {pandits.map((p) => {
+                    const fullName = p.fullName || `${p.user?.firstName || ''} ${p.user?.lastName || ''}`.trim() || 'Vedic Purohit';
+                    const rating = Number(p.averageRating || 0).toFixed(1);
+                    const bookingCount = p._count?.bookings ?? 0;
 
-        {/* Pandits Grid / Table */}
-        {loading ? (
-          <div className="py-24 text-center">
-            <Loader2 className="w-8 h-8 text-gold animate-spin mx-auto mb-3" />
-            <p className="text-xs text-beige/70">Querying verified Vedic scholars from PostgreSQL database...</p>
-          </div>
-        ) : pandits.length === 0 ? (
-          <div className="py-20 text-center bg-maroon-900/40 rounded-2xl border border-gold/20 p-8">
-            <ShieldCheck className="w-12 h-12 text-gold/40 mx-auto mb-3" />
-            <h3 className="font-heading font-bold text-ivory text-base mb-1">No Purohits Found</h3>
-            <p className="text-xs text-beige/70 max-w-md mx-auto mb-4">
-              No Pandits match your current search or status filter. Click below to register and manage a new Pandit.
-            </p>
-            <button
-              onClick={openAddModal}
-              className="px-4 py-2 bg-gold hover:bg-gold-300 text-maroon-950 font-bold rounded-xl text-xs transition inline-flex items-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add First Pandit</span>
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pandits.map((p) => {
-              const fullName = p.fullName || `Pt. ${p.user?.firstName || 'Purohit'} ${p.user?.lastName || ''}`.trim();
-              const isVerified = p.verificationStatus === 'VERIFIED';
-              const isAvailable = p.isAvailable !== false;
+                    return (
+                      <tr key={p.id} className="hover:bg-stone-50/80 transition">
+                        <td className="p-4">
+                          <Link href={`/admin/pandits/${p.id}`} className="font-bold text-stone-900 hover:text-amber-700 text-sm block">
+                            Pt. {fullName}
+                          </Link>
+                          <div className="flex items-center gap-1.5 text-stone-500 text-[11px] mt-0.5">
+                            <MapPin className="w-3 h-3 text-stone-400" />
+                            <span>{p.city}, {p.state}</span>
+                          </div>
+                        </td>
 
-              return (
-                <div
-                  key={p.id}
-                  className="p-5 rounded-2xl bg-maroon-900/60 border border-gold/30 hover:border-gold/60 transition shadow-lg flex flex-col justify-between space-y-4"
-                >
-                  <div className="space-y-3">
-                    {/* Top Row: Name, Status & Availability */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-heading font-bold text-ivory text-base">{fullName}</h4>
-                          {isVerified ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 border border-emerald-500/40 text-emerald-300">
-                              <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                              VERIFIED
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950 border border-amber-500/40 text-amber-300">
-                              PENDING
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gold/90 font-medium mt-0.5">
-                          {p.experienceYears || 10}+ Years Vedic Vidhi • {p.city || 'Pune'}, {p.state || 'Maharashtra'}
-                        </p>
-                      </div>
+                        <td className="p-4">
+                          <div className="font-medium text-stone-800">{p.user?.email || 'N/A'}</div>
+                          <div className="text-[11px] text-stone-500 mt-0.5">{p.user?.phoneNumber || 'N/A'}</div>
+                        </td>
 
-                      {/* Active Status Badge */}
-                      <button
-                        onClick={() => handleToggleStatus(p)}
-                        disabled={actionLoading === p.id}
-                        title="Click to toggle availability"
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition flex items-center gap-1 ${
-                          isAvailable
-                            ? 'bg-emerald-900/50 text-emerald-300 border-emerald-500/30 hover:bg-emerald-800/60'
-                            : 'bg-rose-900/50 text-rose-300 border-rose-500/30 hover:bg-rose-800/60'
-                        }`}
-                      >
-                        {isAvailable ? <UserCheck className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
-                        <span>{isAvailable ? 'Active' : 'Inactive'}</span>
-                      </button>
-                    </div>
+                        <td className="p-4">
+                          <div className="font-semibold text-stone-900">{p.experienceYears || 1} Yrs Exp</div>
+                          <div className="text-amber-700 font-bold text-[11px] mt-0.5">
+                            ₹{Number(p.basePrice || 0).toLocaleString()} base
+                          </div>
+                        </td>
 
-                    {/* Contact Info */}
-                    <div className="grid grid-cols-2 gap-2 text-xs text-beige/80 bg-maroon-950/60 p-2.5 rounded-xl border border-gold/10">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <Phone className="w-3.5 h-3.5 text-gold shrink-0" />
-                        <span className="truncate">{p.user?.phoneNumber || '+91 9822012345'}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 truncate">
-                        <Mail className="w-3.5 h-3.5 text-gold shrink-0" />
-                        <span className="truncate">{p.user?.email || 'vedic@devsutra.com'}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 truncate col-span-2">
-                        <DollarSign className="w-3.5 h-3.5 text-gold shrink-0" />
-                        <span>Base Dakshina: </span>
-                        <strong className="text-gold font-bold">₹{p.basePrice || 2100}</strong>
-                      </div>
-                    </div>
-
-                    {/* Specializations & Languages */}
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex flex-wrap gap-1">
-                        {(p.specializations || ['Satyanarayan', 'Griha Pravesh']).slice(0, 3).map((sp: string, idx: number) => (
+                        <td className="p-4">
                           <span
-                            key={idx}
-                            className="px-2 py-0.5 rounded bg-gold/10 border border-gold/30 text-gold-200 text-[11px]"
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider inline-block ${
+                              p.verificationStatus === 'VERIFIED'
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : p.verificationStatus === 'REJECTED'
+                                ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                                : p.verificationStatus === 'SUSPENDED'
+                                ? 'bg-stone-100 text-stone-800 border border-stone-200'
+                                : 'bg-amber-50 text-amber-800 border border-amber-200'
+                            }`}
                           >
-                            {sp}
+                            {p.verificationStatus}
                           </span>
-                        ))}
-                      </div>
+                        </td>
 
-                      <p className="text-[11px] text-beige/70">
-                        <span className="text-gold/80 font-medium">Languages: </span>
-                        {Array.isArray(p.languages) ? p.languages.join(', ') : 'Marathi, Hindi, Sanskrit'}
-                      </p>
-                    </div>
-                  </div>
+                        <td className="p-4">
+                          <button
+                            onClick={() => handleToggleStatus(p)}
+                            disabled={actionLoading === p.id}
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition ${
+                              p.isAvailable
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-stone-100 text-stone-600 border border-stone-200 hover:bg-stone-200'
+                            }`}
+                          >
+                            {p.isAvailable ? 'AVAILABLE' : 'OFFLINE'}
+                          </button>
+                        </td>
 
-                  {/* Actions Row */}
-                  <div className="pt-3 border-t border-gold/20 flex items-center justify-between gap-2">
-                    <button
-                      onClick={() => handleViewBookings(p)}
-                      className="px-3 py-1.5 bg-maroon-950 hover:bg-maroon-800 text-beige hover:text-ivory rounded-lg text-xs border border-gold/30 transition flex items-center gap-1"
-                    >
-                      <Calendar className="w-3.5 h-3.5 text-gold" />
-                      <span>Booking History</span>
-                    </button>
+                        <td className="p-4">
+                          <div className="font-semibold text-stone-900">{bookingCount} Bookings</div>
+                          <div className="flex items-center gap-1 text-[11px] text-amber-600 mt-0.5">
+                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                            <span className="font-bold text-stone-800">{rating}</span>
+                            <span className="text-stone-400">({p.totalReviews || 0})</span>
+                          </div>
+                        </td>
 
-                    <div className="flex items-center gap-2">
-                      {!isVerified && (
-                        <button
-                          onClick={() => handleApprove(p.id, fullName)}
-                          disabled={actionLoading === p.id}
-                          className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-xs transition flex items-center gap-1"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Verify</span>
-                        </button>
-                      )}
+                        <td className="p-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {p.verificationStatus === 'PENDING' && (
+                              <>
+                                <button
+                                  onClick={() => handleApprove(p.id, fullName)}
+                                  disabled={actionLoading === p.id}
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[10px] transition cursor-pointer"
+                                  title="Approve & Verify Pandit"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setRejectId(p.id);
+                                    setRejectReason('');
+                                  }}
+                                  disabled={actionLoading === p.id}
+                                  className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg text-[10px] transition border border-rose-200 cursor-pointer"
+                                  title="Reject Pandit Application"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
 
-                      <button
-                        onClick={() => openEditModal(p)}
-                        className="px-2.5 py-1.5 bg-maroon-950 hover:bg-maroon-800 text-gold rounded-lg text-xs border border-gold/30 transition flex items-center gap-1"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                        <span>Edit</span>
-                      </button>
+                            <Link
+                              href={`/admin/pandits/${p.id}`}
+                              className="p-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg transition"
+                              title="Full Profile & Documents"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </Link>
 
-                      <button
-                        onClick={() => handleDeletePandit(p)}
-                        className="p-1.5 text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 rounded-lg border border-rose-500/20 transition"
-                        title="Deactivate / Delete Pandit"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                            <button
+                              onClick={() => openEditModal(p)}
+                              className="p-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg transition"
+                              title="Edit Pandit Profile"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
 
-        {/* Pagination Bar */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 pt-4">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="p-2 rounded-lg bg-maroon-900 border border-gold/30 text-beige disabled:opacity-40"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-xs text-beige/80">
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              className="p-2 rounded-lg bg-maroon-900 border border-gold/30 text-beige disabled:opacity-40"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+                            <button
+                              onClick={() => handleViewBookings(p)}
+                              className="p-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg transition"
+                              title="View Pandit Bookings"
+                            >
+                              <Calendar className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              onClick={() => handleDeletePandit(p)}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition border border-rose-200"
+                              title="Deactivate Pandit"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="p-4 bg-stone-50 border-t border-stone-200 flex items-center justify-between text-xs text-stone-600">
+              <span>
+                Page {page} of {totalPages}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 disabled:opacity-50 font-semibold"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-100 disabled:opacity-50 font-semibold"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* MODAL 1: ADD / EDIT PANDIT MODAL */}
-      {/* ----------------------------------------------------------------- */}
-      {showAddEditModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-maroon-900 border border-gold/40 rounded-3xl p-6 max-w-2xl w-full my-8 text-beige shadow-2xl relative">
-            <button
-              onClick={() => setShowAddEditModal(false)}
-              className="absolute top-5 right-5 text-beige/60 hover:text-ivory"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="w-5 h-5 text-gold" />
-              <h3 className="font-heading font-bold text-lg text-ivory">
-                {isEditing ? 'Edit Pandit Details' : 'Add New Vedic Pandit (Admin Controlled)'}
-              </h3>
-            </div>
-            <p className="text-xs text-beige/70 mb-5">
-              Admin manages all Pandit credentials, specialization, pricing, and availability directly in PostgreSQL. Pandits do not require separate login or self-registration.
+      {/* Reject Modal */}
+      {rejectId && (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-xl text-xs text-stone-800">
+            <h3 className="font-bold text-sm text-stone-900 flex items-center gap-2">
+              <XCircle className="w-4 h-4 text-rose-600" /> Reject Pandit Registration
+            </h3>
+            <p className="text-stone-600">
+              Please enter the official reason for rejection. This reason is stored in the audit record and communicated to the applicant.
             </p>
+            <textarea
+              rows={3}
+              required
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="e.g. Identity documents unreadable, or missing Gurukul ordination certificate..."
+              className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setRejectId(null)}
+                className="px-3.5 py-1.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRejectConfirm}
+                disabled={actionLoading === rejectId}
+                className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold"
+              >
+                Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-            <form onSubmit={handleSavePandit} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-gold/90 font-medium mb-1">First Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={modalForm.firstName}
-                    onChange={(e) => setModalForm({ ...modalForm, firstName: e.target.value })}
-                    placeholder="e.g. Radheshyam"
-                    className="w-full bg-maroon-950 border border-gold/30 rounded-xl px-3 py-2 text-ivory focus:outline-none focus:border-gold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gold/90 font-medium mb-1">Last Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={modalForm.lastName}
-                    onChange={(e) => setModalForm({ ...modalForm, lastName: e.target.value })}
-                    placeholder="e.g. Joshi"
-                    className="w-full bg-maroon-950 border border-gold/30 rounded-xl px-3 py-2 text-ivory focus:outline-none focus:border-gold"
-                  />
-                </div>
+      {/* Add / Edit Pandit Modal */}
+      {showAddEditModal && (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-xl text-xs text-stone-800 my-8">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <h3 className="font-bold text-sm text-stone-900 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-600" />
+                {isEditing ? 'Edit Pandit Profile' : 'Direct Pandit Registration & Verification'}
+              </h3>
+              <button onClick={() => setShowAddEditModal(false)} className="text-stone-400 hover:text-stone-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleModalSubmit} className="space-y-3">
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">Full Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={modalForm.fullName}
+                  onChange={(e) => setModalForm({ ...modalForm, fullName: e.target.value })}
+                  placeholder="Pt. Ramesh Shastri"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
+                />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-gold/90 font-medium mb-1">Email Address *</label>
+                  <label className="block font-semibold text-stone-700 mb-1">Email *</label>
                   <input
                     type="email"
                     required
                     value={modalForm.email}
                     onChange={(e) => setModalForm({ ...modalForm, email: e.target.value })}
-                    placeholder="e.g. radheshyam.joshi@devsutra.com"
-                    className="w-full bg-maroon-950 border border-gold/30 rounded-xl px-3 py-2 text-ivory focus:outline-none focus:border-gold"
+                    placeholder="pandit@devsutra.in"
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
                   />
                 </div>
                 <div>
-                  <label className="block text-gold/90 font-medium mb-1">Mobile Number (+91) *</label>
+                  <label className="block font-semibold text-stone-700 mb-1">Phone Number *</label>
                   <input
-                    type="text"
+                    type="tel"
                     required
                     value={modalForm.phoneNumber}
                     onChange={(e) => setModalForm({ ...modalForm, phoneNumber: e.target.value })}
-                    placeholder="e.g. +91 9822012345"
-                    className="w-full bg-maroon-950 border border-gold/30 rounded-xl px-3 py-2 text-ivory focus:outline-none focus:border-gold"
+                    placeholder="+91 9876543210"
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-gold/90 font-medium mb-1">Experience (Years) *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={modalForm.experienceYears}
-                    onChange={(e) => setModalForm({ ...modalForm, experienceYears: Number(e.target.value) })}
-                    className="w-full bg-maroon-950 border border-gold/30 rounded-xl px-3 py-2 text-ivory focus:outline-none focus:border-gold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gold/90 font-medium mb-1">Base Dakshina (₹) *</label>
-                  <input
-                    type="number"
-                    min="500"
-                    step="100"
-                    required
-                    value={modalForm.basePrice}
-                    onChange={(e) => setModalForm({ ...modalForm, basePrice: Number(e.target.value) })}
-                    className="w-full bg-maroon-950 border border-gold/30 rounded-xl px-3 py-2 text-ivory focus:outline-none focus:border-gold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gold/90 font-medium mb-1">City *</label>
+                  <label className="block font-semibold text-stone-700 mb-1">City *</label>
                   <input
                     type="text"
                     required
                     value={modalForm.city}
                     onChange={(e) => setModalForm({ ...modalForm, city: e.target.value })}
-                    placeholder="e.g. Pune"
-                    className="w-full bg-maroon-950 border border-gold/30 rounded-xl px-3 py-2 text-ivory focus:outline-none focus:border-gold"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-gold/90 font-medium mb-1">Languages (comma separated)</label>
-                  <input
-                    type="text"
-                    value={modalForm.languages}
-                    onChange={(e) => setModalForm({ ...modalForm, languages: e.target.value })}
-                    placeholder="e.g. Marathi, Hindi, Sanskrit, English"
-                    className="w-full bg-maroon-950 border border-gold/30 rounded-xl px-3 py-2 text-ivory focus:outline-none focus:border-gold"
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
                   />
                 </div>
                 <div>
-                  <label className="block text-gold/90 font-medium mb-1">Specializations (comma separated)</label>
+                  <label className="block font-semibold text-stone-700 mb-1">State *</label>
                   <input
                     type="text"
-                    value={modalForm.specializations}
-                    onChange={(e) => setModalForm({ ...modalForm, specializations: e.target.value })}
-                    placeholder="e.g. Satyanarayan Puja, Griha Pravesh, Hawan"
-                    className="w-full bg-maroon-950 border border-gold/30 rounded-xl px-3 py-2 text-ivory focus:outline-none focus:border-gold"
+                    required
+                    value={modalForm.state}
+                    onChange={(e) => setModalForm({ ...modalForm, state: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-stone-700 mb-1">Base Price (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={modalForm.basePrice}
+                    onChange={(e) => setModalForm({ ...modalForm, basePrice: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-gold/90 font-medium mb-1">Full Address / Location</label>
+                <label className="block font-semibold text-stone-700 mb-1">Specializations (comma separated)</label>
                 <input
                   type="text"
-                  value={modalForm.address}
-                  onChange={(e) => setModalForm({ ...modalForm, address: e.target.value })}
-                  placeholder="e.g. Shivaji Nagar, Near JM Road, Pune - 411005"
-                  className="w-full bg-maroon-950 border border-gold/30 rounded-xl px-3 py-2 text-ivory focus:outline-none focus:border-gold"
+                  value={modalForm.specializations}
+                  onChange={(e) => setModalForm({ ...modalForm, specializations: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
                 />
               </div>
 
               <div>
-                <label className="block text-gold/90 font-medium mb-1">Purohit Bio / Gurukul Credentials</label>
+                <label className="block font-semibold text-stone-700 mb-1">Languages (comma separated)</label>
+                <input
+                  type="text"
+                  value={modalForm.languages}
+                  onChange={(e) => setModalForm({ ...modalForm, languages: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-stone-700 mb-1">Bio / Shastric Background</label>
                 <textarea
                   rows={2}
                   value={modalForm.bio}
                   onChange={(e) => setModalForm({ ...modalForm, bio: e.target.value })}
-                  placeholder="Describe Vedic education, Shastra vidhi expertise, etc."
-                  className="w-full bg-maroon-950 border border-gold/30 rounded-xl px-3 py-2 text-ivory focus:outline-none focus:border-gold"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
                 />
               </div>
 
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="modalIsAvailable"
-                  checked={modalForm.isAvailable}
-                  onChange={(e) => setModalForm({ ...modalForm, isAvailable: e.target.checked })}
-                  className="w-4 h-4 rounded text-gold focus:ring-0 cursor-pointer"
-                />
-                <label htmlFor="modalIsAvailable" className="cursor-pointer text-ivory font-medium">
-                  Active & Available for Devotee Bookings immediately
-                </label>
-              </div>
-
-              <div className="pt-4 border-t border-gold/20 flex items-center justify-end gap-3">
+              <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowAddEditModal(false)}
-                  className="px-4 py-2 bg-maroon-950 hover:bg-maroon-800 text-beige rounded-xl border border-gold/30"
+                  className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading === 'saving_pandit'}
-                  className="px-5 py-2 bg-gradient-to-r from-gold to-orange-500 hover:from-gold-300 hover:to-orange-400 text-maroon-950 font-bold rounded-xl transition flex items-center gap-1.5 shadow-md"
+                  disabled={actionLoading === 'form-submit'}
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold transition flex items-center gap-1.5"
                 >
-                  {actionLoading === 'saving_pandit' && <Loader2 className="w-4 h-4 animate-spin" />}
-                  <span>{isEditing ? 'Save Changes' : 'Create & Activate Pandit'}</span>
+                  {actionLoading === 'form-submit' ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  <span>{isEditing ? 'Save Profile Changes' : 'Register & Verify Pandit'}</span>
                 </button>
               </div>
             </form>
@@ -858,77 +885,66 @@ export default function AdminPanditsPage() {
         </div>
       )}
 
-      {/* ----------------------------------------------------------------- */}
-      {/* MODAL 2: PANDIT BOOKING HISTORY MODAL */}
-      {/* ----------------------------------------------------------------- */}
-      {showBookingsModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-maroon-900 border border-gold/40 rounded-3xl p-6 max-w-3xl w-full my-8 text-beige shadow-2xl relative">
-            <button
-              onClick={() => setShowBookingsModal(false)}
-              className="absolute top-5 right-5 text-beige/60 hover:text-ivory"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-2 mb-2">
-              <Calendar className="w-5 h-5 text-gold" />
-              <h3 className="font-heading font-bold text-lg text-ivory">
-                Booking History for Pt.{' '}
-                {selectedPanditForBookings?.user?.firstName || ''}{' '}
-                {selectedPanditForBookings?.user?.lastName || ''}
-              </h3>
-            </div>
-            <p className="text-xs text-beige/70 mb-4">
-              Real bookings recorded in PostgreSQL assigned to this Pandit.
-            </p>
-
-            {loadingBookings ? (
-              <div className="py-12 text-center">
-                <Loader2 className="w-6 h-6 text-gold animate-spin mx-auto mb-2" />
-                <p className="text-xs text-beige/70">Loading assigned booking records...</p>
+      {/* View Bookings Modal */}
+      {showBookingsModal && selectedPanditForBookings && (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 max-w-2xl w-full space-y-4 shadow-xl text-xs text-stone-800 my-8">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div>
+                <h3 className="font-bold text-sm text-stone-900">
+                  Bookings for Pt. {selectedPanditForBookings.fullName}
+                </h3>
+                <p className="text-[11px] text-stone-500">Historical ceremonies assigned to this purohit</p>
               </div>
-            ) : panditBookings.length === 0 ? (
-              <div className="py-12 text-center bg-maroon-950/60 rounded-2xl border border-gold/20 p-6">
-                <Calendar className="w-8 h-8 text-gold/40 mx-auto mb-2" />
-                <p className="text-xs text-beige/80">No bookings currently assigned to this Pandit.</p>
-              </div>
-            ) : (
-              <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
-                {panditBookings.map((b) => (
-                  <div
-                    key={b.id}
-                    className="p-3.5 rounded-xl bg-maroon-950 border border-gold/20 flex items-center justify-between gap-3 text-xs"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-gold font-bold">{b.bookingNumber || b.id.slice(0, 8)}</span>
-                        <span className="font-heading font-bold text-ivory">{b.puja?.title || 'Vedic Ritual'}</span>
-                      </div>
-                      <p className="text-beige/70 text-[11px] mt-0.5">
-                        Date: {new Date(b.pujaDate).toLocaleDateString()} • Slot: {b.pujaTimeSlot} • Venue: {b.venueCity}
-                      </p>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-gold/10 text-gold border border-gold/30">
-                        {b.status}
-                      </span>
-                      <p className="text-xs font-bold text-ivory mt-1">₹{b.totalAmount}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="pt-4 border-t border-gold/20 mt-4 text-right">
-              <button
-                onClick={() => setShowBookingsModal(false)}
-                className="px-4 py-2 bg-maroon-950 hover:bg-maroon-800 text-beige rounded-xl border border-gold/30 text-xs"
-              >
-                Close
+              <button onClick={() => setShowBookingsModal(false)} className="text-stone-400 hover:text-stone-700">
+                <X className="w-4 h-4" />
               </button>
             </div>
+
+            {loadingBookings ? (
+              <div className="py-12 text-center text-stone-500">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-amber-600" />
+                Loading bookings...
+              </div>
+            ) : panditBookings.length === 0 ? (
+              <div className="py-12 text-center text-stone-400">
+                <Calendar className="w-8 h-8 mx-auto mb-2 text-stone-300" />
+                No bookings assigned to this Pandit yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                <table className="w-full text-left text-xs text-stone-700">
+                  <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200">
+                    <tr>
+                      <th className="p-3">Booking #</th>
+                      <th className="p-3">Ceremony</th>
+                      <th className="p-3">Devotee</th>
+                      <th className="p-3">Muhurat Date</th>
+                      <th className="p-3">Fee</th>
+                      <th className="p-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {panditBookings.map((b) => (
+                      <tr key={b.id}>
+                        <td className="p-3 font-mono font-bold text-stone-900">{b.bookingNumber}</td>
+                        <td className="p-3 font-semibold text-stone-900">{b.puja?.title || 'Ritual'}</td>
+                        <td className="p-3">
+                          {b.customerProfile ? `${b.customerProfile.firstName} ${b.customerProfile.lastName}` : 'Devotee'}
+                        </td>
+                        <td className="p-3">{b.pujaDate ? new Date(b.pujaDate).toLocaleDateString() : 'N/A'}</td>
+                        <td className="p-3 font-bold text-stone-900">₹{Number(b.totalAmount || 0).toLocaleString()}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-stone-100 text-stone-800">
+                            {b.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

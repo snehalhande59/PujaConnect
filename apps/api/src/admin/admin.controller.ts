@@ -231,4 +231,148 @@ export class AdminController {
   async getReports() {
     return this.adminService.getReports();
   }
+
+  // ==========================================
+  // CATEGORIES MANAGEMENT
+  // ==========================================
+
+  @Get('categories')
+  @ApiOperation({ summary: 'Get all puja categories' })
+  async getCategories(@Query() query: any) {
+    return this.adminService.getCategories(query);
+  }
+
+  @Post('categories')
+  @ApiOperation({ summary: 'Create a new puja category' })
+  async createCategory(@Body() data: any) {
+    return this.adminService.createCategory(data);
+  }
+
+  @Patch('categories/:id')
+  @ApiOperation({ summary: 'Update a puja category' })
+  async updateCategory(@Param('id') id: string, @Body() data: any) {
+    return this.adminService.updateCategory(id, data);
+  }
+
+  @Delete('categories/:id')
+  @ApiOperation({ summary: 'Delete a puja category' })
+  async deleteCategory(@Param('id') id: string) {
+    return this.adminService.deleteCategory(id);
+  }
+
+  // ==========================================
+  // PRODUCTS / SAMAGRI MANAGEMENT
+  // ==========================================
+
+  @Get('products')
+  @ApiOperation({ summary: 'Get samagri products' })
+  async getProducts(@Query() query: any) {
+    return this.adminService.getProducts(query);
+  }
+
+  @Post('products')
+  @ApiOperation({ summary: 'Create a new samagri product' })
+  async createProduct(@Body() data: any) {
+    return this.adminService.createProduct(data);
+  }
+
+  @Patch('products/:id')
+  @ApiOperation({ summary: 'Update product details and stock' })
+  async updateProduct(@Param('id') id: string, @Body() data: any) {
+    return this.adminService.updateProduct(id, data);
+  }
+
+  @Delete('products/:id')
+  @ApiOperation({ summary: 'Soft-delete a product' })
+  async deleteProduct(@Param('id') id: string) {
+    return this.adminService.deleteProduct(id);
+  }
+
+  // ==========================================
+  // ORDERS MANAGEMENT
+  // ==========================================
+
+  @Get('orders')
+  @ApiOperation({ summary: 'Get all e-commerce customer orders' })
+  async getOrders(@Query() query: any) {
+    return this.adminService.getOrders(query);
+  }
+
+  @Patch('orders/:id/status')
+  @ApiOperation({ summary: 'Update order status' })
+  async updateOrderStatus(@Param('id') id: string, @Body('status') status: any) {
+    return this.adminService.updateOrderStatus(id, status);
+  }
+
+  @Patch('orders/:id/tracking')
+  @ApiOperation({ summary: 'Update courier tracking number' })
+  async updateOrderTracking(@Param('id') id: string, @Body('trackingNumber') trackingNumber: string) {
+    return this.adminService.updateOrderTracking(id, trackingNumber);
+  }
+
+  // ==========================================
+  // REVIEWS MANAGEMENT
+  // ==========================================
+
+  @Get('reviews')
+  @ApiOperation({ summary: 'Get all customer reviews' })
+  async getReviews(@Query() query: any) {
+    return this.adminService.getReviews(query);
+  }
+
+  @Patch('reviews/:id/publish')
+  @ApiOperation({ summary: 'Toggle review published state' })
+  async toggleReviewPublish(@Param('id') id: string, @Body('isPublished') isPublished: boolean) {
+    return this.adminService.toggleReviewPublish(id, isPublished);
+  }
+
+  @Delete('reviews/:id')
+  @ApiOperation({ summary: 'Delete inappropriate review' })
+  async deleteReview(@Param('id') id: string) {
+    return this.adminService.deleteReview(id);
+  }
+
+  // ==========================================
+  // SUPPORT TICKETS DESK
+  // ==========================================
+
+  @Get('support/tickets')
+  @ApiOperation({ summary: 'Get all support tickets' })
+  async getSupportTickets(@Query() query: any) {
+    return this.adminService.getSupportTickets(query);
+  }
+
+  @Patch('support/tickets/:id')
+  @ApiOperation({ summary: 'Update support ticket status or priority' })
+  async updateSupportTicket(@Param('id') id: string, @Body() data: any) {
+    return this.adminService.updateSupportTicket(id, data);
+  }
+
+  // ==========================================
+  // COUPONS MANAGEMENT
+  // ==========================================
+
+  @Get('coupons')
+  @ApiOperation({ summary: 'Get all promotional coupons' })
+  async getCoupons() {
+    return this.adminService.getCoupons();
+  }
+
+  @Post('coupons')
+  @ApiOperation({ summary: 'Create a new coupon' })
+  async createCoupon(@Body() data: any) {
+    return this.adminService.createCoupon(data);
+  }
+
+  @Patch('coupons/:id')
+  @ApiOperation({ summary: 'Update a coupon' })
+  async updateCoupon(@Param('id') id: string, @Body() data: any) {
+    return this.adminService.updateCoupon(id, data);
+  }
+
+  @Delete('coupons/:id')
+  @ApiOperation({ summary: 'Delete a coupon' })
+  async deleteCoupon(@Param('id') id: string) {
+    return this.adminService.deleteCoupon(id);
+  }
 }

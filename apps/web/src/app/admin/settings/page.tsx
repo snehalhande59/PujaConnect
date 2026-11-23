@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Settings, Save, CheckCircle2, ShieldCheck, Mail, Database } from 'lucide-react';
+import { Settings, Save, CheckCircle2, ShieldCheck, Mail, Database, Check } from 'lucide-react';
 import AdminLayout from '@/components/admin/AdminLayout';
 
 export default function AdminSettingsPage() {
@@ -20,31 +20,32 @@ export default function AdminSettingsPage() {
   return (
     <AdminLayout>
       <div className="space-y-6 max-w-4xl">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+        {/* Header */}
+        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
+          <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
             Platform Settings & Configuration
           </h1>
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500 mt-0.5">
             Marketplace commission rates, payment gateway credentials, and automated Pandit settlement rules
           </p>
         </div>
 
         {saved && (
-          <div className="p-3.5 rounded-xl text-xs bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Settings updated successfully in database!</span>
+          <div className="p-3.5 rounded-xl text-xs bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center gap-2 shadow-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-semibold">Settings updated and applied successfully!</span>
           </div>
         )}
 
         <form onSubmit={handleSave} className="space-y-6">
-          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-6 space-y-5 text-xs">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 border-b border-stone-800 pb-3">
-              <ShieldCheck className="w-4 h-4 text-amber-500" />
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-5 text-xs shadow-xs">
+            <h2 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2 border-b border-stone-100 pb-3">
+              <ShieldCheck className="w-4 h-4 text-amber-600" />
               <span>Financial & Commission Policies</span>
             </h2>
 
             <div>
-              <label className="block font-semibold text-stone-300 mb-1">
+              <label className="block font-semibold text-stone-700 mb-1">
                 Standard Platform Commission (%)
               </label>
               <input
@@ -53,7 +54,7 @@ export default function AdminSettingsPage() {
                 max={50}
                 value={commission}
                 onChange={(e) => setCommission(Number(e.target.value))}
-                className="w-full max-w-md px-3.5 py-2.5 rounded-xl bg-stone-950 border border-stone-800 text-white focus:outline-none focus:border-amber-600"
+                className="w-full max-w-md px-3.5 py-2.5 rounded-xl bg-white border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
               />
               <p className="text-[11px] text-stone-500 mt-1">
                 Retained by DevSutra from Pandit Dakshina upon successful completion of sacred rituals
@@ -61,7 +62,7 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <label className="block font-semibold text-stone-300 mb-1">
+              <label className="block font-semibold text-stone-700 mb-1">
                 Auspicious Platform Booking Fee (₹)
               </label>
               <input
@@ -69,7 +70,7 @@ export default function AdminSettingsPage() {
                 min={0}
                 value={platformFee}
                 onChange={(e) => setPlatformFee(Number(e.target.value))}
-                className="w-full max-w-md px-3.5 py-2.5 rounded-xl bg-stone-950 border border-stone-800 text-white focus:outline-none focus:border-amber-600"
+                className="w-full max-w-md px-3.5 py-2.5 rounded-xl bg-white border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
               />
               <p className="text-[11px] text-stone-500 mt-1">
                 Fixed nominal charge per booking for booking management and support
@@ -77,13 +78,13 @@ export default function AdminSettingsPage() {
             </div>
 
             <div>
-              <label className="block font-semibold text-stone-300 mb-1">
+              <label className="block font-semibold text-stone-700 mb-1">
                 Pandit Settlement Payout Cycle
               </label>
               <select
                 value={payoutSchedule}
                 onChange={(e) => setPayoutSchedule(e.target.value)}
-                className="w-full max-w-md px-3.5 py-2.5 rounded-xl bg-stone-950 border border-stone-800 text-white focus:outline-none focus:border-amber-600"
+                className="w-full max-w-md px-3.5 py-2.5 rounded-xl bg-white border border-stone-300 text-stone-900 focus:outline-none focus:border-amber-600"
               >
                 <option value="IMMEDIATE">Immediate (Escrow Release upon Devotee OTP)</option>
                 <option value="DAILY">Daily Batch Transfer (NEFT/IMPS)</option>
@@ -92,27 +93,33 @@ export default function AdminSettingsPage() {
             </div>
           </div>
 
-          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-6 space-y-4 text-xs">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 border-b border-stone-800 pb-3">
-              <Database className="w-4 h-4 text-amber-500" />
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4 text-xs shadow-xs">
+            <h2 className="text-sm font-bold text-stone-900 uppercase tracking-wider flex items-center gap-2 border-b border-stone-100 pb-3">
+              <Database className="w-4 h-4 text-amber-600" />
               <span>Database & Environment Connections</span>
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div className="p-4 bg-stone-950 border border-stone-800 rounded-xl">
-                <span className="text-stone-400 block text-[11px]">PostgreSQL Neon Cluster</span>
-                <span className="text-emerald-400 font-bold block mt-1">Healthy & Connected</span>
+              <div className="p-4 bg-stone-50 border border-stone-200 rounded-xl space-y-1">
+                <span className="text-stone-500 block text-[11px] font-semibold">PostgreSQL Neon Cluster</span>
+                <span className="text-emerald-700 font-bold block flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  Healthy & Operational
+                </span>
               </div>
-              <div className="p-4 bg-stone-950 border border-stone-800 rounded-xl">
-                <span className="text-stone-400 block text-[11px]">Mail Service (Gmail SMTP)</span>
-                <span className="text-emerald-400 font-bold block mt-1">Ready for OTP & Invoices</span>
+              <div className="p-4 bg-stone-50 border border-stone-200 rounded-xl space-y-1">
+                <span className="text-stone-500 block text-[11px] font-semibold">Mail Service (Gmail SMTP / Vercel Relay)</span>
+                <span className="text-emerald-700 font-bold block flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  Ready for OTP & Invoices
+                </span>
               </div>
             </div>
           </div>
 
           <button
             type="submit"
-            className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
+            className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer"
           >
             <Save className="w-4 h-4" />
             <span>Save Configuration Changes</span>
