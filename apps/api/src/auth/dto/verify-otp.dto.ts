@@ -38,6 +38,11 @@ export class VerifyOtpDto {
   @IsString()
   channel?: string;
 
+  @ApiPropertyOptional({ example: '336767676...', description: 'MSG91 Widget Request ID for OTP verification' })
+  @IsOptional()
+  @IsString()
+  reqId?: string;
+
   @ApiPropertyOptional({ example: 'LOGIN', enum: ['LOGIN', 'REGISTER'] })
   @IsOptional()
   @IsString()

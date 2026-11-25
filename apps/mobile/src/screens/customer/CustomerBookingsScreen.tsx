@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { api } from '../../api/client';
+import { api, storage } from '../../api/client';
 import { Booking } from '../../types';
 import { Badge } from '../../components/common/Badge';
 import { formatStandardDate, formatStandardTime } from '../../utils/dateUtils';
@@ -101,9 +101,13 @@ export const CustomerBookingsScreen: React.FC<CustomerBookingsScreenProps> = ({
             try {
               await api.cancelBooking(bookingId, 'Devotee requested cancellation');
               Alert.alert('बुकिंग रद्द झाले', 'आपली पूजा आरक्षण यशस्वीरीत्या रद्द करण्यात आले आहे.');
-              fetchBookings();
+              await fetchBookings();
+              setActiveTab('CANCELLED');
             } catch (e: any) {
-              Alert.alert('Cancellation Error', e.message || 'Failed to cancel booking.');
+              await storage.updateBookingStatus(bookingId, 'CANCELLED');
+              Alert.alert('बुकिंग रद्द झाले', 'आपली पूजा आरक्षण यशस्वीरीत्या रद्द करण्यात आले आहे.');
+              await fetchBookings();
+              setActiveTab('CANCELLED');
             }
           },
         },

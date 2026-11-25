@@ -9,7 +9,12 @@ interface AuthContextType {
   isLoading: boolean;
   loginCustomer: (email: string, pass: string) => Promise<any>;
   sendCustomerOtp: (identifier: string, channel?: 'email' | 'sms') => Promise<any>;
-  loginCustomerWithOtp: (identifier: string, otp: string, fullName?: string) => Promise<any>;
+  loginCustomerWithOtp: (
+    identifier: string,
+    otp: string,
+    fullName?: string,
+    reqId?: string,
+  ) => Promise<any>;
   registerCustomer: (params: any) => Promise<any>;
   loginPandit: (email: string, pass: string) => Promise<any>;
   registerPandit: (params: any) => Promise<any>;
@@ -57,8 +62,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return await api.sendCustomerOtp(identifier, channel);
   };
 
-  const handleLoginCustomerWithOtp = async (identifier: string, otp: string, fullName?: string) => {
-    const res = await api.verifyCustomerOtp(identifier, otp, fullName);
+  const handleLoginCustomerWithOtp = async (
+    identifier: string,
+    otp: string,
+    fullName?: string,
+    reqId?: string,
+  ) => {
+    const res = await api.verifyCustomerOtp(identifier, otp, fullName, reqId);
     setUser(res.user);
     setRole(res.user.role);
     setToken(res.token);

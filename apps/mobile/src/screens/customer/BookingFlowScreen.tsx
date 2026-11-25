@@ -110,9 +110,16 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
   const [availablePandits, setAvailablePandits] = useState<PanditProfile[]>([initialPandit || DEFAULT_VERIFIED_PANDIT]);
 
   // Step 2: Interactive Vedic Calendar & Time State
-  const [currentMonthIndex, setCurrentMonthIndex] = useState<0 | 1>(0); // 0: Nov 2026, 1: Dec 2026
-  const [selectedDay, setSelectedDay] = useState<number>(20);
-  const [selectedDate, setSelectedDate] = useState<string>('2026-11-20');
+  const today = new Date();
+  const currentCalMonth = today.getMonth() === 11 ? 1 : 0;
+  const currentCalDay = today.getDate();
+  const currentCalMonthStr = (today.getMonth() + 1).toString().padStart(2, '0');
+  const currentCalDayStr = currentCalDay.toString().padStart(2, '0');
+  const currentCalYear = today.getFullYear();
+
+  const [currentMonthIndex, setCurrentMonthIndex] = useState<0 | 1>(currentCalMonth);
+  const [selectedDay, setSelectedDay] = useState<number>(currentCalDay);
+  const [selectedDate, setSelectedDate] = useState<string>(`${currentCalYear}-${currentCalMonthStr}-${currentCalDayStr}`);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('09:30 AM (Shubh Choghadiya)');
 
   // Custom Time Selector State
@@ -125,7 +132,7 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
     setSelectedDay(day);
     const mStr = currentMonthIndex === 0 ? '11' : '12';
     const dStr = day < 10 ? `0${day}` : `${day}`;
-    setSelectedDate(`2026-${mStr}-${dStr}`);
+    setSelectedDate(`${currentCalYear}-${mStr}-${dStr}`);
   };
 
   const handleApplyCustomTime = (h: string, m: string, ampm: 'AM' | 'PM') => {
@@ -282,6 +289,10 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
       setSubmitting(true);
       setError(null);
 
+      const currentUser = await storage.getUser().catch(() => null);
+      const custName = currentUser?.fullName || (currentUser?.firstName ? `${currentUser.firstName} ${currentUser.lastName || ''}`.trim() : 'Devotee');
+      const custPhone = currentUser?.phoneNumber || '9822012345';
+
       const booking = await api.createBooking({
         pujaId: selectedPuja.id,
         panditProfileId: selectedPandit.id,
@@ -295,8 +306,8 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
         discountAmount,
         totalAmount,
         specialInstructions: `${specialInstructions ? specialInstructions + ' | ' : ''}${appliedCoupon ? 'Coupon: ' + appliedCoupon.code + ' (-₹' + discountAmount + ') | ' : ''}Paid via ${paymentDetails.method} (Txn: ${paymentDetails.paymentId})`,
-        customerName: 'Snehal Hande',
-        customerPhone: '8459369260',
+        customerName: custName,
+        customerPhone: custPhone,
         paymentMethod: paymentDetails.method,
         paymentStatus: 'PAID',
         transactionId: paymentDetails.paymentId,
@@ -560,7 +571,7 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
 
                     const isMuhurat = (currentMonthIndex === 0 ? MUHURAT_DAYS_NOV : MUHURAT_DAYS_DEC).includes(day);
                     const isSelected = selectedDay === day;
-                    const isToday = currentMonthIndex === 0 && day === 19;
+                    const isToday = currentMonthIndex === currentCalMonth && day === currentCalDay;
 
                     return (
                       <TouchableOpacity

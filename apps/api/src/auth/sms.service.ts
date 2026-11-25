@@ -4,9 +4,17 @@ import * as crypto from 'crypto';
 export interface SendSmsResult {
   success: boolean;
   messageId?: string;
+  reqId?: string;
   provider: string;
   error?: string;
   simulated?: boolean;
+}
+
+export interface VerifyOtpResult {
+  success: boolean;
+  provider: string;
+  error?: string;
+  accessToken?: string;
 }
 
 @Injectable()
@@ -21,16 +29,39 @@ export class SmsService {
 
   private readonly msg91AuthKey =
     process.env.MSG91_AUTH_KEY ||
-    process.env.MSG91_TOKEN_AUTH ||
     process.env.MSG91_API_KEY ||
     '';
+  private readonly msg91WidgetId = (
+    process.env.MSG91_WIDGET_ID ||
+    '366b796a706d353331323931'
+  ).trim();
+  private readonly msg91WidgetTokenAuth = (
+    process.env.MSG91_WIDGET_TOKEN_AUTH ||
+    ''
+  ).trim();
   private readonly msg91TemplateId =
     process.env.MSG91_TEMPLATE_ID ||
     process.env.MSG91_OTP_TEMPLATE_ID ||
-    process.env.MSG91_WIDGET_ID ||
     '';
   private readonly msg91SenderId =
     process.env.MSG91_SENDER_ID || process.env.MSG91_SENDER || 'DEVSUT';
+
+  // Internal storage for access token returned by MSG91 widget on successful verification
+  private lastWidgetAccessToken?: string;
+
+  /**
+   * Check if MSG91 Widget configuration (Widget ID and TokenAuth) is available
+   */
+  isWidgetConfigured(): boolean {
+    return Boolean(this.msg91WidgetId && this.msg91WidgetTokenAuth);
+  }
+
+  /**
+   * Retrieve the internally preserved access token from the last successful widget OTP verification
+   */
+  getLastWidgetAccessToken(): string | undefined {
+    return this.lastWidgetAccessToken;
+  }
 
   /**
    * Normalize phone number to standard E.164 +91XXXXXXXXXX format
@@ -89,44 +120,296 @@ export class SmsService {
   }
 
   /**
-   * Send actual SMS OTP through configured provider (MSG91 or Twilio)
+   * Send actual SMS OTP through MSG91 OTP Widget API
+   * POST https://api.msg91.com/api/v5/widget/sendOtp
    */
-  async sendOtpSms(phoneNumber: string, otp: string): Promise<SendSmsResult> {
+  async sendOtpSms(phoneNumber: string): Promise<SendSmsResult> {
     const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
     const maskedPhone = `${normalizedPhone.slice(0, 6)}****${normalizedPhone.slice(-2)}`;
 
-    const configuredProvider = (this.smsProvider || '').toUpperCase();
+    // Indian mobile format without '+' (e.g. 919822012345)
+    const mobileNumber = normalizedPhone.replace(/[^0-9]/g, '');
 
-    // 1. Explicitly configured as MSG91
-    if (configuredProvider === 'MSG91' && this.msg91AuthKey && this.msg91TemplateId) {
-      return this.sendViaMsg91(normalizedPhone, otp, maskedPhone);
+    if (this.isWidgetConfigured()) {
+      return this.sendOtpWidget(mobileNumber, maskedPhone);
     }
 
-    // 2. Explicitly configured as TWILIO
-    if (configuredProvider === 'TWILIO' && this.twilioSid && this.twilioToken && this.twilioFrom) {
-      return this.sendViaTwilio(normalizedPhone, otp, maskedPhone);
-    }
-
-    // 3. Fallback: If MSG91 credentials exist, prefer MSG91 (configured for India)
-    if (this.msg91AuthKey && this.msg91TemplateId) {
-      return this.sendViaMsg91(normalizedPhone, otp, maskedPhone);
-    }
-
-    // 4. Fallback: Check Twilio credentials
     if (this.twilioSid && this.twilioToken && this.twilioFrom) {
-      return this.sendViaTwilio(normalizedPhone, otp, maskedPhone);
+      const fallbackOtp = this.generateOtp();
+      return this.sendViaTwilio(normalizedPhone, fallbackOtp, maskedPhone);
     }
 
-    // 5. Gateway credentials missing in environment
     this.logger.warn(
-      `SMS gateway credentials are not configured in environment. SMS OTP delivery disabled for ${maskedPhone}.`,
+      `MSG91 OTP Widget credentials (MSG91_WIDGET_ID, MSG91_WIDGET_TOKEN_AUTH) are not configured for ${maskedPhone}.`,
     );
 
     return {
       success: false,
       provider: 'UNCONFIGURED',
-      error: 'SMS service is temporarily unconfigured. Please sign in using Email OTP.',
+      error:
+        'MSG91 SMS gateway is not configured on the server. Please sign in using Email OTP.',
     };
+  }
+
+  /**
+   * Send OTP via MSG91 Widget Send OTP API
+   * POST https://api.msg91.com/api/v5/widget/sendOtp
+   * Body: { widgetId, tokenAuth, identifier }
+   */
+  async sendOtpWidget(
+    mobileNumber: string,
+    maskedPhone: string,
+  ): Promise<SendSmsResult> {
+    if (!this.isWidgetConfigured()) {
+      this.logger.error('[MSG91 Widget] sendOtp failed: Widget ID or TokenAuth is not configured.');
+      return {
+        success: false,
+        provider: 'MSG91_WIDGET',
+        error: 'MSG91 Widget configuration (Widget ID and TokenAuth) is missing.',
+      };
+    }
+
+    try {
+      const url = 'https://api.msg91.com/api/v5/widget/sendOtp';
+      const body = {
+        widgetId: this.msg91WidgetId,
+        tokenAuth: this.msg91WidgetTokenAuth,
+        identifier: mobileNumber,
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data.type === 'error' || data.type === 'failed' || data.status === 'fail' || data.hasError) {
+        const errorMsg =
+          data.message ||
+          (typeof data === 'string'
+            ? data
+            : `MSG91 Error ${response.status}: ${response.statusText}`);
+        this.logger.error(`[MSG91 Widget] sendOtp failed for ${maskedPhone}: ${errorMsg}`);
+        return {
+          success: false,
+          provider: 'MSG91_WIDGET',
+          error: errorMsg,
+        };
+      }
+
+      // Extract reqId from MSG91 response (message or reqId or data)
+      const reqId =
+        data.reqId ||
+        data.data?.reqId ||
+        (typeof data.data === 'string' && data.data.length > 10 ? data.data : undefined) ||
+        (typeof data.message === 'string' && /^[0-9a-fA-F]{16,}$/.test(data.message.trim())
+          ? data.message.trim()
+          : undefined) ||
+        (typeof data.message === 'string' && data.message.length > 15
+          ? data.message.trim()
+          : undefined);
+
+      this.logger.log(`[MSG91 Widget] OTP sent to ${maskedPhone} (reqId: ${reqId || 'OK'})`);
+
+      return {
+        success: true,
+        reqId,
+        messageId: reqId || 'SENT',
+        provider: 'MSG91_WIDGET',
+      };
+    } catch (err: any) {
+      this.logger.error(`[MSG91 Widget] Connection error for ${maskedPhone}: ${err.message}`);
+      return {
+        success: false,
+        provider: 'MSG91_WIDGET',
+        error: err.message || 'Failed to connect to MSG91 SMS gateway.',
+      };
+    }
+  }
+
+  /**
+   * Verify OTP via MSG91 Widget Verify OTP API
+   * POST https://api.msg91.com/api/v5/widget/verifyOtp
+   * Body: { widgetId, tokenAuth, reqId, otp }
+   */
+  async verifyOtpWidget(
+    otp: string,
+    reqId?: string,
+    phoneNumber?: string,
+  ): Promise<VerifyOtpResult> {
+    if (!this.isWidgetConfigured()) {
+      return {
+        success: false,
+        provider: 'UNCONFIGURED',
+        error: 'MSG91 Widget configuration (Widget ID and TokenAuth) is missing.',
+      };
+    }
+
+    const cleanReqId = reqId?.trim();
+    if (!cleanReqId) {
+      this.logger.warn('[MSG91 Widget] verifyOtp rejected: missing reqId');
+      return {
+        success: false,
+        provider: 'MSG91_WIDGET',
+        error: 'Request ID (reqId) is required for MSG91 OTP verification.',
+      };
+    }
+
+    const cleanOtp = otp?.trim();
+    if (!cleanOtp) {
+      return {
+        success: false,
+        provider: 'MSG91_WIDGET',
+        error: 'Verification code (OTP) is required.',
+      };
+    }
+
+    try {
+      const url = 'https://api.msg91.com/api/v5/widget/verifyOtp';
+      const body = {
+        widgetId: this.msg91WidgetId,
+        tokenAuth: this.msg91WidgetTokenAuth,
+        reqId: cleanReqId,
+        otp: cleanOtp,
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data.type === 'error' || data.type === 'failed' || data.status === 'fail' || data.hasError) {
+        const errorMsg =
+          data.message ||
+          (typeof data === 'string'
+            ? data
+            : 'Invalid or expired verification code.');
+        this.logger.warn(`[MSG91 Widget] verifyOtp failed: ${errorMsg}`);
+        return {
+          success: false,
+          provider: 'MSG91_WIDGET',
+          error: errorMsg,
+        };
+      }
+
+      // Check MSG91 success response
+      const isVerified =
+        data.type === 'success' ||
+        (typeof data.message === 'string' &&
+          (data.message.toLowerCase().includes('verified') ||
+            data.message.toLowerCase().includes('success'))) ||
+        Boolean(data['access-token']) ||
+        Boolean(data.accessToken);
+
+      if (isVerified) {
+        const accessToken =
+          data['access-token'] || data.accessToken || data.data?.accessToken;
+        // Preserve returned access token internally
+        this.lastWidgetAccessToken = accessToken;
+
+        this.logger.log(`[MSG91 Widget] OTP verified successfully via MSG91`);
+        return {
+          success: true,
+          provider: 'MSG91_WIDGET',
+          accessToken,
+        };
+      }
+
+      return {
+        success: false,
+        provider: 'MSG91_WIDGET',
+        error: data.message || 'OTP verification failed.',
+      };
+    } catch (err: any) {
+      this.logger.error(`[MSG91 Widget] verifyOtp connection error: ${err.message}`);
+      return {
+        success: false,
+        provider: 'MSG91_WIDGET',
+        error: err.message || 'Failed to verify OTP with MSG91 gateway.',
+      };
+    }
+  }
+
+  /**
+   * Resend/Retry OTP via MSG91 Widget Retry OTP API
+   * POST https://api.msg91.com/api/v5/widget/retryOtp
+   * Body: { widgetId, tokenAuth, reqId, retryChannel? }
+   */
+  async retryOtpWidget(reqId: string, retryType?: string): Promise<SendSmsResult> {
+    if (!this.isWidgetConfigured()) {
+      return {
+        success: false,
+        provider: 'UNCONFIGURED',
+        error: 'MSG91 Widget configuration (Widget ID and TokenAuth) is missing.',
+      };
+    }
+
+    const cleanReqId = reqId?.trim();
+    if (!cleanReqId) {
+      return {
+        success: false,
+        provider: 'MSG91_WIDGET',
+        error: 'Request ID (reqId) is required to retry OTP.',
+      };
+    }
+
+    try {
+      const url = 'https://api.msg91.com/api/v5/widget/retryOtp';
+      const body: Record<string, any> = {
+        widgetId: this.msg91WidgetId,
+        tokenAuth: this.msg91WidgetTokenAuth,
+        reqId: cleanReqId,
+      };
+      if (retryType) {
+        body.retryType = retryType;
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || data.type === 'error' || data.type === 'failed' || data.status === 'fail' || data.hasError) {
+        const errorMsg = data.message || `MSG91 retry failed (${response.status})`;
+        this.logger.warn(`[MSG91 Widget] retryOtp failed for reqId ${cleanReqId}: ${errorMsg}`);
+        return {
+          success: false,
+          provider: 'MSG91_WIDGET',
+          error: errorMsg,
+        };
+      }
+
+      this.logger.log(`[MSG91 Widget] OTP retried for reqId ${cleanReqId}`);
+      return {
+        success: true,
+        reqId: cleanReqId,
+        provider: 'MSG91_WIDGET',
+      };
+    } catch (err: any) {
+      this.logger.error(`[MSG91 Widget] retryOtp connection error: ${err.message}`);
+      return {
+        success: false,
+        provider: 'MSG91_WIDGET',
+        error: err.message || 'Failed to retry OTP with MSG91 gateway.',
+      };
+    }
   }
 
   /**

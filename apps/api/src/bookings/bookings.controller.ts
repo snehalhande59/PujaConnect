@@ -87,7 +87,7 @@ export class BookingsController {
   @ApiOperation({ summary: 'Customer cancels booking' })
   async cancelBooking(
     @CurrentUser() user: any,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Body('reason') reason?: string,
   ) {
     return this.bookingsService.cancelBooking(user.id, id, reason);

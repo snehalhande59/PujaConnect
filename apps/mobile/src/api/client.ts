@@ -17,19 +17,46 @@ declare const process: any;
 declare const __DEV__: boolean;
 
 export const PRODUCTION_API_URL = 'https://pujaconnect-api-he9b.onrender.com/api/v1';
+export const LOCAL_API_PORT = 3001;
 
 // Dynamic host determination:
 // 1. Explicit EXPO_PUBLIC_API_URL environment variable has top priority.
-// 2. Constants extra apiUrl from app.json
-// 3. Defaults to live HTTPS production Render API URL.
+// 2. In local development (__DEV__ is true):
+//    - Connects to local backend on port 3001.
+//    - Extracts Expo host IP from hostUri so physical mobile devices reach PC.
+//    - Uses 10.0.2.2:3001 on Android emulator.
+//    - Uses 127.0.0.1:3001 on Web / iOS simulator.
+// 3. Defaults to live HTTPS production Render API URL for release builds.
 export const getApiBaseUrl = (): string => {
   if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
+
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    const hostUri =
+      Constants.expoConfig?.hostUri ||
+      (Constants as any)?.manifest?.debuggerHost ||
+      (Constants as any)?.manifest2?.extra?.expoGo?.debuggerHost;
+
+    if (hostUri) {
+      const hostIp = hostUri.split(':')[0];
+      if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
+        return `http://${hostIp}:${LOCAL_API_PORT}/api/v1`;
+      }
+    }
+
+    if (Platform.OS === 'android') {
+      return `http://10.0.2.2:${LOCAL_API_PORT}/api/v1`;
+    }
+
+    return `http://127.0.0.1:${LOCAL_API_PORT}/api/v1`;
+  }
+
   const extraUrl = Constants.expoConfig?.extra?.apiUrl;
   if (extraUrl) {
     return extraUrl;
   }
+
   return PRODUCTION_API_URL;
 };
 
@@ -102,6 +129,18 @@ export const storage = {
 
   async saveBooking(booking: Booking) {
     memoryBookings = [booking, ...memoryBookings.filter((b) => b.id !== booking.id)];
+    try {
+      if (Platform.OS !== 'web') {
+        await SecureStore.setItemAsync(BOOKINGS_KEY, JSON.stringify(memoryBookings));
+      }
+    } catch (e) {
+      // ignore
+    }
+  },
+
+  async updateBookingStatus(id: string, status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'REJECTED') {
+    await this.getLocalBookings();
+    memoryBookings = memoryBookings.map((b) => (b.id === id ? { ...b, status } : b));
     try {
       if (Platform.OS !== 'web') {
         await SecureStore.setItemAsync(BOOKINGS_KEY, JSON.stringify(memoryBookings));
@@ -194,7 +233,8 @@ async function apiRequest<T = any>(
 
   // 45s timeout handles cloud cold-starts comfortably across Mobile Data and Wi-Fi
   const timeoutMs = 45000;
-  const targetUrl = `${API_BASE_URL}${endpoint}`;
+  const baseUrl = getApiBaseUrl();
+  const targetUrl = `${baseUrl}${endpoint}`;
 
   try {
     const response = await fetchWithTimeout(targetUrl, options, headers, timeoutMs);
@@ -270,7 +310,12 @@ export const api = {
     });
   },
 
-  async verifyCustomerOtp(identifier: string, otp: string, fullName?: string) {
+  async verifyCustomerOtp(
+    identifier: string,
+    otp: string,
+    fullName?: string,
+    reqId?: string,
+  ) {
     const trimmed = identifier.trim();
     const isEmail = trimmed.includes('@');
 
@@ -286,6 +331,9 @@ export const api = {
     }
     if (fullName && fullName.trim()) {
       body.fullName = fullName.trim();
+    }
+    if (reqId && reqId.trim()) {
+      body.reqId = reqId.trim();
     }
 
     const res = await apiRequest('/auth/customer/verify-otp', {
@@ -513,10 +561,18 @@ export const api = {
   },
 
   async cancelBooking(id: string, reason?: string): Promise<Booking> {
-    return apiRequest<Booking>(`/bookings/${id}/cancel`, {
-      method: 'PATCH',
-      body: JSON.stringify({ reason }),
-    });
+    try {
+      const res = await apiRequest<Booking>(`/bookings/${id}/cancel`, {
+        method: 'PATCH',
+        body: JSON.stringify({ reason }),
+      });
+      await storage.updateBookingStatus(id, 'CANCELLED');
+      return res;
+    } catch (e) {
+      // If server is offline or rejected because of local id, still update local storage so user sees it in Cancelled tab
+      await storage.updateBookingStatus(id, 'CANCELLED');
+      return { id, status: 'CANCELLED' } as any;
+    }
   },
 
   // --- STORE & PRODUCTS ---

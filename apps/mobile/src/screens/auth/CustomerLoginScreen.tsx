@@ -47,6 +47,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [reqId, setReqId] = useState<string | undefined>(undefined);
 
   // Status & loading
   const [loading, setLoading] = useState(false);
@@ -86,6 +87,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     setMethod(selected);
     setOtpSent(false);
     setOtp('');
+    setReqId(undefined);
     setError(null);
     setSuccess(null);
   };
@@ -149,6 +151,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         setLoading(true);
         const res = await sendCustomerOtp(formattedPhone, 'sms');
         setOtpSent(true);
+        if (res?.reqId) setReqId(res.reqId);
         setCooldown(res?.cooldownSeconds || 60);
         setSuccess(
           res?.message ||
@@ -172,8 +175,8 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     setSuccess(null);
 
     const cleanOtp = otp.trim().replace(/[^0-9]/g, '');
-    if (!cleanOtp || cleanOtp.length !== 6) {
-      setError('Please enter the complete 6-digit verification code.');
+    if (!cleanOtp || cleanOtp.length < 4 || cleanOtp.length > 6) {
+      setError('Please enter the complete verification code.');
       return;
     }
 
@@ -184,8 +187,12 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
 
     try {
       setLoading(true);
-      const res = await loginCustomerWithOtp(identifier, cleanOtp);
-      setSuccess('Verification successful!');
+      const res = await loginCustomerWithOtp(identifier, cleanOtp, undefined, reqId);
+      if (res.user?.role === 'PANDIT') {
+        setSuccess(`Namaste Pt. ${res.user.firstName || ''}! Redirecting to Pandit Portal...`);
+      } else {
+        setSuccess('Verification successful!');
+      }
       onLoginSuccess(res.user, Boolean(res.isNewCustomer));
     } catch (e: any) {
       setError(e.message || 'Invalid or expired verification code. Please try again.');
@@ -406,6 +413,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                         if (loading) return;
                         setOtpSent(false);
                         setOtp('');
+                        setReqId(undefined);
                         setError(null);
                         setSuccess(null);
                       }}
@@ -535,6 +543,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                         if (loading) return;
                         setOtpSent(false);
                         setOtp('');
+                        setReqId(undefined);
                         setError(null);
                         setSuccess(null);
                       }}

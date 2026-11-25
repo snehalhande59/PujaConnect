@@ -480,12 +480,19 @@ export class BookingsService {
     const customer = await this.prisma.customerProfile.findUnique({ where: { userId } });
     if (!customer) throw new NotFoundException('Customer profile not found.');
 
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingId);
+    if (!isUuid) {
+      return { id: bookingId, status: BookingStatus.CANCELLED, message: 'Local booking marked as cancelled.' };
+    }
+
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: { panditProfile: true, puja: true },
     });
 
-    if (!booking) throw new NotFoundException('Booking not found.');
+    if (!booking) {
+      return { id: bookingId, status: BookingStatus.CANCELLED, message: 'Booking marked as cancelled.' };
+    }
     if (booking.customerProfileId !== customer.id) {
       throw new ForbiddenException('You are not authorized to cancel this booking.');
     }

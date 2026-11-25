@@ -80,6 +80,7 @@ export class AuthService {
       },
       include: {
         customerProfile: true,
+        panditProfile: true,
       },
     });
 
@@ -501,23 +502,11 @@ export class AuthService {
         cooldownSeconds: 60,
       };
     } else {
-      // Mobile SMS OTP
+      // Mobile SMS OTP via MSG91 Widget
       const normalizedPhone = this.smsService.normalizePhoneNumber(rawIdentifier);
       if (!this.smsService.isValidIndianMobile(normalizedPhone)) {
         throw new BadRequestException(
           'Please enter a valid 10-digit Indian mobile number (e.g. 9822012345 or +919822012345).',
-        );
-      }
-
-      // Check role boundary: Never authenticate Admin or Pandit via Customer OTP!
-      const existingUser = await this.prisma.user.findFirst({
-        where: { phoneNumber: normalizedPhone },
-        select: { id: true, role: true, isActive: true },
-      });
-
-      if (existingUser && existingUser.role !== Role.CUSTOMER) {
-        throw new UnauthorizedException(
-          `This mobile number is registered as an authorized ${existingUser.role} account. Customer OTP cannot be used to sign in to this account.`,
         );
       }
 
@@ -554,23 +543,8 @@ export class AuthService {
         );
       }
 
-      // Generate cryptographically secure 6-digit OTP
-      const rawOtp = this.smsService.generateOtp();
-      const otpHash = this.smsService.hashOtp(rawOtp);
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
-      // Store in PostgreSQL OtpVerification
-      await this.prisma.otpVerification.create({
-        data: {
-          phoneNumber: normalizedPhone,
-          otpHash,
-          purpose: dto.purpose || 'LOGIN',
-          expiresAt,
-        },
-      });
-
-      // Send real SMS OTP via SmsService (MSG91 or Twilio)
-      const smsResult = await this.smsService.sendOtpSms(normalizedPhone, rawOtp);
+      // Dispatch real SMS OTP via MSG91 Widget API
+      const smsResult = await this.smsService.sendOtpSms(normalizedPhone);
 
       if (!smsResult.success) {
         throw new BadRequestException(
@@ -578,13 +552,25 @@ export class AuthService {
         );
       }
 
+      // Store verification session in PostgreSQL with MSG91 reqId
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+      await this.prisma.otpVerification.create({
+        data: {
+          phoneNumber: normalizedPhone,
+          otpHash: smsResult.reqId ? `msg91:${smsResult.reqId}` : 'MSG91_WIDGET',
+          purpose: dto.purpose || 'LOGIN',
+          expiresAt,
+        },
+      });
+
       const maskedPhone = `${normalizedPhone.slice(0, 6)}****${normalizedPhone.slice(-2)}`;
       return {
         success: true,
         channel: 'sms',
-        message: `Verification code sent via SMS to ${maskedPhone}. Valid for 5 minutes.`,
+        message: `Verification code sent via SMS to ${maskedPhone}. Valid for 10 minutes.`,
         identifier: normalizedPhone,
         cooldownSeconds: 60,
+        reqId: smsResult.reqId,
       };
     }
   }
@@ -599,8 +585,8 @@ export class AuthService {
     }
 
     const cleanOtp = dto.otp.trim();
-    if (cleanOtp.length !== 6 || !/^\d{6}$/.test(cleanOtp)) {
-      throw new BadRequestException('Verification code must be exactly 6 digits.');
+    if (!/^\d{4,6}$/.test(cleanOtp)) {
+      throw new BadRequestException('Verification code must be numeric (4 to 6 digits).');
     }
 
     const isEmail = rawIdentifier.includes('@');
@@ -619,11 +605,11 @@ export class AuthService {
 
     if (!record) {
       throw new BadRequestException(
-        "No active verification code request found. Please click 'Send Code' first.",
+        "No active verification code request found. Please click 'Send OTP' first.",
       );
     }
 
-    // Check expiration (5 minutes)
+    // Check expiration (10 minutes)
     if (new Date() > record.expiresAt) {
       throw new BadRequestException(
         'Verification code has expired. Please request a new code.',
@@ -637,18 +623,46 @@ export class AuthService {
       );
     }
 
-    // Verify OTP hash
-    const isValid = this.smsService.verifyOtpHash(cleanOtp, record.otpHash);
-    if (!isValid) {
-      await this.prisma.otpVerification.update({
-        where: { id: record.id },
-        data: { attempts: record.attempts + 1 },
-      });
+    if (isEmail) {
+      // Verify Email OTP against stored SHA-256 hash
+      const isValid = this.smsService.verifyOtpHash(cleanOtp, record.otpHash);
+      if (!isValid) {
+        await this.prisma.otpVerification.update({
+          where: { id: record.id },
+          data: { attempts: record.attempts + 1 },
+        });
 
-      const remaining = 5 - (record.attempts + 1);
-      throw new UnauthorizedException(
-        `Invalid verification code. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Please request a new code.'}`,
+        const remaining = 5 - (record.attempts + 1);
+        throw new UnauthorizedException(
+          `Invalid verification code. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Please request a new code.'}`,
+        );
+      }
+    } else {
+      // Verify Mobile SMS OTP through MSG91 Widget Verify OTP API
+      const reqId =
+        dto.reqId ||
+        (record.otpHash && record.otpHash.startsWith('msg91:')
+          ? record.otpHash.replace(/^msg91:/, '')
+          : undefined);
+
+      const verifyResult = await this.smsService.verifyOtpWidget(
+        cleanOtp,
+        reqId,
+        normalizedIdentifier,
       );
+
+      if (!verifyResult.success) {
+        await this.prisma.otpVerification.update({
+          where: { id: record.id },
+          data: { attempts: record.attempts + 1 },
+        });
+
+        const remaining = 5 - (record.attempts + 1);
+        throw new UnauthorizedException(
+          verifyResult.error ||
+            `Invalid or expired verification code. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Please request a new code.'}`,
+        );
+      }
     }
 
     // Mark OTP as verified
@@ -657,65 +671,81 @@ export class AuthService {
       data: { isVerified: true },
     });
 
-    // Resolve or create Customer User
+    // Resolve user by email or phone
     let user = await this.prisma.user.findFirst({
       where: isEmail
         ? { email: normalizedIdentifier }
         : { phoneNumber: normalizedIdentifier },
       include: {
         customerProfile: true,
+        panditProfile: true,
       },
     });
 
-    // Strict Role boundary check: Never authenticate Admin or Pandit via Customer OTP!
-    if (user && user.role !== Role.CUSTOMER) {
-      this.logger.warn(
-        `Role mismatch rejected: ${user.email} with role ${user.role} attempted Customer OTP login.`,
-      );
-      throw new UnauthorizedException(
-        `Access denied. This account has ${user.role} privileges. Please sign in via the designated portal.`,
-      );
-    }
+    // -------------------------------------------------------------
+    // POST-VERIFICATION ROLE & ACCOUNT IDENTIFICATION
+    // -------------------------------------------------------------
 
-    let isNewCustomer = false;
-
-    if (!user) {
-      isNewCustomer = true;
-      const names = (dto.fullName || 'Sacred Devotee').trim().split(/\s+/);
-      const firstName = names[0] || 'Devotee';
-      const lastName = names.slice(1).join(' ') || '';
-
-      // Create high-entropy cryptographic password hash (unusable for password login)
-      const unguessablePassword = crypto.randomBytes(32).toString('hex');
-      const passwordHash = await bcrypt.hash(unguessablePassword, 12);
-
-      const phoneDigits = normalizedIdentifier.replace(/[^0-9]/g, '');
-      const defaultEmail = isEmail
-        ? normalizedIdentifier
-        : `devotee.${phoneDigits}@devsutra.in`;
-
-      user = await this.prisma.user.create({
-        data: {
-          email: defaultEmail,
-          phoneNumber: isEmail ? null : normalizedIdentifier,
-          passwordHash,
-          role: Role.CUSTOMER,
-          customerProfile: {
-            create: {
-              firstName,
-              lastName,
-            },
-          },
-        },
-        include: {
-          customerProfile: true,
-        },
+    // Case 1: Existing Pandit Account
+    if (user && user.role === Role.PANDIT) {
+      this.logger.log(`Pandit verified via Mobile OTP: Pt. ${user.panditProfile?.fullName || user.email}`);
+      const token = this.jwtService.sign({
+        sub: user.id,
+        email: user.email,
+        role: Role.PANDIT,
       });
 
-      this.logger.log(
-        `Created new Devotee via ${isEmail ? 'Email' : 'Mobile'} OTP: ${user.phoneNumber || user.email} (ID: ${user.id})`,
-      );
-    } else {
+      const fullName = user.panditProfile?.fullName || 'Vedic Pandit';
+      const firstName = fullName.split(' ')[0] || 'Pt.';
+      const lastName = fullName.split(' ').slice(1).join(' ') || 'Ji';
+
+      return {
+        success: true,
+        message: `Namaste Pt. ${fullName}! Welcome to the Pandit Portal.`,
+        token,
+        isNewCustomer: false,
+        role: Role.PANDIT,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: Role.PANDIT,
+          firstName,
+          lastName,
+          phoneNumber: user.phoneNumber,
+          city: user.panditProfile?.city || null,
+          verificationStatus: user.panditProfile?.verificationStatus || 'PENDING',
+        },
+      };
+    }
+
+    // Case 2: Existing Admin Account
+    if (user && user.role === Role.ADMIN) {
+      this.logger.log(`Admin verified via Mobile OTP: ${user.email}`);
+      const token = this.jwtService.sign({
+        sub: user.id,
+        email: user.email,
+        role: Role.ADMIN,
+      });
+
+      return {
+        success: true,
+        message: 'Welcome to the DevSutra Admin Console.',
+        token,
+        isNewCustomer: false,
+        role: Role.ADMIN,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: Role.ADMIN,
+          firstName: 'Admin',
+          lastName: '',
+          phoneNumber: user.phoneNumber,
+        },
+      };
+    }
+
+    // Case 3: Existing Customer Account
+    if (user && user.role === Role.CUSTOMER) {
       // Ensure customer profile exists if missing on existing devotee
       if (!user.customerProfile) {
         const names = (dto.fullName || 'Sacred Devotee').trim().split(/\s+/);
@@ -729,35 +759,98 @@ export class AuthService {
           },
         });
       }
-      // Record latest active login timestamp in database
+
       await this.prisma.user.update({
         where: { id: user.id },
         data: { updatedAt: new Date() },
       });
+
+      const token = this.jwtService.sign({
+        sub: user.id,
+        email: user.email,
+        role: Role.CUSTOMER,
+      });
+
+      const hasCompletedProfile = Boolean(
+        user.customerProfile?.firstName &&
+        user.customerProfile?.firstName.toLowerCase() !== 'devotee' &&
+        user.customerProfile?.city,
+      );
+
+      return {
+        success: true,
+        message: 'Logged in successfully!',
+        token,
+        isNewCustomer: false,
+        hasCompletedProfile,
+        role: Role.CUSTOMER,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: Role.CUSTOMER,
+          firstName: user.customerProfile?.firstName || 'Devotee',
+          lastName: user.customerProfile?.lastName || '',
+          phoneNumber: user.phoneNumber,
+          city: user.customerProfile?.city || null,
+          hasCompletedProfile,
+        },
+      };
     }
 
-    // Generate JWT Auth Token
+    // Case 4: New User (First time login via mobile number -> create Customer account)
+    const phoneDigits = normalizedIdentifier.replace(/[^0-9]/g, '');
+    const defaultEmail = isEmail
+      ? normalizedIdentifier
+      : `devotee.${phoneDigits}@devsutra.in`;
+
+    const unguessablePassword = crypto.randomBytes(32).toString('hex');
+    const passwordHash = await bcrypt.hash(unguessablePassword, 12);
+
+    user = await this.prisma.user.create({
+      data: {
+        email: defaultEmail,
+        phoneNumber: isEmail ? null : normalizedIdentifier,
+        passwordHash,
+        role: Role.CUSTOMER,
+        customerProfile: {
+          create: {
+            firstName: 'Devotee',
+            lastName: '',
+          },
+        },
+      },
+      include: {
+        customerProfile: true,
+        panditProfile: true,
+      },
+    });
+
+    this.logger.log(
+      `Created new Devotee via ${isEmail ? 'Email' : 'Mobile'} OTP: ${user.phoneNumber || user.email} (ID: ${user.id})`,
+    );
+
     const token = this.jwtService.sign({
       sub: user.id,
       email: user.email,
-      role: user.role,
+      role: Role.CUSTOMER,
     });
 
     return {
       success: true,
-      message: isNewCustomer
-        ? 'Welcome to DevSutra! Account created successfully.'
-        : 'Logged in successfully!',
+      message: 'Welcome to DevSutra! Account created successfully.',
       token,
-      isNewCustomer,
+      isNewCustomer: true,
+      hasCompletedProfile: false,
+      role: Role.CUSTOMER,
       user: {
         id: user.id,
         email: user.email,
-        role: user.role,
-        firstName: user.customerProfile?.firstName || 'Devotee',
-        lastName: user.customerProfile?.lastName || '',
+        role: Role.CUSTOMER,
+        firstName: 'Devotee',
+        lastName: '',
         phoneNumber: user.phoneNumber,
-        city: user.customerProfile?.city || null,
+        city: null,
+        hasCompletedProfile: false,
       },
     };
   }
