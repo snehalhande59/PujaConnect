@@ -560,10 +560,14 @@ export const api = {
   },
 
   // --- ORDERS ---
-  async createOrder(shippingAddressId: string): Promise<Order> {
+  async createOrder(
+    shippingAddressId?: string,
+    paymentDetails?: any,
+    items?: Array<{ productId: string; quantity: number }>
+  ): Promise<Order> {
     return apiRequest<Order>('/orders', {
       method: 'POST',
-      body: JSON.stringify({ shippingAddressId }),
+      body: JSON.stringify({ shippingAddressId, paymentDetails, items }),
     });
   },
 

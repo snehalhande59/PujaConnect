@@ -113,24 +113,28 @@ export const CartScreen: React.FC<CartScreenProps> = ({
   };
 
   const handlePaymentComplete = async (paymentDetails: PaymentSuccessDetails) => {
-    if (!selectedAddressId) return;
-
     try {
       setCheckingOut(true);
       setError(null);
-      await api.createOrder(selectedAddressId);
+      const cartItemsPayload = (cart?.items || []).map((i) => ({
+        productId: i.productId,
+        quantity: i.quantity,
+      }));
+
+      await api.createOrder(selectedAddressId || undefined, paymentDetails, cartItemsPayload);
       await clearCart();
+      setShowPaymentModal(false);
+
       Alert.alert(
         'Payment & Order Placed Successfully! 🙏',
         `Payment ID: ${paymentDetails.paymentId}\nMethod: ${paymentDetails.method}\nAmount Paid: ₹${paymentDetails.amount}\nYour sacred samagri kit order is being prepared!`,
         [{ text: 'View My Orders', onPress: onNavigateOrders }]
       );
     } catch (e: any) {
-      await clearCart();
+      console.warn('Order checkout error:', e);
       Alert.alert(
-        'Payment Confirmed & Order Recorded! 🙏',
-        `Payment ID: ${paymentDetails.paymentId}\nYour sacred order has been confirmed successfully.`,
-        [{ text: 'View My Orders', onPress: onNavigateOrders }]
+        'ऑर्डर नोंदणी त्रुटी',
+        e?.message || 'ऑर्डर व पेमेंट नोंदवताना अडचण आली. कृपया पुन्हा प्रयत्न करा.'
       );
     } finally {
       setCheckingOut(false);

@@ -4,7 +4,6 @@ import {
   Post,
   Body,
   UseGuards,
-  ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
@@ -24,12 +23,17 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Checkout and place order from cart' })
+  @ApiOperation({ summary: 'Checkout and place order from cart with payment recording' })
   async createOrder(
     @CurrentUser() user: any,
-    @Body('shippingAddressId', ParseUUIDPipe) shippingAddressId: string,
+    @Body() body: { shippingAddressId?: string; paymentDetails?: any; items?: Array<{ productId: string; quantity: number }> },
   ) {
-    return this.ordersService.createOrderFromCart(user.id, shippingAddressId);
+    return this.ordersService.createOrderFromCart(
+      user.id,
+      body.shippingAddressId,
+      body.paymentDetails,
+      body.items,
+    );
   }
 
   @Get('my')

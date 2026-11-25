@@ -113,6 +113,8 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
   ]);
 
   const [activeCoupons, setActiveCoupons] = useState<any[]>([]);
+  const [liveCategories, setLiveCategories] = useState<any[]>([]);
+  const [liveTrendingPujas, setLiveTrendingPujas] = useState<any[]>([]);
 
   const loadData = async () => {
     try {
@@ -131,6 +133,18 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
           return 0;
         });
         setFeaturedPandits(sorted);
+      }
+
+      // Fetch dynamic Categories & Pujas from PostgreSQL so additions in Admin appear instantly
+      const [categoriesRes, pujasRes] = await Promise.all([
+        api.getCategories().catch(() => []),
+        api.getPujas().catch(() => []),
+      ]);
+      if (Array.isArray(categoriesRes) && categoriesRes.length > 0) {
+        setLiveCategories(categoriesRes);
+      }
+      if (Array.isArray(pujasRes) && pujasRes.length > 0) {
+        setLiveTrendingPujas(pujasRes);
       }
 
       const myBookings = await api.getMyBookings();
@@ -763,40 +777,60 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
           </TouchableOpacity>
         )}
 
-        {/* 3 Quick Category Chips - Speedy Pandit Style */}
+        {/* Quick Category Chips - Dynamic from PostgreSQL */}
         <View style={styles.categoryChipsRow}>
-          {/* 1. Regular Puja */}
-          <TouchableOpacity
-            style={styles.categoryChip}
-            activeOpacity={0.8}
-            onPress={() => onNavigateCategory('Regular Puja')}
-          >
-            <Ionicons name="home-outline" size={22} color={colors.primary} />
-            <Text style={styles.categoryChipText}>Regular Puja</Text>
-          </TouchableOpacity>
+          {liveCategories.length > 0 ? (
+            liveCategories.slice(0, 3).map((cat, idx) => (
+              <TouchableOpacity
+                key={cat.id || idx}
+                style={styles.categoryChip}
+                activeOpacity={0.8}
+                onPress={() => onNavigateCategory(cat.name || cat.title || 'Regular Puja')}
+              >
+                <Ionicons
+                  name={idx === 0 ? 'home-outline' : idx === 1 ? 'sparkles-outline' : 'flame-outline'}
+                  size={22}
+                  color={colors.primary}
+                />
+                <Text style={styles.categoryChipText} numberOfLines={1}>{cat.name || cat.title}</Text>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <>
+              {/* 1. Regular Puja */}
+              <TouchableOpacity
+                style={styles.categoryChip}
+                activeOpacity={0.8}
+                onPress={() => onNavigateCategory('Regular Puja')}
+              >
+                <Ionicons name="home-outline" size={22} color={colors.primary} />
+                <Text style={styles.categoryChipText}>Regular Puja</Text>
+              </TouchableOpacity>
 
-          {/* 2. Festive Puja */}
-          <TouchableOpacity
-            style={styles.categoryChip}
-            activeOpacity={0.8}
-            onPress={() => onNavigateCategory('Festive Puja')}
-          >
-            <Ionicons name="sparkles-outline" size={22} color={colors.primary} />
-            <Text style={styles.categoryChipText}>Festive Puja</Text>
-          </TouchableOpacity>
+              {/* 2. Festive Puja */}
+              <TouchableOpacity
+                style={styles.categoryChip}
+                activeOpacity={0.8}
+                onPress={() => onNavigateCategory('Festive Puja')}
+              >
+                <Ionicons name="sparkles-outline" size={22} color={colors.primary} />
+                <Text style={styles.categoryChipText}>Festive Puja</Text>
+              </TouchableOpacity>
 
-          {/* 3. All Hawan */}
-          <TouchableOpacity
-            style={styles.categoryChip}
-            activeOpacity={0.8}
-            onPress={() => onNavigateCategory('All Hawan')}
-          >
-            <Ionicons name="flame-outline" size={22} color={colors.primary} />
-            <Text style={styles.categoryChipText}>All Hawan</Text>
-          </TouchableOpacity>
+              {/* 3. All Hawan */}
+              <TouchableOpacity
+                style={styles.categoryChip}
+                activeOpacity={0.8}
+                onPress={() => onNavigateCategory('All Hawan')}
+              >
+                <Ionicons name="flame-outline" size={22} color={colors.primary} />
+                <Text style={styles.categoryChipText}>All Hawan</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
-        {/* This Month's Trending Pujas */}
+        {/* This Month's Trending Pujas - Dynamic from PostgreSQL */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionHeaderTitle}>This Month’s Trending Pujas</Text>
           <TouchableOpacity onPress={onNavigateExplore}>
@@ -810,36 +844,80 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.trendingScroll}
         >
-          {SPEEDY_PUJA_CATALOG.slice(0, 5).map((puja) => (
-            <TouchableOpacity
-              key={puja.id}
-              style={styles.trendingCard}
-              activeOpacity={0.85}
-              onPress={() => handlePujaCardPress(puja)}
-            >
-              <View style={styles.trendingImageContainer}>
-                <Image source={puja.image} style={styles.trendingImage} resizeMode="cover" />
-                {puja.discount && (
-                  <View style={styles.trendingDiscountBadge}>
-                    <Text style={styles.trendingDiscountText}>{puja.discount}</Text>
-                  </View>
-                )}
-              </View>
+          {liveTrendingPujas.length > 0 ? (
+            liveTrendingPujas.slice(0, 6).map((puja: any) => {
+              const pujaObj: Puja = {
+                id: puja.id,
+                categoryId: puja.categoryId || puja.category?.id || 'regular',
+                title: puja.title,
+                slug: puja.slug || puja.id,
+                description: puja.description || '',
+                basePrice: Number(puja.basePrice) || 2100,
+                durationMinutes: puja.durationMinutes || 120,
+              };
 
-              <View style={styles.trendingCardContent}>
-                <Text style={styles.trendingCategory}>{puja.category}</Text>
-                <Text style={styles.trendingTitle} numberOfLines={1}>
-                  {puja.name}
-                </Text>
-                <View style={styles.trendingPriceRow}>
-                  <Text style={styles.trendingCurrentPrice}>{puja.price}/-</Text>
-                  {puja.originalPrice > puja.price && (
-                    <Text style={styles.trendingOriginalPrice}>{puja.originalPrice}/-</Text>
+              return (
+                <TouchableOpacity
+                  key={puja.id}
+                  style={styles.trendingCard}
+                  activeOpacity={0.85}
+                  onPress={() => onNavigatePujaDetail(pujaObj)}
+                >
+                  <View style={styles.trendingImageContainer}>
+                    <Image
+                      source={puja.imageUrl ? { uri: puja.imageUrl } : APP_IMAGES.satyanarayan}
+                      style={styles.trendingImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.trendingDiscountBadge}>
+                      <Text style={styles.trendingDiscountText}>Vedic Certified</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.trendingCardContent}>
+                    <Text style={styles.trendingCategory}>{puja.category?.name || 'Vedic Ceremony'}</Text>
+                    <Text style={styles.trendingTitle} numberOfLines={1}>
+                      {puja.title}
+                    </Text>
+                    <View style={styles.trendingPriceRow}>
+                      <Text style={styles.trendingCurrentPrice}>₹{puja.basePrice}/-</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          ) : (
+            SPEEDY_PUJA_CATALOG.slice(0, 5).map((puja) => (
+              <TouchableOpacity
+                key={puja.id}
+                style={styles.trendingCard}
+                activeOpacity={0.85}
+                onPress={() => handlePujaCardPress(puja)}
+              >
+                <View style={styles.trendingImageContainer}>
+                  <Image source={puja.image} style={styles.trendingImage} resizeMode="cover" />
+                  {puja.discount && (
+                    <View style={styles.trendingDiscountBadge}>
+                      <Text style={styles.trendingDiscountText}>{puja.discount}</Text>
+                    </View>
                   )}
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+
+                <View style={styles.trendingCardContent}>
+                  <Text style={styles.trendingCategory}>{puja.category}</Text>
+                  <Text style={styles.trendingTitle} numberOfLines={1}>
+                    {puja.name}
+                  </Text>
+                  <View style={styles.trendingPriceRow}>
+                    <Text style={styles.trendingCurrentPrice}>{puja.price}/-</Text>
+                    {puja.originalPrice > puja.price && (
+                      <Text style={styles.trendingOriginalPrice}>{puja.originalPrice}/-</Text>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
         </ScrollView>
 
         {/* Puja Mudra Balance Reminder Banner */}
