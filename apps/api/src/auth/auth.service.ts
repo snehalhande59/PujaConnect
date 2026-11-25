@@ -757,6 +757,7 @@ export class AuthService {
         firstName: user.customerProfile?.firstName || 'Devotee',
         lastName: user.customerProfile?.lastName || '',
         phoneNumber: user.phoneNumber,
+        city: user.customerProfile?.city || null,
       },
     };
   }

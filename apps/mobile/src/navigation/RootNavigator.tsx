@@ -275,8 +275,17 @@ export const RootNavigator: React.FC = () => {
           <CustomerLoginScreen
             onBack={() => setAuthRoute('welcome')}
             onLoginSuccess={(loggedUser, isNew) => {
-              if (isNew) {
+              const isDevoteeDefault =
+                !loggedUser?.firstName ||
+                loggedUser.firstName.toLowerCase() === 'devotee';
+              const hasNoCity =
+                !loggedUser?.city && !loggedUser?.customerProfile?.city;
+              const needsOnboarding = Boolean(isNew || (isDevoteeDefault && hasNoCity));
+
+              if (needsOnboarding) {
                 setRegistrationStep('personal');
+              } else {
+                setRegistrationStep('none');
               }
             }}
             onNavigateForgotPassword={() => setAuthRoute('forgot_password')}

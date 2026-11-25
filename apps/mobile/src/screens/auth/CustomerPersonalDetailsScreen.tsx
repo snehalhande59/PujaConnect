@@ -31,13 +31,22 @@ export const CustomerPersonalDetailsScreen: React.FC<CustomerPersonalDetailsScre
   onBack,
 }) => {
   const [fullName, setFullName] = useState(initialFullName);
-  const [phoneNumber, setPhoneNumber] = useState(initialPhoneNumber);
+  const [phoneNumber, setPhoneNumber] = useState(() => {
+    const digits = (initialPhoneNumber || '').replace(/[^0-9]/g, '');
+    if (digits.length > 10 && digits.startsWith('91')) {
+      return digits.slice(2);
+    }
+    return digits;
+  });
   const [error, setError] = useState<string | null>(null);
 
   const handleNext = () => {
     setError(null);
     const trimmedName = fullName.trim();
-    const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+    let cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+    if (cleanPhone.length > 10 && cleanPhone.startsWith('91')) {
+      cleanPhone = cleanPhone.slice(2);
+    }
 
     if (!trimmedName || trimmedName.length < 2) {
       setError('Please enter your full name (minimum 2 characters).');

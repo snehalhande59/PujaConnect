@@ -23,6 +23,8 @@ interface CustomerLoginScreenProps {
   onNavigateForgotPassword?: () => void;
 }
 
+export type CustomerLoginMethod = 'email_otp' | 'mobile_otp' | 'password';
+
 export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
   onBack,
   onLoginSuccess,
@@ -30,23 +32,21 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
 }) => {
   const { sendCustomerOtp, loginCustomerWithOtp, loginCustomer } = useAuth();
 
-  // Primary Login Mode: 'email' vs 'mobile' (clearly visible at the top of the Customer Login page)
-  const [loginMode, setLoginMode] = useState<'email' | 'mobile'>('email');
+  // Three primary login methods clearly visible at the top:
+  // 1. Email OTP
+  // 2. Mobile OTP
+  // 3. Password
+  const [method, setMethod] = useState<CustomerLoginMethod>('email_otp');
 
-  // Email state
+  // Input States
   const [email, setEmail] = useState('');
-
-  // Mobile state (10 digits, default +91)
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
 
-  // OTP state (shared across active mode)
+  // OTP Verification States
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
-
-  // Optional password fallback inside Email mode
-  const [showPasswordLogin, setShowPasswordLogin] = useState(false);
-  const [password, setPassword] = useState('');
 
   // Status & loading
   const [loading, setLoading] = useState(false);
@@ -80,24 +80,23 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     return val;
   };
 
-  // Switch between Email Login and Mobile Login
-  const handleSelectMode = (mode: 'email' | 'mobile') => {
+  // Switch between the 3 methods
+  const handleSelectMethod = (selected: CustomerLoginMethod) => {
     if (loading) return;
-    setLoginMode(mode);
+    setMethod(selected);
     setOtpSent(false);
     setOtp('');
-    setShowPasswordLogin(false);
     setError(null);
     setSuccess(null);
   };
 
-  // 1. Send OTP Request (Email or Mobile)
+  // 1. Send OTP Request (Email OTP or Mobile OTP)
   const handleSendOtp = async () => {
     if (loading) return;
     setError(null);
     setSuccess(null);
 
-    if (loginMode === 'email') {
+    if (method === 'email_otp') {
       const trimmed = email.trim();
       if (!trimmed) {
         setError('Please enter your email address.');
@@ -126,8 +125,8 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
       } finally {
         setLoading(false);
       }
-    } else {
-      // Mobile Login (SMS OTP via MSG91)
+    } else if (method === 'mobile_otp') {
+      // Mobile SMS OTP via MSG91
       const cleaned = phone.trim().replace(/[^0-9]/g, '');
       if (!cleaned) {
         setError('Please enter your 10-digit mobile number.');
@@ -179,7 +178,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     }
 
     const identifier =
-      loginMode === 'email'
+      method === 'email_otp'
         ? email.trim()
         : `+91${phone.trim().replace(/[^0-9]/g, '')}`;
 
@@ -195,7 +194,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     }
   };
 
-  // 3. Password Login (Optional fallback for Email mode)
+  // 3. Password Login
   const handlePasswordLogin = async () => {
     if (loading) return;
     setError(null);
@@ -248,51 +247,81 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             </Text>
           </View>
 
-          {/* PRIMARY LOGIN OPTIONS: EMAIL LOGIN vs MOBILE LOGIN */}
+          {/* THREE VISIBLE LOGIN METHODS: EMAIL OTP | MOBILE OTP | PASSWORD */}
           <View style={styles.tabContainer}>
             <TouchableOpacity
-              onPress={() => handleSelectMode('email')}
-              style={[styles.tabButton, loginMode === 'email' && styles.tabButtonActive]}
+              onPress={() => handleSelectMethod('email_otp')}
+              style={[
+                styles.tabButton,
+                method === 'email_otp' && styles.tabButtonActive,
+              ]}
               disabled={loading}
               activeOpacity={0.85}
             >
               <Ionicons
                 name="mail-outline"
-                size={17}
-                color={loginMode === 'email' ? colors.card : colors.textLight}
+                size={15}
+                color={method === 'email_otp' ? colors.card : colors.textLight}
               />
               <Text
                 style={[
                   styles.tabButtonText,
-                  loginMode === 'email' && styles.tabButtonTextActive,
+                  method === 'email_otp' && styles.tabButtonTextActive,
                 ]}
+                numberOfLines={1}
               >
-                Email Login
+                Email OTP
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => handleSelectMode('mobile')}
-              style={[styles.tabButton, loginMode === 'mobile' && styles.tabButtonActive]}
+              onPress={() => handleSelectMethod('mobile_otp')}
+              style={[
+                styles.tabButton,
+                method === 'mobile_otp' && styles.tabButtonActive,
+              ]}
               disabled={loading}
               activeOpacity={0.85}
             >
               <Ionicons
                 name="phone-portrait-outline"
-                size={17}
-                color={loginMode === 'mobile' ? colors.card : colors.textLight}
+                size={15}
+                color={method === 'mobile_otp' ? colors.card : colors.textLight}
               />
               <Text
                 style={[
                   styles.tabButtonText,
-                  loginMode === 'mobile' && styles.tabButtonTextActive,
+                  method === 'mobile_otp' && styles.tabButtonTextActive,
                 ]}
+                numberOfLines={1}
               >
-                Mobile Login
+                Mobile OTP
               </Text>
-              <View style={styles.smsBadge}>
-                <Text style={styles.smsBadgeText}>SMS OTP</Text>
-              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => handleSelectMethod('password')}
+              style={[
+                styles.tabButton,
+                method === 'password' && styles.tabButtonActive,
+              ]}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="key-outline"
+                size={15}
+                color={method === 'password' ? colors.card : colors.textLight}
+              />
+              <Text
+                style={[
+                  styles.tabButtonText,
+                  method === 'password' && styles.tabButtonTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                Password
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -314,68 +343,12 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
 
           {/* Main Login Card */}
           <View style={styles.formCard}>
-            {loginMode === 'email' ? (
+            {method === 'email_otp' ? (
               // ==========================================
-              // 1. EMAIL LOGIN FLOW
+              // 1. EMAIL OTP FLOW
               // ==========================================
-              showPasswordLogin ? (
-                // Email Password Fallback
-                <View>
-                  <Input
-                    label="Email Address *"
-                    placeholder="devotee@example.com"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    leftIcon="mail-outline"
-                    editable={!loading}
-                  />
-
-                  <Input
-                    label="Password *"
-                    placeholder="••••••••••••"
-                    value={password}
-                    onChangeText={setPassword}
-                    isPassword
-                    leftIcon="lock-closed-outline"
-                    editable={!loading}
-                  />
-
-                  {onNavigateForgotPassword && (
-                    <TouchableOpacity
-                      onPress={onNavigateForgotPassword}
-                      style={styles.forgotBtn}
-                      disabled={loading}
-                    >
-                      <Text style={styles.forgotText}>Forgot Password?</Text>
-                    </TouchableOpacity>
-                  )}
-
-                  <Button
-                    title="Sign In with Password"
-                    variant="primary"
-                    size="lg"
-                    loading={loading}
-                    disabled={loading}
-                    onPress={handlePasswordLogin}
-                    style={{ marginTop: 8 }}
-                  />
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShowPasswordLogin(false);
-                      setError(null);
-                    }}
-                    style={styles.togglePasswordLink}
-                    disabled={loading}
-                  >
-                    <Ionicons name="mail-outline" size={14} color={colors.primary} />
-                    <Text style={styles.togglePasswordText}>Sign in using Email OTP instead</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : !otpSent ? (
-                // Step 1: Email Input + Send Email OTP
+              !otpSent ? (
+                // Step 1: Email Input + Send OTP
                 <View>
                   <Input
                     label="Email Address *"
@@ -404,7 +377,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   </View>
 
                   <Button
-                    title="Send Email OTP"
+                    title="Send OTP"
                     variant="primary"
                     size="lg"
                     loading={loading}
@@ -419,18 +392,6 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                     }
                     style={{ marginTop: 16 }}
                   />
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShowPasswordLogin(true);
-                      setError(null);
-                    }}
-                    style={styles.togglePasswordLink}
-                    disabled={loading}
-                  >
-                    <Ionicons name="key-outline" size={14} color={colors.primary} />
-                    <Text style={styles.togglePasswordText}>Sign in with Password instead</Text>
-                  </TouchableOpacity>
                 </View>
               ) : (
                 // Step 2: 6-Digit Email OTP Verification
@@ -472,7 +433,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   />
 
                   <Button
-                    title="Verify & Continue"
+                    title="Verify OTP"
                     variant="primary"
                     size="lg"
                     loading={loading}
@@ -502,15 +463,15 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   </View>
                 </View>
               )
-            ) : (
+            ) : method === 'mobile_otp' ? (
               // ==========================================
-              // 2. MOBILE LOGIN FLOW (SMS OTP VIA MSG91)
+              // 2. MOBILE OTP FLOW (SMS VIA MSG91)
               // ==========================================
               !otpSent ? (
-                // Step 1: Indian Mobile Number Input + Send Mobile OTP
+                // Step 1: Mobile Input with +91 + Send OTP
                 <View>
                   <View style={styles.phoneInputGroup}>
-                    <Text style={styles.phoneLabel}>Indian Mobile Number *</Text>
+                    <Text style={styles.phoneLabel}>Mobile Number *</Text>
                     <View style={styles.phoneInputRow}>
                       <View style={styles.countryCodeBadge}>
                         <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
@@ -528,7 +489,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                         keyboardType="phone-pad"
                         maxLength={10}
                         editable={!loading}
-                        autoFocus={loginMode === 'mobile'}
+                        autoFocus={method === 'mobile_otp'}
                       />
                     </View>
                   </View>
@@ -540,12 +501,12 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                       color={colors.goldDark}
                     />
                     <Text style={styles.infoRowText}>
-                      We will send a 6-digit SMS verification code to your mobile number via MSG91.
+                      We will send a 6-digit SMS verification code to your Indian mobile number via MSG91.
                     </Text>
                   </View>
 
                   <Button
-                    title="Send Mobile OTP"
+                    title="Send OTP"
                     variant="primary"
                     size="lg"
                     loading={loading}
@@ -586,7 +547,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   </View>
 
                   <Input
-                    label="Enter 6-Digit SMS Code *"
+                    label="Enter 6-Digit Verification Code *"
                     placeholder="• • • • • •"
                     value={otp}
                     onChangeText={(val) => {
@@ -601,7 +562,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   />
 
                   <Button
-                    title="Verify & Continue"
+                    title="Verify OTP"
                     variant="primary"
                     size="lg"
                     loading={loading}
@@ -631,6 +592,52 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   </View>
                 </View>
               )
+            ) : (
+              // ==========================================
+              // 3. PASSWORD LOGIN FLOW
+              // ==========================================
+              <View>
+                <Input
+                  label="Email Address *"
+                  placeholder="devotee@example.com"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  leftIcon="mail-outline"
+                  editable={!loading}
+                />
+
+                <Input
+                  label="Password *"
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChangeText={setPassword}
+                  isPassword
+                  leftIcon="lock-closed-outline"
+                  editable={!loading}
+                />
+
+                {onNavigateForgotPassword && (
+                  <TouchableOpacity
+                    onPress={onNavigateForgotPassword}
+                    style={styles.forgotBtn}
+                    disabled={loading}
+                  >
+                    <Text style={styles.forgotText}>Forgot Password?</Text>
+                  </TouchableOpacity>
+                )}
+
+                <Button
+                  title="Sign In with Password"
+                  variant="primary"
+                  size="lg"
+                  loading={loading}
+                  disabled={loading}
+                  onPress={handlePasswordLogin}
+                  style={{ marginTop: 8 }}
+                />
+              </View>
             )}
           </View>
 
@@ -716,8 +723,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
+    gap: 4,
+    paddingVertical: 11,
+    paddingHorizontal: 2,
     borderRadius: 10,
   },
   tabButtonActive: {
@@ -729,23 +737,12 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   tabButtonText: {
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.textLight,
   },
   tabButtonTextActive: {
     color: colors.card,
-  },
-  smsBadge: {
-    backgroundColor: '#F7D070',
-    borderRadius: 6,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-  smsBadgeText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#800020',
   },
   phoneInputGroup: {
     marginBottom: 14,
@@ -914,19 +911,6 @@ const styles = StyleSheet.create({
   resendLink: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.primary,
-  },
-  togglePasswordLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 16,
-    paddingVertical: 8,
-  },
-  togglePasswordText: {
-    fontSize: 12.5,
-    fontWeight: '600',
     color: colors.primary,
   },
   forgotBtn: {
