@@ -19,9 +19,18 @@ export class SmsService {
   private readonly twilioFrom = process.env.TWILIO_PHONE_NUMBER || '';
   private readonly twilioVerifySid = process.env.TWILIO_VERIFY_SERVICE_SID || '';
 
-  private readonly msg91AuthKey = process.env.MSG91_AUTH_KEY || '';
-  private readonly msg91TemplateId = process.env.MSG91_TEMPLATE_ID || '';
-  private readonly msg91SenderId = process.env.MSG91_SENDER_ID || 'DEVSUT';
+  private readonly msg91AuthKey =
+    process.env.MSG91_AUTH_KEY ||
+    process.env.MSG91_TOKEN_AUTH ||
+    process.env.MSG91_API_KEY ||
+    '';
+  private readonly msg91TemplateId =
+    process.env.MSG91_TEMPLATE_ID ||
+    process.env.MSG91_OTP_TEMPLATE_ID ||
+    process.env.MSG91_WIDGET_ID ||
+    '';
+  private readonly msg91SenderId =
+    process.env.MSG91_SENDER_ID || process.env.MSG91_SENDER || 'DEVSUT';
 
   /**
    * Normalize phone number to standard E.164 +91XXXXXXXXXX format
@@ -80,23 +89,35 @@ export class SmsService {
   }
 
   /**
-   * Send actual SMS OTP through configured provider (Twilio or MSG91)
+   * Send actual SMS OTP through configured provider (MSG91 or Twilio)
    */
   async sendOtpSms(phoneNumber: string, otp: string): Promise<SendSmsResult> {
     const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
     const maskedPhone = `${normalizedPhone.slice(0, 6)}****${normalizedPhone.slice(-2)}`;
 
-    // 1. Check Twilio integration
-    if (this.twilioSid && this.twilioToken && this.twilioFrom) {
+    const configuredProvider = (this.smsProvider || '').toUpperCase();
+
+    // 1. Explicitly configured as MSG91
+    if (configuredProvider === 'MSG91' && this.msg91AuthKey && this.msg91TemplateId) {
+      return this.sendViaMsg91(normalizedPhone, otp, maskedPhone);
+    }
+
+    // 2. Explicitly configured as TWILIO
+    if (configuredProvider === 'TWILIO' && this.twilioSid && this.twilioToken && this.twilioFrom) {
       return this.sendViaTwilio(normalizedPhone, otp, maskedPhone);
     }
 
-    // 2. Check MSG91 integration
+    // 3. Fallback: If MSG91 credentials exist, prefer MSG91 (configured for India)
     if (this.msg91AuthKey && this.msg91TemplateId) {
       return this.sendViaMsg91(normalizedPhone, otp, maskedPhone);
     }
 
-    // 3. Gateway credentials missing in .env
+    // 4. Fallback: Check Twilio credentials
+    if (this.twilioSid && this.twilioToken && this.twilioFrom) {
+      return this.sendViaTwilio(normalizedPhone, otp, maskedPhone);
+    }
+
+    // 5. Gateway credentials missing in environment
     this.logger.warn(
       `SMS gateway credentials are not configured in environment. SMS OTP delivery disabled for ${maskedPhone}.`,
     );
@@ -104,7 +125,7 @@ export class SmsService {
     return {
       success: false,
       provider: 'UNCONFIGURED',
-      error: 'SMS service is temporarily unavailable. Please sign in using Email OTP.',
+      error: 'SMS service is temporarily unconfigured. Please sign in using Email OTP.',
     };
   }
 
@@ -162,7 +183,7 @@ export class SmsService {
   }
 
   /**
-   * Send SMS via MSG91 OTP API
+   * Send SMS via MSG91 OTP API (v5 OTP API)
    */
   private async sendViaMsg91(
     to: string,
@@ -170,31 +191,43 @@ export class SmsService {
     maskedPhone: string,
   ): Promise<SendSmsResult> {
     try {
-      // MSG91 mobile parameter without '+'
-      const mobileNumber = to.replace('+', '');
-      const url = `https://control.msg91.com/api/v5/otp?template_id=${this.msg91TemplateId}&mobile=${mobileNumber}&authkey=${this.msg91AuthKey}&otp=${otp}`;
+      // MSG91 mobile parameter requires country code without '+' (e.g. 919822012345)
+      const mobileNumber = to.replace(/[^0-9]/g, '');
+
+      // MSG91 v5 OTP endpoint with authkey header and required parameters
+      const url = `https://control.msg91.com/api/v5/otp?template_id=${encodeURIComponent(
+        this.msg91TemplateId,
+      )}&mobile=${encodeURIComponent(mobileNumber)}&otp=${encodeURIComponent(otp)}`;
 
       const response = await fetch(url, {
         method: 'POST',
         headers: {
+          authkey: this.msg91AuthKey,
           'Content-Type': 'application/json',
+          Accept: 'application/json',
         },
       });
 
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok || data.type === 'error') {
-        this.logger.error(`MSG91 SMS delivery failed: ${data.message || response.statusText}`);
+        const errorMsg =
+          data.message ||
+          (typeof data === 'string'
+            ? data
+            : `MSG91 HTTP ${response.status}: ${response.statusText}`);
+        this.logger.error(`MSG91 SMS delivery failed for ${maskedPhone}: ${errorMsg}`);
         return {
           success: false,
           provider: 'MSG91',
-          error: data.message || `MSG91 error ${response.status}`,
+          error: errorMsg,
         };
       }
 
       this.logger.log(`[MSG91 SMS Sent] Successfully delivered OTP SMS to ${maskedPhone}`);
       return {
         success: true,
+        messageId: data.message || 'DELIVERED',
         provider: 'MSG91',
       };
     } catch (err: any) {
@@ -202,7 +235,7 @@ export class SmsService {
       return {
         success: false,
         provider: 'MSG91',
-        error: err.message,
+        error: err.message || 'Failed to connect to MSG91 SMS gateway.',
       };
     }
   }

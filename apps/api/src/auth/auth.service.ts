@@ -501,10 +501,91 @@ export class AuthService {
         cooldownSeconds: 60,
       };
     } else {
-      // Mobile SMS OTP - strictly disabled until SMS provider credentials are provided and verified
-      throw new BadRequestException(
-        'Mobile SMS OTP is temporarily unavailable. Please sign in using your Email Address.',
-      );
+      // Mobile SMS OTP
+      const normalizedPhone = this.smsService.normalizePhoneNumber(rawIdentifier);
+      if (!this.smsService.isValidIndianMobile(normalizedPhone)) {
+        throw new BadRequestException(
+          'Please enter a valid 10-digit Indian mobile number (e.g. 9822012345 or +919822012345).',
+        );
+      }
+
+      // Check role boundary: Never authenticate Admin or Pandit via Customer OTP!
+      const existingUser = await this.prisma.user.findFirst({
+        where: { phoneNumber: normalizedPhone },
+        select: { id: true, role: true, isActive: true },
+      });
+
+      if (existingUser && existingUser.role !== Role.CUSTOMER) {
+        throw new UnauthorizedException(
+          `This mobile number is registered as an authorized ${existingUser.role} account. Customer OTP cannot be used to sign in to this account.`,
+        );
+      }
+
+      // 60-second resend cooldown
+      const recentOtp = await this.prisma.otpVerification.findFirst({
+        where: {
+          phoneNumber: normalizedPhone,
+          createdAt: { gte: new Date(Date.now() - 60 * 1000) },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (recentOtp) {
+        const waitSeconds = Math.ceil(
+          (recentOtp.createdAt.getTime() + 60 * 1000 - Date.now()) / 1000,
+        );
+        throw new BadRequestException(
+          `Please wait ${waitSeconds > 0 ? waitSeconds : 1} seconds before requesting a new SMS code.`,
+        );
+      }
+
+      // Rate limit: Maximum 5 OTP requests per hour per mobile number
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const hourlyCount = await this.prisma.otpVerification.count({
+        where: {
+          phoneNumber: normalizedPhone,
+          createdAt: { gte: oneHourAgo },
+        },
+      });
+
+      if (hourlyCount >= 5) {
+        throw new BadRequestException(
+          'Too many verification requests for this mobile number. Please try again after 1 hour or sign in via Email OTP.',
+        );
+      }
+
+      // Generate cryptographically secure 6-digit OTP
+      const rawOtp = this.smsService.generateOtp();
+      const otpHash = this.smsService.hashOtp(rawOtp);
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+      // Store in PostgreSQL OtpVerification
+      await this.prisma.otpVerification.create({
+        data: {
+          phoneNumber: normalizedPhone,
+          otpHash,
+          purpose: dto.purpose || 'LOGIN',
+          expiresAt,
+        },
+      });
+
+      // Send real SMS OTP via SmsService (MSG91 or Twilio)
+      const smsResult = await this.smsService.sendOtpSms(normalizedPhone, rawOtp);
+
+      if (!smsResult.success) {
+        throw new BadRequestException(
+          smsResult.error || 'Failed to deliver SMS OTP to your mobile number. Please try again or use Email OTP.',
+        );
+      }
+
+      const maskedPhone = `${normalizedPhone.slice(0, 6)}****${normalizedPhone.slice(-2)}`;
+      return {
+        success: true,
+        channel: 'sms',
+        message: `Verification code sent via SMS to ${maskedPhone}. Valid for 5 minutes.`,
+        identifier: normalizedPhone,
+        cooldownSeconds: 60,
+      };
     }
   }
 
@@ -608,9 +689,14 @@ export class AuthService {
       const unguessablePassword = crypto.randomBytes(32).toString('hex');
       const passwordHash = await bcrypt.hash(unguessablePassword, 12);
 
+      const phoneDigits = normalizedIdentifier.replace(/[^0-9]/g, '');
+      const defaultEmail = isEmail
+        ? normalizedIdentifier
+        : `devotee.${phoneDigits}@devsutra.in`;
+
       user = await this.prisma.user.create({
         data: {
-          email: isEmail ? normalizedIdentifier : `devotee.${Date.now()}@devsutra.in`,
+          email: defaultEmail,
           phoneNumber: isEmail ? null : normalizedIdentifier,
           passwordHash,
           role: Role.CUSTOMER,
@@ -626,7 +712,9 @@ export class AuthService {
         },
       });
 
-      this.logger.log(`Created new Devotee via Email OTP: ${user.email} (ID: ${user.id})`);
+      this.logger.log(
+        `Created new Devotee via ${isEmail ? 'Email' : 'Mobile'} OTP: ${user.phoneNumber || user.email} (ID: ${user.id})`,
+      );
     } else {
       // Ensure customer profile exists if missing on existing devotee
       if (!user.customerProfile) {

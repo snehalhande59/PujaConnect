@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -29,16 +30,22 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
 }) => {
   const { sendCustomerOtp, loginCustomerWithOtp, loginCustomer } = useAuth();
 
-  // Mode: 'otp' (primary Email OTP) vs 'password' (fallback)
-  const [authMode, setAuthMode] = useState<'otp' | 'password'>('otp');
+  // Primary Login Mode: 'email' vs 'mobile' (clearly visible at the top of the Customer Login page)
+  const [loginMode, setLoginMode] = useState<'email' | 'mobile'>('email');
 
-  // Email OTP state
+  // Email state
   const [email, setEmail] = useState('');
+
+  // Mobile state (10 digits, default +91)
+  const [phone, setPhone] = useState('');
+
+  // OTP state (shared across active mode)
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
-  // Password login state
+  // Optional password fallback inside Email mode
+  const [showPasswordLogin, setShowPasswordLogin] = useState(false);
   const [password, setPassword] = useState('');
 
   // Status & loading
@@ -63,43 +70,105 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     return `${local[0]}***${local[local.length - 1]}@${domain}`;
   };
 
-  // 1. Send OTP Request
+  // Mask phone for display (e.g. +91 98******45)
+  const maskPhone = (val: string) => {
+    const digits = val.replace(/[^0-9]/g, '');
+    if (digits.length >= 10) {
+      const last10 = digits.slice(-10);
+      return `+91 ${last10.slice(0, 2)}******${last10.slice(-2)}`;
+    }
+    return val;
+  };
+
+  // Switch between Email Login and Mobile Login
+  const handleSelectMode = (mode: 'email' | 'mobile') => {
+    if (loading) return;
+    setLoginMode(mode);
+    setOtpSent(false);
+    setOtp('');
+    setShowPasswordLogin(false);
+    setError(null);
+    setSuccess(null);
+  };
+
+  // 1. Send OTP Request (Email or Mobile)
   const handleSendOtp = async () => {
+    if (loading) return;
     setError(null);
     setSuccess(null);
 
-    const trimmed = email.trim();
-    if (!trimmed) {
-      setError('Please enter your email address.');
-      return;
-    }
+    if (loginMode === 'email') {
+      const trimmed = email.trim();
+      if (!trimmed) {
+        setError('Please enter your email address.');
+        return;
+      }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmed)) {
-      setError('Please enter a valid email address (e.g. devotee@example.com).');
-      return;
-    }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(trimmed)) {
+        setError('Please enter a valid email address (e.g. devotee@example.com).');
+        return;
+      }
 
-    try {
-      setLoading(true);
-      const res = await sendCustomerOtp(trimmed, 'email');
-      setOtpSent(true);
-      setCooldown(res?.cooldownSeconds || 60);
-      setSuccess(
-        res?.message || `A 6-digit verification code has been sent to ${maskEmail(trimmed)}.`,
-      );
-    } catch (e: any) {
-      setError(
-        e.message ||
-          'Failed to deliver verification code. Please check your email and try again.',
-      );
-    } finally {
-      setLoading(false);
+      try {
+        setLoading(true);
+        const res = await sendCustomerOtp(trimmed, 'email');
+        setOtpSent(true);
+        setCooldown(res?.cooldownSeconds || 60);
+        setSuccess(
+          res?.message || `A 6-digit verification code has been sent to ${maskEmail(trimmed)}.`,
+        );
+      } catch (e: any) {
+        setError(
+          e.message ||
+            'Failed to deliver email verification code. Please check your email and try again.',
+        );
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Mobile Login (SMS OTP via MSG91)
+      const cleaned = phone.trim().replace(/[^0-9]/g, '');
+      if (!cleaned) {
+        setError('Please enter your 10-digit mobile number.');
+        return;
+      }
+
+      if (cleaned.length !== 10) {
+        setError('Please enter a valid 10-digit Indian mobile number.');
+        return;
+      }
+
+      if (!/^[6-9]\d{9}$/.test(cleaned)) {
+        setError('Please enter a valid mobile number starting with 6, 7, 8, or 9.');
+        return;
+      }
+
+      const formattedPhone = `+91${cleaned}`;
+
+      try {
+        setLoading(true);
+        const res = await sendCustomerOtp(formattedPhone, 'sms');
+        setOtpSent(true);
+        setCooldown(res?.cooldownSeconds || 60);
+        setSuccess(
+          res?.message ||
+            `A 6-digit verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
+        );
+      } catch (e: any) {
+        setError(
+          e.message ||
+            'Failed to deliver SMS verification code. Please check your number and try again.',
+        );
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   // 2. Verify OTP Request
   const handleVerifyOtp = async () => {
+    if (loading) return;
     setError(null);
     setSuccess(null);
 
@@ -109,9 +178,14 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
       return;
     }
 
+    const identifier =
+      loginMode === 'email'
+        ? email.trim()
+        : `+91${phone.trim().replace(/[^0-9]/g, '')}`;
+
     try {
       setLoading(true);
-      const res = await loginCustomerWithOtp(email.trim(), cleanOtp);
+      const res = await loginCustomerWithOtp(identifier, cleanOtp);
       setSuccess('Verification successful!');
       onLoginSuccess(res.user, Boolean(res.isNewCustomer));
     } catch (e: any) {
@@ -121,8 +195,9 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     }
   };
 
-  // 3. Password Login Fallback
+  // 3. Password Login (Optional fallback for Email mode)
   const handlePasswordLogin = async () => {
+    if (loading) return;
     setError(null);
     setSuccess(null);
 
@@ -149,7 +224,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
-        {/* Top Bar */}
+        {/* Top Header Bar */}
         <View style={styles.topBar}>
           <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityLabel="Back">
             <Ionicons name="arrow-back" size={20} color={colors.primary} />
@@ -163,7 +238,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
+          {/* Brand & Welcome Hero */}
           <View style={styles.header}>
             <DevSutraLogo variant="vertical" size="md" />
             <Text style={styles.mantraText}>॥ ॐ श्री गणेशाय नमः ॥</Text>
@@ -173,52 +248,51 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             </Text>
           </View>
 
-          {/* Mode Switch Pills */}
+          {/* PRIMARY LOGIN OPTIONS: EMAIL LOGIN vs MOBILE LOGIN */}
           <View style={styles.tabContainer}>
             <TouchableOpacity
-              onPress={() => {
-                setAuthMode('otp');
-                setError(null);
-                setSuccess(null);
-              }}
-              style={[styles.tabButton, authMode === 'otp' && styles.tabButtonActive]}
+              onPress={() => handleSelectMode('email')}
+              style={[styles.tabButton, loginMode === 'email' && styles.tabButtonActive]}
+              disabled={loading}
+              activeOpacity={0.85}
             >
               <Ionicons
                 name="mail-outline"
-                size={16}
-                color={authMode === 'otp' ? colors.card : colors.textLight}
-              />
-              <Text
-                style={[styles.tabButtonText, authMode === 'otp' && styles.tabButtonTextActive]}
-              >
-                Email OTP
-              </Text>
-              <View style={styles.recommendedBadge}>
-                <Text style={styles.recommendedBadgeText}>Instant</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => {
-                setAuthMode('password');
-                setError(null);
-                setSuccess(null);
-              }}
-              style={[styles.tabButton, authMode === 'password' && styles.tabButtonActive]}
-            >
-              <Ionicons
-                name="key-outline"
-                size={16}
-                color={authMode === 'password' ? colors.card : colors.textLight}
+                size={17}
+                color={loginMode === 'email' ? colors.card : colors.textLight}
               />
               <Text
                 style={[
                   styles.tabButtonText,
-                  authMode === 'password' && styles.tabButtonTextActive,
+                  loginMode === 'email' && styles.tabButtonTextActive,
                 ]}
               >
-                Password
+                Email Login
               </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => handleSelectMode('mobile')}
+              style={[styles.tabButton, loginMode === 'mobile' && styles.tabButtonActive]}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name="phone-portrait-outline"
+                size={17}
+                color={loginMode === 'mobile' ? colors.card : colors.textLight}
+              />
+              <Text
+                style={[
+                  styles.tabButtonText,
+                  loginMode === 'mobile' && styles.tabButtonTextActive,
+                ]}
+              >
+                Mobile Login
+              </Text>
+              <View style={styles.smsBadge}>
+                <Text style={styles.smsBadgeText}>SMS OTP</Text>
+              </View>
             </TouchableOpacity>
           </View>
 
@@ -238,12 +312,70 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             </View>
           )}
 
-          {/* Main Form Card */}
+          {/* Main Login Card */}
           <View style={styles.formCard}>
-            {authMode === 'otp' ? (
-              // --- EMAIL OTP FLOW ---
-              !otpSent ? (
-                // Step 1: Email Input
+            {loginMode === 'email' ? (
+              // ==========================================
+              // 1. EMAIL LOGIN FLOW
+              // ==========================================
+              showPasswordLogin ? (
+                // Email Password Fallback
+                <View>
+                  <Input
+                    label="Email Address *"
+                    placeholder="devotee@example.com"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    leftIcon="mail-outline"
+                    editable={!loading}
+                  />
+
+                  <Input
+                    label="Password *"
+                    placeholder="••••••••••••"
+                    value={password}
+                    onChangeText={setPassword}
+                    isPassword
+                    leftIcon="lock-closed-outline"
+                    editable={!loading}
+                  />
+
+                  {onNavigateForgotPassword && (
+                    <TouchableOpacity
+                      onPress={onNavigateForgotPassword}
+                      style={styles.forgotBtn}
+                      disabled={loading}
+                    >
+                      <Text style={styles.forgotText}>Forgot Password?</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <Button
+                    title="Sign In with Password"
+                    variant="primary"
+                    size="lg"
+                    loading={loading}
+                    disabled={loading}
+                    onPress={handlePasswordLogin}
+                    style={{ marginTop: 8 }}
+                  />
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowPasswordLogin(false);
+                      setError(null);
+                    }}
+                    style={styles.togglePasswordLink}
+                    disabled={loading}
+                  >
+                    <Ionicons name="mail-outline" size={14} color={colors.primary} />
+                    <Text style={styles.togglePasswordText}>Sign in using Email OTP instead</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : !otpSent ? (
+                // Step 1: Email Input + Send Email OTP
                 <View>
                   <Input
                     label="Email Address *"
@@ -257,27 +389,51 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                     autoCapitalize="none"
                     autoCorrect={false}
                     leftIcon="mail-outline"
+                    editable={!loading}
                   />
 
                   <View style={styles.infoRow}>
-                    <Ionicons name="shield-checkmark-outline" size={15} color={colors.goldDark} />
+                    <Ionicons
+                      name="shield-checkmark-outline"
+                      size={15}
+                      color={colors.goldDark}
+                    />
                     <Text style={styles.infoRowText}>
                       We will email you a 6-digit verification code. No password required!
                     </Text>
                   </View>
 
                   <Button
-                    title="Send Verification Code"
+                    title="Send Email OTP"
                     variant="primary"
                     size="lg"
                     loading={loading}
+                    disabled={loading}
                     onPress={handleSendOtp}
-                    icon={<Ionicons name="paper-plane-outline" size={18} color={colors.textWhite} />}
+                    icon={
+                      <Ionicons
+                        name="paper-plane-outline"
+                        size={18}
+                        color={colors.textWhite}
+                      />
+                    }
                     style={{ marginTop: 16 }}
                   />
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowPasswordLogin(true);
+                      setError(null);
+                    }}
+                    style={styles.togglePasswordLink}
+                    disabled={loading}
+                  >
+                    <Ionicons name="key-outline" size={14} color={colors.primary} />
+                    <Text style={styles.togglePasswordText}>Sign in with Password instead</Text>
+                  </TouchableOpacity>
                 </View>
               ) : (
-                // Step 2: 6-Digit OTP Input
+                // Step 2: 6-Digit Email OTP Verification
                 <View>
                   <View style={styles.verifyTargetBox}>
                     <View style={{ flex: 1 }}>
@@ -286,15 +442,17 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                     </View>
                     <TouchableOpacity
                       onPress={() => {
+                        if (loading) return;
                         setOtpSent(false);
                         setOtp('');
                         setError(null);
                         setSuccess(null);
                       }}
-                      style={styles.editEmailBtn}
+                      style={styles.editTargetBtn}
+                      disabled={loading}
                     >
                       <Ionicons name="pencil" size={13} color={colors.primary} />
-                      <Text style={styles.editEmailBtnText}>Change</Text>
+                      <Text style={styles.editTargetBtnText}>Change</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -310,6 +468,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                     maxLength={6}
                     leftIcon="lock-closed-outline"
                     style={styles.otpInputText}
+                    editable={!loading}
                   />
 
                   <Button
@@ -317,6 +476,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                     variant="primary"
                     size="lg"
                     loading={loading}
+                    disabled={loading}
                     onPress={handleVerifyOtp}
                     icon={<Ionicons name="arrow-forward" size={18} color={colors.textWhite} />}
                     style={{ marginTop: 12 }}
@@ -330,7 +490,11 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                         <Text style={styles.cooldownText}>Resend code in {cooldown}s</Text>
                       </View>
                     ) : (
-                      <TouchableOpacity onPress={handleSendOtp} disabled={loading} style={styles.resendBtn}>
+                      <TouchableOpacity
+                        onPress={handleSendOtp}
+                        disabled={loading}
+                        style={styles.resendBtn}
+                      >
                         <Ionicons name="refresh" size={14} color={colors.primary} />
                         <Text style={styles.resendLink}>Resend Code</Text>
                       </TouchableOpacity>
@@ -339,42 +503,134 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                 </View>
               )
             ) : (
-              // --- PASSWORD LOGIN FALLBACK ---
-              <View>
-                <Input
-                  label="Email Address *"
-                  placeholder="devotee@example.com"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  leftIcon="mail-outline"
-                />
+              // ==========================================
+              // 2. MOBILE LOGIN FLOW (SMS OTP VIA MSG91)
+              // ==========================================
+              !otpSent ? (
+                // Step 1: Indian Mobile Number Input + Send Mobile OTP
+                <View>
+                  <View style={styles.phoneInputGroup}>
+                    <Text style={styles.phoneLabel}>Indian Mobile Number *</Text>
+                    <View style={styles.phoneInputRow}>
+                      <View style={styles.countryCodeBadge}>
+                        <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
+                      </View>
+                      <TextInput
+                        style={styles.phoneNumberInput}
+                        placeholder="98220 12345"
+                        placeholderTextColor={colors.textMuted}
+                        value={phone}
+                        onChangeText={(val) => {
+                          const cleaned = val.replace(/[^0-9]/g, '').slice(0, 10);
+                          setPhone(cleaned);
+                          setError(null);
+                        }}
+                        keyboardType="phone-pad"
+                        maxLength={10}
+                        editable={!loading}
+                        autoFocus={loginMode === 'mobile'}
+                      />
+                    </View>
+                  </View>
 
-                <Input
-                  label="Password *"
-                  placeholder="••••••••••••"
-                  value={password}
-                  onChangeText={setPassword}
-                  isPassword
-                  leftIcon="lock-closed-outline"
-                />
+                  <View style={styles.infoRow}>
+                    <Ionicons
+                      name="chatbox-ellipses-outline"
+                      size={15}
+                      color={colors.goldDark}
+                    />
+                    <Text style={styles.infoRowText}>
+                      We will send a 6-digit SMS verification code to your mobile number via MSG91.
+                    </Text>
+                  </View>
 
-                {onNavigateForgotPassword && (
-                  <TouchableOpacity onPress={onNavigateForgotPassword} style={styles.forgotBtn}>
-                    <Text style={styles.forgotText}>Forgot Password?</Text>
-                  </TouchableOpacity>
-                )}
+                  <Button
+                    title="Send Mobile OTP"
+                    variant="primary"
+                    size="lg"
+                    loading={loading}
+                    disabled={loading}
+                    onPress={handleSendOtp}
+                    icon={
+                      <Ionicons
+                        name="paper-plane-outline"
+                        size={18}
+                        color={colors.textWhite}
+                      />
+                    }
+                    style={{ marginTop: 16 }}
+                  />
+                </View>
+              ) : (
+                // Step 2: 6-Digit Mobile SMS OTP Verification
+                <View>
+                  <View style={styles.verifyTargetBox}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.verifyTargetLabel}>SMS verification code sent to:</Text>
+                      <Text style={styles.verifyTargetEmail}>{maskPhone(`+91${phone}`)}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (loading) return;
+                        setOtpSent(false);
+                        setOtp('');
+                        setError(null);
+                        setSuccess(null);
+                      }}
+                      style={styles.editTargetBtn}
+                      disabled={loading}
+                    >
+                      <Ionicons name="pencil" size={13} color={colors.primary} />
+                      <Text style={styles.editTargetBtnText}>Change</Text>
+                    </TouchableOpacity>
+                  </View>
 
-                <Button
-                  title="Sign In with Password"
-                  variant="primary"
-                  size="lg"
-                  loading={loading}
-                  onPress={handlePasswordLogin}
-                  style={{ marginTop: 8 }}
-                />
-              </View>
+                  <Input
+                    label="Enter 6-Digit SMS Code *"
+                    placeholder="• • • • • •"
+                    value={otp}
+                    onChangeText={(val) => {
+                      setOtp(val.replace(/[^0-9]/g, ''));
+                      setError(null);
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    leftIcon="lock-closed-outline"
+                    style={styles.otpInputText}
+                    editable={!loading}
+                  />
+
+                  <Button
+                    title="Verify & Continue"
+                    variant="primary"
+                    size="lg"
+                    loading={loading}
+                    disabled={loading}
+                    onPress={handleVerifyOtp}
+                    icon={<Ionicons name="arrow-forward" size={18} color={colors.textWhite} />}
+                    style={{ marginTop: 12 }}
+                  />
+
+                  {/* Resend Action Row */}
+                  <View style={styles.otpActionsRow}>
+                    {cooldown > 0 ? (
+                      <View style={styles.cooldownWrap}>
+                        <Ionicons name="time-outline" size={14} color={colors.textLight} />
+                        <Text style={styles.cooldownText}>Resend SMS in {cooldown}s</Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={handleSendOtp}
+                        disabled={loading}
+                        style={styles.resendBtn}
+                      >
+                        <Ionicons name="refresh" size={14} color={colors.primary} />
+                        <Text style={styles.resendLink}>Resend SMS Code</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              )
             )}
           </View>
 
@@ -461,7 +717,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 10,
   },
   tabButtonActive: {
@@ -473,23 +729,64 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   tabButtonText: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
     color: colors.textLight,
   },
   tabButtonTextActive: {
     color: colors.card,
   },
-  recommendedBadge: {
+  smsBadge: {
     backgroundColor: '#F7D070',
     borderRadius: 6,
     paddingHorizontal: 5,
     paddingVertical: 2,
   },
-  recommendedBadgeText: {
+  smsBadgeText: {
     fontSize: 9.5,
     fontWeight: '800',
     color: '#800020',
+  },
+  phoneInputGroup: {
+    marginBottom: 14,
+  },
+  phoneLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 6,
+  },
+  phoneInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    height: 50,
+    overflow: 'hidden',
+  },
+  countryCodeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(128, 0, 32, 0.06)',
+    paddingHorizontal: 12,
+    height: '100%',
+    borderRightWidth: 1,
+    borderRightColor: colors.border,
+  },
+  countryCodeText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  phoneNumberInput: {
+    flex: 1,
+    height: '100%',
+    paddingHorizontal: 14,
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
   },
   errorBox: {
     flexDirection: 'row',
@@ -571,7 +868,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginTop: 2,
   },
-  editEmailBtn: {
+  editTargetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -580,7 +877,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
   },
-  editEmailBtnText: {
+  editTargetBtnText: {
     fontSize: 11,
     fontWeight: '700',
     color: colors.primary,
@@ -617,6 +914,19 @@ const styles = StyleSheet.create({
   resendLink: {
     fontSize: 13,
     fontWeight: '700',
+    color: colors.primary,
+  },
+  togglePasswordLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingVertical: 8,
+  },
+  togglePasswordText: {
+    fontSize: 12.5,
+    fontWeight: '600',
     color: colors.primary,
   },
   forgotBtn: {
