@@ -58,25 +58,43 @@ export class PanditsService {
       where.languages = { has: params.language.trim() };
     }
 
-    return this.prisma.panditProfile.findMany({
+    const pandits = await this.prisma.panditProfile.findMany({
       where,
-      select: {
-        id: true,
-        fullName: true,
-        avatarUrl: true,
-        experienceYears: true,
-        languages: true,
-        specializations: true,
-        city: true,
-        state: true,
-        serviceAreas: true,
-        bio: true,
-        basePrice: true,
-        averageRating: true,
-        totalReviews: true,
-        verificationStatus: true,
+      include: {
+        user: {
+          select: { email: true, phoneNumber: true },
+        },
       },
       orderBy: { averageRating: 'desc' },
+    });
+
+    return pandits.map((p) => {
+      // Ensure user object is populated with firstName and lastName so older mobile APKs reading item.user display the real name
+      const nameParts = (p.fullName || '').trim().replace(/^Pt\.\s*/i, '').split(/\s+/);
+      const firstName = nameParts[0] || 'Vedic';
+      const lastName = nameParts.slice(1).join(' ') || 'Purohit';
+
+      return {
+        id: p.id,
+        fullName: p.fullName,
+        avatarUrl: p.avatarUrl,
+        experienceYears: p.experienceYears,
+        languages: p.languages,
+        specializations: p.specializations,
+        city: p.city,
+        state: p.state,
+        serviceAreas: p.serviceAreas,
+        bio: p.bio,
+        basePrice: p.basePrice,
+        averageRating: p.averageRating,
+        totalReviews: p.totalReviews,
+        verificationStatus: p.verificationStatus,
+        user: {
+          firstName,
+          lastName,
+          email: p.user?.email || null,
+        },
+      };
     });
   }
 

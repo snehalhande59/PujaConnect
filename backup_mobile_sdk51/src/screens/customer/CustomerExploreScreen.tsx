@@ -204,9 +204,9 @@ export const CustomerExploreScreen: React.FC<CustomerExploreScreenProps> = ({
                 <View style={styles.panditInfo}>
                   <View style={styles.nameHeader}>
                     <Text style={styles.panditName}>
-                      {item.user
+                      {item.fullName || (item.user
                         ? `Pt. ${item.user.firstName} ${item.user.lastName || ''}`.trim()
-                        : 'Pt. Vedic Shastri'}
+                        : 'Pt. Vedic Shastri')}
                     </Text>
                     <View style={styles.verifiedBadge}>
                       <Ionicons name="shield-checkmark" size={12} color="#166534" />

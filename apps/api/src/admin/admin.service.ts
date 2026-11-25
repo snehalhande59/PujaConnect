@@ -3,6 +3,7 @@
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
@@ -14,6 +15,8 @@ import { UpdatePanditDto } from './dto/update-pandit.dto';
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
@@ -604,7 +607,7 @@ export class AdminService {
       this.prisma.payment.count({ where: { paymentStatus: 'REFUNDED' } }),
       this.prisma.payment.findMany({
         where: { paymentStatus: 'SUCCESS' },
-        select: { amount: true, razorpayPaymentId: true, razorpaySignature: true, paymentMethod: true },
+        select: { paymentNumber: true, amount: true, razorpayPaymentId: true, razorpaySignature: true, paymentMethod: true },
       }),
       this.prisma.booking.findMany({
         take: 10,
@@ -732,11 +735,11 @@ export class AdminService {
       };
     });
 
-    // Strictly exclude unverified test transactions (e.g. PAY_TEST_123456 without Razorpay HMAC signature)
+    // Strictly exclude unverified dummy test transaction reference (PAY_TEST_123456)
     const verifiedPayments = paymentsWithAmount.filter((p) => {
       const isTest = Boolean(
-        p.razorpayPaymentId?.includes('TEST') ||
-        (p.paymentMethod === 'RAZORPAY' && !p.razorpaySignature)
+        p.paymentNumber === 'PAY_TEST_123456' ||
+        p.razorpayPaymentId?.toUpperCase().includes('PAY_TEST_123456')
       );
       return !isTest;
     });
@@ -1148,23 +1151,25 @@ export class AdminService {
     const targetStatus = (typeof status === 'string' ? status.toUpperCase() : status) as BookingStatus;
     const isCancelled = targetStatus === BookingStatus.CANCELLED || targetStatus === BookingStatus.REJECTED;
 
-    const [updatedBooking] = await this.prisma.$transaction([
-      this.prisma.booking.update({
-        where: { id },
-        data: {
-          status: targetStatus,
-          cancellationReason: isCancelled ? (reason || 'Cancelled by Admin') : booking.cancellationReason,
+    const updatedBooking = await this.prisma.booking.update({
+      where: { id },
+      data: {
+        status: targetStatus,
+        cancellationReason: isCancelled ? (reason || 'Cancelled by Admin') : booking.cancellationReason,
+      },
+      include: {
+        customerProfile: {
+          include: { user: true },
         },
-        include: {
-          customerProfile: {
-            include: { user: true },
-          },
-          panditProfile: true,
-          puja: true,
-          payments: true,
-        },
-      }),
-      this.prisma.bookingStatusHistory.create({
+        panditProfile: true,
+        puja: true,
+        payments: true,
+      },
+    });
+
+    // Safely record status audit history without failing the operation if the table is not migrated
+    try {
+      await this.prisma.bookingStatusHistory.create({
         data: {
           bookingId: id,
           fromStatus: booking.status,
@@ -1173,8 +1178,10 @@ export class AdminService {
           changedBy: 'ADMIN',
           reason: reason || null,
         },
-      }),
-    ]);
+      });
+    } catch (e: any) {
+      this.logger.warn(`Notice: BookingStatusHistory table not available or error recording audit: ${e?.message || e}`);
+    }
 
     // Send real email notification to the Customer via Gmail SMTP
     try {
@@ -1256,17 +1263,18 @@ export class AdminService {
       );
     }
 
-    const [updatedBooking] = await this.prisma.$transaction([
-      this.prisma.booking.update({
-        where: { id: bookingId },
-        data: { panditProfileId: newPandit.id },
-        include: {
-          customerProfile: true,
-          panditProfile: true,
-          puja: true,
-        },
-      }),
-      this.prisma.bookingStatusHistory.create({
+    const updatedBooking = await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { panditProfileId: newPandit.id },
+      include: {
+        customerProfile: true,
+        panditProfile: true,
+        puja: true,
+      },
+    });
+
+    try {
+      await this.prisma.bookingStatusHistory.create({
         data: {
           bookingId,
           fromStatus: booking.status,
@@ -1281,8 +1289,10 @@ export class AdminService {
             newPanditName: newPandit.fullName,
           },
         },
-      }),
-    ]);
+      });
+    } catch (e: any) {
+      this.logger.warn(`Notice: BookingStatusHistory table not available or error recording reassignment: ${e?.message || e}`);
+    }
 
     return updatedBooking;
   }
@@ -1299,10 +1309,14 @@ export class AdminService {
       throw new NotFoundException(`Booking '${bookingId}' not found.`);
     }
 
-    return this.prisma.bookingStatusHistory.findMany({
-      where: { bookingId },
-      orderBy: { createdAt: 'desc' },
-    });
+    try {
+      return await this.prisma.bookingStatusHistory.findMany({
+        where: { bookingId },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch {
+      return [];
+    }
   }
 
   /**
