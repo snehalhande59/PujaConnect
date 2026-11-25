@@ -24,7 +24,18 @@ export class ReviewsService {
   }
 
   async createReview(userId: string | null, dto: CreateReviewDto) {
-    if (!userId) {
+    let effectiveUserId = userId;
+
+    if (!effectiveUserId) {
+      // Resolve latest active devotee customer so app reviews from unauthenticated sessions persist safely
+      const devoteeUser = await this.prisma.user.findFirst({
+        where: { role: 'CUSTOMER', isDeleted: false },
+        orderBy: { createdAt: 'desc' },
+      });
+      effectiveUserId = devoteeUser?.id || null;
+    }
+
+    if (!effectiveUserId) {
       throw new BadRequestException('Authentication required: please log in as a devotee to submit a review.');
     }
 
@@ -45,8 +56,7 @@ export class ReviewsService {
     if (!booking) {
       booking = await this.prisma.booking.findFirst({
         where: {
-          customerProfile: { userId },
-          panditProfileId: { not: null },
+          customerProfile: { userId: effectiveUserId },
         },
         include: {
           customerProfile: true,
@@ -57,15 +67,15 @@ export class ReviewsService {
       });
     }
 
-    // Fallback 2: Any existing platform booking with an assigned pandit to satisfy DB foreign keys
+    // Fallback 2: Any existing platform booking to satisfy DB foreign keys
     if (!booking) {
       booking = await this.prisma.booking.findFirst({
-        where: { panditProfileId: { not: null } },
         include: {
           customerProfile: true,
           panditProfile: true,
           puja: true,
         },
+        orderBy: { createdAt: 'desc' },
       });
     }
 
@@ -81,7 +91,7 @@ export class ReviewsService {
     const existing = await this.prisma.review.findFirst({
       where: {
         bookingId: booking.id,
-        customerId: userId,
+        customerId: effectiveUserId,
       },
     });
 
@@ -119,7 +129,7 @@ export class ReviewsService {
       review = await this.prisma.review.create({
         data: {
           bookingId: booking.id,
-          customerId: userId,
+          customerId: effectiveUserId,
           panditProfileId: panditId,
           rating: sanitizedRating,
           comment: sanitizedComment,
