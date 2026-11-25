@@ -87,6 +87,7 @@ export default function HomePage() {
   // Live PostgreSQL Data Integration
   const [livePandits, setLivePandits] = useState<any[]>(FEATURED_PANDITS_DATA);
   const [livePujas, setLivePujas] = useState<any[]>(POPULAR_PUJA_CATEGORIES_DATA);
+  const [liveReviews, setLiveReviews] = useState<any[]>([]);
 
   useEffect(() => {
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
@@ -137,6 +138,17 @@ export default function HomePage() {
         const data = json?.data || json;
         if (Array.isArray(data) && data.length > 0) {
           setLivePujas(data);
+        }
+      })
+      .catch(() => {});
+
+    // 3. Fetch verified customer reviews & ratings from PostgreSQL
+    fetch(`${apiBase}/reviews/public`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const data = json?.data || json;
+        if (Array.isArray(data) && data.length > 0) {
+          setLiveReviews(data);
         }
       })
       .catch(() => {});
@@ -1401,52 +1413,84 @@ export default function HomePage() {
             Read reflections from families who celebrated their sacred ceremonies through our platform.
           </p>
 
-          {/* Testimonial Cards */}
+          {/* Testimonial Cards - Real-time PostgreSQL Data */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10 text-left font-sans">
-            <div className="bg-white p-6 rounded-2xl border border-beige shadow-sm space-y-3">
-              <div className="flex items-center gap-1 text-gold-500">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-gold-500" />
-                ))}
-              </div>
-              <p className="text-xs text-brown/80 leading-relaxed italic">
-                &ldquo;Pt. Rameshwar Shastri performed our Griha Pravesh with such sacred devotion. The entire havan samagri was pure and punctuality was 100%.&rdquo;
-              </p>
-              <div className="pt-2 border-t border-beige">
-                <p className="text-xs font-bold text-maroon">Rajesh & Sneha Kulkarni</p>
-                <p className="text-[10px] text-brown/60">Griha Pravesh • Pune</p>
-              </div>
-            </div>
+            {liveReviews.length > 0 ? (
+              liveReviews.slice(0, 3).map((r) => {
+                const devoteeName = r.customer?.customerProfile
+                  ? `${r.customer.customerProfile.firstName} ${r.customer.customerProfile.lastName || ''}`.trim()
+                  : 'वेदमित्र भाविक (Devotee)';
+                const ceremony = r.booking?.puja?.title || 'पवित्र पूजा विधी';
+                const pandit = r.panditProfile?.fullName ? `Pt. ${r.panditProfile.fullName}` : 'Certified Purohit';
 
-            <div className="bg-white p-6 rounded-2xl border border-beige shadow-sm space-y-3">
-              <div className="flex items-center gap-1 text-gold-500">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-gold-500" />
-                ))}
-              </div>
-              <p className="text-xs text-brown/80 leading-relaxed italic">
-                &ldquo;We booked Satyanarayan Katha online for the first time. The Acharya explained each chapter in Marathi and Sanskrit so clearly. Truly blessed.&rdquo;
-              </p>
-              <div className="pt-2 border-t border-beige">
-                <p className="text-xs font-bold text-maroon">Anand Joshi</p>
-                <p className="text-[10px] text-brown/60">Satyanarayan Puja • Mumbai</p>
-              </div>
-            </div>
+                return (
+                  <div key={r.id} className="bg-white p-6 rounded-2xl border border-beige shadow-sm space-y-3">
+                    <div className="flex items-center gap-1 text-gold-500">
+                      {[...Array(5)].map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-4 h-4 ${i < (r.rating || 5) ? 'fill-gold-500 text-gold-500' : 'text-stone-200'}`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-xs text-brown/80 leading-relaxed italic">
+                      &ldquo;{r.comment || 'पूजा व अभिषेक विधी अतिशय भावपूर्ण वातावरणात आणि शास्त्रोक्त पद्धतीने पार पडला. उत्तम अनुभव!'}&rdquo;
+                    </p>
+                    <div className="pt-2 border-t border-beige">
+                      <p className="text-xs font-bold text-maroon">{devoteeName}</p>
+                      <p className="text-[10px] text-brown/60">{ceremony} • {pandit}</p>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <>
+                <div className="bg-white p-6 rounded-2xl border border-beige shadow-sm space-y-3">
+                  <div className="flex items-center gap-1 text-gold-500">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="w-4 h-4 fill-gold-500" />
+                    ))}
+                  </div>
+                  <p className="text-xs text-brown/80 leading-relaxed italic">
+                    &ldquo;Pt. Rameshwar Shastri performed our Griha Pravesh with such sacred devotion. The entire havan samagri was pure and punctuality was 100%.&rdquo;
+                  </p>
+                  <div className="pt-2 border-t border-beige">
+                    <p className="text-xs font-bold text-maroon">Rajesh & Sneha Kulkarni</p>
+                    <p className="text-[10px] text-brown/60">Griha Pravesh • Pune</p>
+                  </div>
+                </div>
 
-            <div className="bg-white p-6 rounded-2xl border border-beige shadow-sm space-y-3">
-              <div className="flex items-center gap-1 text-gold-500">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-gold-500" />
-                ))}
-              </div>
-              <p className="text-xs text-brown/80 leading-relaxed italic">
-                &ldquo;The Maha Rudrabhishek was conducted with such high positive energy. The Pandit brought pure Bel patra and Ganga jal. Highly recommended!&rdquo;
-              </p>
-              <div className="pt-2 border-t border-beige">
-                <p className="text-xs font-bold text-maroon">Meenakshi Sundaram</p>
-                <p className="text-[10px] text-brown/60">Maha Rudrabhishek • Bengaluru</p>
-              </div>
-            </div>
+                <div className="bg-white p-6 rounded-2xl border border-beige shadow-sm space-y-3">
+                  <div className="flex items-center gap-1 text-gold-500">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="w-4 h-4 fill-gold-500" />
+                    ))}
+                  </div>
+                  <p className="text-xs text-brown/80 leading-relaxed italic">
+                    &ldquo;We booked Satyanarayan Katha online for the first time. The Acharya explained each chapter in Marathi and Sanskrit so clearly. Truly blessed.&rdquo;
+                  </p>
+                  <div className="pt-2 border-t border-beige">
+                    <p className="text-xs font-bold text-maroon">Anand Joshi</p>
+                    <p className="text-[10px] text-brown/60">Satyanarayan Puja • Mumbai</p>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-beige shadow-sm space-y-3">
+                  <div className="flex items-center gap-1 text-gold-500">
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} className="w-4 h-4 fill-gold-500" />
+                    ))}
+                  </div>
+                  <p className="text-xs text-brown/80 leading-relaxed italic">
+                    &ldquo;The Maha Rudrabhishek was conducted with such high positive energy. The Pandit brought pure Bel patra and Ganga jal. Highly recommended!&rdquo;
+                  </p>
+                  <div className="pt-2 border-t border-beige">
+                    <p className="text-xs font-bold text-maroon">Meenakshi Sundaram</p>
+                    <p className="text-[10px] text-brown/60">Maha Rudrabhishek • Bengaluru</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </section>

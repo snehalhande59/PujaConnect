@@ -2,8 +2,8 @@ import { IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min } from 'class-vali
 
 export class CreateReviewDto {
   @IsString()
-  @IsNotEmpty()
-  bookingId: string;
+  @IsOptional()
+  bookingId?: string;
 
   @IsNumber()
   @Min(1)
@@ -13,4 +13,8 @@ export class CreateReviewDto {
   @IsString()
   @IsOptional()
   comment?: string;
+
+  @IsString()
+  @IsOptional()
+  panditProfileId?: string;
 }

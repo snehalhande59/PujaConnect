@@ -610,9 +610,10 @@ export const api = {
 
   // --- REVIEWS & RATINGS ---
   async submitReview(data: {
-    bookingId: string;
+    bookingId?: string;
     rating: number;
     comment?: string;
+    panditProfileId?: string;
   }) {
     return apiRequest('/reviews', {
       method: 'POST',

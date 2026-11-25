@@ -958,20 +958,20 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
           </View>
         )}
 
-        {/* Puja Samagri Store Banner */}
+        {/* Sampurna Puja Kit & Thali Banner */}
         <TouchableOpacity
           style={styles.storeCtaBanner}
           activeOpacity={0.85}
           onPress={onNavigateStore}
         >
           <View style={styles.storeCtaContent}>
-            <Text style={styles.storeCtaTag}>100% PURE & CONSECRATED</Text>
-            <Text style={styles.storeCtaTitle}>Complete Puja Samagri Kits</Text>
+            <Text style={styles.storeCtaTag}>🚩 १००% शुद्ध व संकल्पित वैदिक साहित्य</Text>
+            <Text style={styles.storeCtaTitle}>संपूर्ण पूजा किट्स व पूजा ताट</Text>
             <Text style={styles.storeCtaDesc}>
-              Pure Cow Ghee, Brass Kalash, Havan Samidha, and Consecrated Kits.
+              नारळ, ताजी फुले, पितळी दिवा, शुद्ध पूजा तेल, वाती, हळद-कुंकू, कापूर, अगरबत्ती सहित संपूर्ण पूजा ताट उपलब्ध.
             </Text>
             <View style={styles.storeCtaBtn}>
-              <Text style={styles.storeCtaBtnText}>Explore Samagri Store</Text>
+              <Text style={styles.storeCtaBtnText}>पूजेचे ताट निवडा व बुक करा</Text>
               <Ionicons name="arrow-forward" size={12} color="#FFFFFF" />
             </View>
           </View>
@@ -1101,6 +1101,7 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
         visible={showReviewModal}
         onClose={() => setShowReviewModal(false)}
         onSubmitSuccess={(newRev) => {
+          loadData();
           setReviewsList((prev) => [
             {
               id: 'rev-' + Date.now(),
