@@ -28,6 +28,9 @@ import {
   Award,
   Layers,
   ChevronRight,
+  Star,
+  Gift,
+  Tag,
 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
@@ -61,6 +64,8 @@ export default function AdminDashboardPage() {
       failed: 0,
       totalRevenue: 0,
     },
+    reviews: { total: 0 },
+    coupons: { total: 0 },
   });
 
   const [recentBookings, setRecentBookings] = useState<any[]>([]);
@@ -68,6 +73,7 @@ export default function AdminDashboardPage() {
   const [recentPandits, setRecentPandits] = useState<any[]>([]);
   const [recentPayments, setRecentPayments] = useState<any[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [recentReviews, setRecentReviews] = useState<any[]>([]);
   const [pendingPandits, setPendingPandits] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -150,6 +156,8 @@ export default function AdminDashboardPage() {
               failed: Number(payload.payments?.failed || 0),
               totalRevenue: Number(payload.payments?.totalRevenue || 0),
             },
+            reviews: { total: Number(payload.reviews?.total || 0) },
+            coupons: { total: Number(payload.coupons?.total || 0) },
           });
         }
 
@@ -158,6 +166,12 @@ export default function AdminDashboardPage() {
         if (Array.isArray(payload.recentPandits)) setRecentPandits(payload.recentPandits);
         if (Array.isArray(payload.recentPayments)) setRecentPayments(payload.recentPayments);
         if (Array.isArray(payload.recentActivity)) setRecentActivity(payload.recentActivity);
+        if (Array.isArray(payload.recentReviews)) setRecentReviews(payload.recentReviews);
+      } else {
+        setMessage({
+          type: 'error',
+          text: `API Sync Notice (${statsRes.status}): Live statistics could not be loaded from backend (${API_BASE_URL}).`,
+        });
       }
 
       if (pendingRes.ok) {
@@ -813,6 +827,270 @@ export default function AdminDashboardPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* ------------------------------------------------------------------ */}
+        {/* ACTUAL DEVOTEE CUSTOMERS ROSTER (LIVE POSTGRESQL) */}
+        {/* ------------------------------------------------------------------ */}
+        <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-purple-600" />
+                  <span>Actual Devotee Customers (नोंदणीकृत भक्त ग्राहक)</span>
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                  {platformStats.customers.total} Total
+                </span>
+              </div>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Real devotee accounts registered through the Android application and website
+              </p>
+            </div>
+            <Link
+              href="/admin/customers"
+              className="text-xs text-amber-700 font-bold hover:underline flex items-center gap-1 self-start sm:self-auto"
+            >
+              <span>Manage All Customers ({platformStats.customers.total})</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {recentCustomers.length === 0 ? (
+            <div className="py-10 text-center text-xs text-stone-400">
+              <Users className="w-8 h-8 mx-auto mb-2 text-stone-300" />
+              <p className="font-semibold text-stone-600">No customer accounts found in database</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-stone-700">
+                <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200 tracking-wider">
+                  <tr>
+                    <th className="p-3">Devotee Name</th>
+                    <th className="p-3">Email Address</th>
+                    <th className="p-3">Phone Number</th>
+                    <th className="p-3">City</th>
+                    <th className="p-3">Bookings</th>
+                    <th className="p-3">Registered Date</th>
+                    <th className="p-3">Last Login / Activity</th>
+                    <th className="p-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {recentCustomers.slice(0, 7).map((c) => {
+                    const name = `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Devotee';
+                    const email = c.user?.email || 'N/A';
+                    const phone = c.user?.phoneNumber || 'N/A';
+                    const city = c.city || 'India';
+                    const bookingCount = c._count?.bookings || 0;
+                    const regDate = c.createdAt ? new Date(c.createdAt).toLocaleDateString() : 'N/A';
+                    const hasLogin = Boolean(c.lastLoginAt);
+
+                    return (
+                      <tr key={c.id} className="hover:bg-stone-50/80 transition">
+                        <td className="p-3 font-bold text-stone-900 flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-purple-50 text-purple-700 font-bold flex items-center justify-center text-xs border border-purple-200 shrink-0">
+                            {name.charAt(0).toUpperCase()}
+                          </div>
+                          <span>{name}</span>
+                        </td>
+                        <td className="p-3 font-mono text-[11px] text-stone-700">{email}</td>
+                        <td className="p-3 font-mono text-[11px] text-stone-700">{phone}</td>
+                        <td className="p-3 text-stone-600">{city}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-800 font-bold text-[11px]">
+                            {bookingCount} {bookingCount === 1 ? 'Booking' : 'Bookings'}
+                          </span>
+                        </td>
+                        <td className="p-3 text-stone-500 font-mono text-[11px]">{regDate}</td>
+                        <td className="p-3">
+                          {hasLogin ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-stone-800 text-[11px]">
+                                {new Date(c.lastLoginAt).toLocaleDateString()}
+                              </span>
+                              <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 font-bold text-[9px] border border-amber-200">
+                                {c.lastLoginMethod || 'OTP'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-stone-400 text-[11px] italic">No login recorded</span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            Active
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* ------------------------------------------------------------------ */}
+        {/* ACTUAL VEDIC PUROHITS & PANDITS DIRECTORY */}
+        {/* ------------------------------------------------------------------ */}
+        <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-amber-600" />
+                  <span>Actual Vedic Pandits & Purohits (अधिकृत पुरोहित)</span>
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                  {platformStats.pandits.total} Total ({platformStats.pandits.approved} Verified)
+                </span>
+              </div>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Qualified Vedic scholars and purohits registered to conduct sacred ceremonies
+              </p>
+            </div>
+            <Link
+              href="/admin/pandits"
+              className="text-xs text-amber-700 font-bold hover:underline flex items-center gap-1 self-start sm:self-auto"
+            >
+              <span>Manage All Pandits ({platformStats.pandits.total})</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {recentPandits.length === 0 ? (
+            <div className="py-10 text-center text-xs text-stone-400">
+              <ShieldCheck className="w-8 h-8 mx-auto mb-2 text-stone-300" />
+              <p className="font-semibold text-stone-600">No Pandits found in database</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-stone-700">
+                <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200 tracking-wider">
+                  <tr>
+                    <th className="p-3">Purohit Name</th>
+                    <th className="p-3">Contact Email</th>
+                    <th className="p-3">Phone</th>
+                    <th className="p-3">Location</th>
+                    <th className="p-3">Experience</th>
+                    <th className="p-3">Base Dakshina</th>
+                    <th className="p-3">Verification</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {recentPandits.slice(0, 7).map((p) => {
+                    const isVerified = p.verificationStatus === 'VERIFIED';
+                    const isPending = p.verificationStatus === 'PENDING';
+
+                    return (
+                      <tr key={p.id} className="hover:bg-stone-50/80 transition">
+                        <td className="p-3 font-bold text-stone-900 flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-amber-50 text-amber-700 font-bold flex items-center justify-center text-xs border border-amber-200 shrink-0">
+                            {p.fullName ? p.fullName.charAt(0).toUpperCase() : 'P'}
+                          </div>
+                          <span>Pt. {p.fullName}</span>
+                        </td>
+                        <td className="p-3 font-mono text-[11px] text-stone-700">{p.user?.email || 'N/A'}</td>
+                        <td className="p-3 font-mono text-[11px] text-stone-700">{p.user?.phoneNumber || 'N/A'}</td>
+                        <td className="p-3 text-stone-600">{p.city}, {p.state}</td>
+                        <td className="p-3 font-semibold text-stone-800">{p.experienceYears} Years</td>
+                        <td className="p-3 font-extrabold text-stone-900">₹{Number(p.basePrice || 2100).toLocaleString()}</td>
+                        <td className="p-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              isVerified
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : isPending
+                                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                : 'bg-rose-50 text-rose-800 border border-rose-200'
+                            }`}
+                          >
+                            {p.verificationStatus}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* ------------------------------------------------------------------ */}
+        {/* RECENT REVIEWS & SACRED RATINGS FEED */}
+        {/* ------------------------------------------------------------------ */}
+        <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                  <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                  <span>Devotee Ratings & Sacred Reviews (अभिप्राय व रेटिंग)</span>
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                  {platformStats.reviews.total} Reviews
+                </span>
+              </div>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Authentic star ratings and feedback submitted by devotees from the mobile application
+              </p>
+            </div>
+            <Link
+              href="/admin/reviews"
+              className="text-xs text-amber-700 font-bold hover:underline flex items-center gap-1 self-start sm:self-auto"
+            >
+              <span>Manage All Reviews</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {recentReviews.length === 0 ? (
+            <div className="py-10 text-center text-xs text-stone-400">
+              <Star className="w-8 h-8 mx-auto mb-2 text-stone-300" />
+              <p className="font-semibold text-stone-600">No reviews submitted yet</p>
+              <p className="text-stone-400 mt-0.5">When devotees complete rituals and rate via the Android app, reviews appear here</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {recentReviews.map((rev) => {
+                const devoteeName = rev.customer?.customerProfile
+                  ? `${rev.customer.customerProfile.firstName} ${rev.customer.customerProfile.lastName || ''}`.trim()
+                  : 'Sacred Devotee';
+
+                return (
+                  <div key={rev.id} className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star
+                            key={s}
+                            className={`w-3.5 h-3.5 ${
+                              s <= rev.rating ? 'text-amber-500 fill-amber-500' : 'text-stone-300'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-[10px] text-stone-400 font-mono">
+                        {rev.createdAt ? new Date(rev.createdAt).toLocaleDateString() : ''}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-stone-800 italic line-clamp-3">
+                      &ldquo;{rev.comment || 'Authentic shastric vidhi conducted with deep devotion.'}&rdquo;
+                    </p>
+
+                    <div className="pt-2 border-t border-stone-200/60 text-[11px] flex justify-between items-center">
+                      <span className="font-semibold text-stone-900">{devoteeName}</span>
+                      <span className="text-amber-800 font-medium">Pt. {rev.panditProfile?.fullName || 'Purohit'}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

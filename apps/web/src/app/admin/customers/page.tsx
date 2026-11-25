@@ -41,7 +41,9 @@ export default function AdminCustomersPage() {
   const [customerDetails, setCustomerDetails] = useState<any | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [savingDetails, setSavingDetails] = useState(false);
-  const [activeTab, setActiveTab] = useState<'details' | 'bookings'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'bookings' | 'security'>('details');
+  const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
+  const [bookingStatusMap, setBookingStatusMap] = useState<Record<string, { status: string; reason: string }>>({});
 
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -143,6 +145,61 @@ export default function AdminCustomersPage() {
       setNotification({ type: 'error', message: e.message || 'Error updating customer.' });
     } finally {
       setSavingDetails(false);
+    }
+  };
+
+  // Update customer booking status & message (Confirm, In-Progress, Complete, Cancel)
+  const handleUpdateBookingStatus = async (bookingId: string) => {
+    const entry = bookingStatusMap[bookingId];
+    if (!entry || !entry.status) {
+      setNotification({ type: 'error', message: 'Please select a target status.' });
+      return;
+    }
+
+    const token = getClientToken();
+    try {
+      setUpdatingBookingId(bookingId);
+      const res = await fetch(`${API_BASE_URL}/admin/bookings/${bookingId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: entry.status,
+          reason: entry.reason || `Status updated to ${entry.status} by Admin`,
+        }),
+      });
+
+      if (res.ok) {
+        setNotification({
+          type: 'success',
+          message: `Booking #${bookingId.slice(0, 8)} status updated to ${entry.status} successfully.`,
+        });
+        // Refresh customer details to show updated status
+        if (selectedCustomerId) {
+          const custRes = await fetch(`${API_BASE_URL}/admin/customers/${selectedCustomerId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (custRes.ok) {
+            const json = await custRes.json();
+            setCustomerDetails(json.data || json);
+          }
+        }
+      } else {
+        const err = await res.json();
+        setNotification({
+          type: 'error',
+          message: err.message || 'Failed to update booking status.',
+        });
+      }
+    } catch (e: any) {
+      setNotification({
+        type: 'error',
+        message: e.message || 'Error updating booking status.',
+      });
+    } finally {
+      setUpdatingBookingId(null);
     }
   };
 
@@ -303,6 +360,7 @@ export default function AdminCustomersPage() {
                     <th className="p-4">Account Status</th>
                     <th className="p-4">Total Bookings</th>
                     <th className="p-4">Registered Date</th>
+                    <th className="p-4">Last Login Activity</th>
                     <th className="p-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -315,6 +373,7 @@ export default function AdminCustomersPage() {
                     const isActive = c.user?.isActive !== false;
                     const bookingCount = c._count?.bookings || 0;
                     const regDate = c.createdAt ? new Date(c.createdAt).toLocaleDateString() : 'N/A';
+                    const hasLogin = Boolean(c.lastLoginAt);
 
                     return (
                       <tr key={c.id} className="hover:bg-stone-50/80 transition">
@@ -362,7 +421,30 @@ export default function AdminCustomersPage() {
                           </span>
                         </td>
 
-                        <td className="p-4 text-stone-500">{regDate}</td>
+                        <td className="p-4 text-stone-500 font-mono text-[11px]">{regDate}</td>
+
+                        <td className="p-4">
+                          {hasLogin ? (
+                            <div>
+                              <span className="block font-semibold text-stone-800 text-[11px]">
+                                {new Date(c.lastLoginAt).toLocaleDateString()}
+                              </span>
+                              <div className="flex items-center gap-1 text-[10px] text-stone-400 font-mono">
+                                <span>
+                                  {new Date(c.lastLoginAt).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                                <span className="px-1 py-0.2 rounded bg-amber-50 text-amber-800 font-bold text-[9px] border border-amber-200">
+                                  {c.lastLoginMethod || 'OTP'}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-stone-400 text-[11px] italic">No login recorded</span>
+                          )}
+                        </td>
 
                         <td className="p-4 text-right">
                           <button
@@ -432,6 +514,16 @@ export default function AdminCustomersPage() {
                 >
                   Booking History ({customerDetails?.bookings?.length || 0})
                 </button>
+                <button
+                  onClick={() => setActiveTab('security')}
+                  className={`pb-2.5 font-bold border-b-2 transition cursor-pointer ${
+                    activeTab === 'security'
+                      ? 'border-amber-600 text-amber-700'
+                      : 'border-transparent text-stone-500 hover:text-stone-900'
+                  }`}
+                >
+                  Login & Security Audit ({customerDetails?.loginHistory?.length || 0})
+                </button>
               </div>
 
               {/* Modal Content */}
@@ -443,6 +535,31 @@ export default function AdminCustomersPage() {
                   </div>
                 ) : activeTab === 'details' ? (
                   <form onSubmit={handleSaveCustomer} className="space-y-4">
+                    {/* Database Identity & Login Audit Banner */}
+                    <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-xl space-y-2 text-xs">
+                      <div className="flex justify-between items-center pb-1.5 border-b border-stone-200/60">
+                        <span className="text-stone-500">Account Registration Date:</span>
+                        <span className="font-mono font-semibold text-stone-800">
+                          {customerDetails?.createdAt
+                            ? new Date(customerDetails.createdAt).toLocaleString()
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-stone-500">Last Verified Login Activity:</span>
+                        {customerDetails?.lastLoginAt ? (
+                          <span className="font-mono font-semibold text-emerald-800 flex items-center gap-1.5">
+                            <span>{new Date(customerDetails.lastLoginAt).toLocaleString()}</span>
+                            <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-900 font-bold text-[9px] uppercase border border-emerald-300">
+                              {customerDetails.lastLoginMethod}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-stone-400 italic">No login event recorded in PostgreSQL database</span>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-stone-700 mb-1">First Name *</label>
@@ -552,30 +669,158 @@ export default function AdminCustomersPage() {
                       </button>
                     </div>
                   </form>
+                ) : activeTab === 'bookings' ? (
+                  <div className="space-y-4">
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                      <p className="font-bold">Customer Order & Ceremony Management</p>
+                      <p className="text-[11px] text-amber-800">
+                        Confirm bookings, update ritual progress, mark completed with devotee messages, or cancel ceremonies directly in PostgreSQL.
+                      </p>
+                    </div>
+
+                    {customerDetails?.bookings && customerDetails.bookings.length > 0 ? (
+                      <div className="space-y-3">
+                        {customerDetails.bookings.map((b: any) => {
+                          const currentSelected = bookingStatusMap[b.id] || { status: b.status, reason: '' };
+                          const isUpdating = updatingBookingId === b.id;
+
+                          return (
+                            <div key={b.id} className="p-4 bg-white rounded-xl border border-stone-200 shadow-2xs space-y-3">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-bold text-stone-900">{b.bookingNumber}</span>
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                        b.status === 'COMPLETED'
+                                          ? 'bg-emerald-100 text-emerald-800'
+                                          : b.status === 'CONFIRMED'
+                                          ? 'bg-blue-100 text-blue-800'
+                                          : b.status === 'IN_PROGRESS'
+                                          ? 'bg-amber-100 text-amber-800'
+                                          : b.status === 'CANCELLED'
+                                          ? 'bg-rose-100 text-rose-800'
+                                          : 'bg-stone-100 text-stone-800'
+                                      }`}
+                                    >
+                                      {b.status}
+                                    </span>
+                                  </div>
+                                  <p className="text-stone-800 font-semibold text-sm mt-0.5">{b.puja?.title || 'Vedic Ceremony'}</p>
+                                  <p className="text-stone-500 text-[11px] mt-0.5">
+                                    📅 {b.pujaDate ? new Date(b.pujaDate).toLocaleDateString() : 'N/A'} • ⏰ {b.pujaTimeSlot || 'Morning'} • Pt. {b.panditProfile?.fullName || 'Awaiting Pandit'}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-extrabold text-stone-900 text-base">₹{Number(b.totalAmount || 0).toLocaleString()}</p>
+                                  <p className="text-[10px] text-stone-400">Total Dakshina</p>
+                                </div>
+                              </div>
+
+                              {/* Interactive Admin Status & Message Controls */}
+                              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2 text-xs">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="block font-semibold text-stone-700 mb-1">Update Status (प्रगती बदला)</label>
+                                    <select
+                                      value={currentSelected.status}
+                                      onChange={(e) =>
+                                        setBookingStatusMap({
+                                          ...bookingStatusMap,
+                                          [b.id]: { ...currentSelected, status: e.target.value },
+                                        })
+                                      }
+                                      className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 text-stone-900 bg-white font-medium"
+                                    >
+                                      <option value="CONFIRMED">CONFIRMED (ऑर्डर कन्फर्म)</option>
+                                      <option value="IN_PROGRESS">IN_PROGRESS (पूजा चालू / प्रगतीपथावर)</option>
+                                      <option value="COMPLETED">COMPLETED (पूजा विधी पूर्ण)</option>
+                                      <option value="CANCELLED">CANCELLED (बुकिंग रद्द)</option>
+                                      <option value="PENDING">PENDING (प्रलंबित)</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block font-semibold text-stone-700 mb-1">Status Note / Devotee Message</label>
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. Guruji confirmed. Samagri kit dispatched."
+                                      value={currentSelected.reason}
+                                      onChange={(e) =>
+                                        setBookingStatusMap({
+                                          ...bookingStatusMap,
+                                          [b.id]: { ...currentSelected, reason: e.target.value },
+                                        })
+                                      }
+                                      className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 text-stone-900 bg-white"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="flex justify-end pt-1">
+                                  <button
+                                    type="button"
+                                    disabled={isUpdating}
+                                    onClick={() => handleUpdateBookingStatus(b.id)}
+                                    className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                  >
+                                    {isUpdating ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" /> : null}
+                                    <span>Apply & Update Booking Status</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-center py-8 text-stone-400">No booking records found for this customer.</p>
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-3">
-                    {customerDetails?.bookings && customerDetails.bookings.length > 0 ? (
+                    <div className="p-4 bg-amber-50/60 border border-amber-200/80 rounded-xl text-xs text-amber-900 space-y-1">
+                      <p className="font-bold">Cryptographically Verified Login Audit Trail</p>
+                      <p className="text-amber-800 text-[11px]">
+                        Below are the authentic session authentications recorded in PostgreSQL for this devotee account.
+                      </p>
+                    </div>
+
+                    {customerDetails?.loginHistory && customerDetails.loginHistory.length > 0 ? (
                       <div className="space-y-2">
-                        {customerDetails.bookings.map((b: any) => (
-                          <div key={b.id} className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between">
+                        {customerDetails.loginHistory.map((l: any) => (
+                          <div
+                            key={l.id}
+                            className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 flex items-center justify-between"
+                          >
                             <div>
-                              <p className="font-mono font-bold text-stone-900">{b.bookingNumber}</p>
-                              <p className="text-stone-700 font-medium">{b.puja?.title || 'Ritual'}</p>
-                              <p className="text-stone-500 text-[11px]">
-                                {b.pujaDate ? new Date(b.pujaDate).toLocaleDateString() : 'N/A'} • Pt. {b.panditProfile?.fullName || 'Awaiting Pandit'}
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-stone-900 text-xs">
+                                  {new Date(l.timestamp).toLocaleDateString()} at{' '}
+                                  {new Date(l.timestamp).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                  {l.method === 'PASSWORD' ? 'Password Auth' : 'Email OTP Verified'}
+                                </span>
+                              </div>
+                              <p className="text-stone-500 font-mono text-[11px] mt-0.5">
+                                Channel: {l.channel}
                               </p>
                             </div>
-                            <div className="text-right">
-                              <p className="font-bold text-stone-900">₹{Number(b.totalAmount || 0).toLocaleString()}</p>
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-stone-200 text-stone-800 uppercase">
-                                {b.status}
-                              </span>
-                            </div>
+                            <span className="text-[10px] font-mono text-stone-400">ID: {l.id.slice(0, 8)}...</span>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-center py-8 text-stone-400">No booking records found for this customer.</p>
+                      <div className="py-10 text-center text-xs text-stone-400 space-y-1">
+                        <p className="font-semibold text-stone-600">No Historical Logins Stored in Database</p>
+                        <p className="text-stone-400 max-w-sm mx-auto">
+                          Prior to audit recording, login events for this account were not persisted in PostgreSQL.
+                          Future sign-ins will automatically log verified sessions here.
+                        </p>
+                      </div>
                     )}
                   </div>
                 )}

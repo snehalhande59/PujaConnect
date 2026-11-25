@@ -456,6 +456,8 @@ export const api = {
     city: string;
     pincode: string;
     includeSamagri?: boolean;
+    discountAmount?: number;
+    totalAmount?: number;
     specialInstructions?: string;
     customerName?: string;
     customerPhone?: string;
@@ -604,5 +606,40 @@ export const api = {
 
   async deleteAddress(id: string) {
     return apiRequest(`/customers/addresses/${id}`, { method: 'DELETE' });
+  },
+
+  // --- REVIEWS & RATINGS ---
+  async submitReview(data: {
+    bookingId: string;
+    rating: number;
+    comment?: string;
+  }) {
+    return apiRequest('/reviews', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getPublicReviews(panditProfileId?: string) {
+    const qs = panditProfileId ? `?panditProfileId=${panditProfileId}` : '';
+    return apiRequest(`/reviews/public${qs}`);
+  },
+
+  // --- PROMOTIONAL COUPONS & SPECIAL OFFERS ---
+  async getActiveCoupons(): Promise<any[]> {
+    return apiRequest<any[]>('/coupons/active');
+  },
+
+  async validateCoupon(code: string, amount: number): Promise<{
+    valid: boolean;
+    code: string;
+    discountAmount: number;
+    finalAmount: number;
+    coupon: any;
+  }> {
+    return apiRequest('/coupons/validate', {
+      method: 'POST',
+      body: JSON.stringify({ code, amount }),
+    });
   },
 };

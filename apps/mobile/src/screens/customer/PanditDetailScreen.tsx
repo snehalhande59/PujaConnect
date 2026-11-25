@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Platform,
   StatusBar,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,9 +30,8 @@ export const PanditDetailScreen: React.FC<PanditDetailScreenProps> = ({
     ? (StatusBar.currentHeight || 28) + 8
     : Math.max(insets.top, 20) + 6;
 
-  const panditName = pandit.user
-    ? `Pt. ${pandit.user.firstName} ${pandit.user.lastName || ''}`.trim()
-    : 'Pt. Vedic Scholar';
+  const panditName = pandit.fullName
+    || (pandit.user ? `Pt. ${pandit.user.firstName} ${pandit.user.lastName || ''}`.trim() : 'Pt. Vedic Scholar');
 
   return (
     <View style={styles.safe}>
@@ -48,7 +48,15 @@ export const PanditDetailScreen: React.FC<PanditDetailScreenProps> = ({
         {/* Profile Card */}
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={40} color={colors.secondary} />
+            {pandit.avatarUrl ? (
+              <Image
+                source={{ uri: pandit.avatarUrl }}
+                style={{ width: 80, height: 80, borderRadius: 40 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <Ionicons name="person" size={40} color={colors.secondary} />
+            )}
           </View>
 
           <Text style={styles.name}>{panditName}</Text>
@@ -141,7 +149,7 @@ export const PanditDetailScreen: React.FC<PanditDetailScreenProps> = ({
           <Text style={styles.bottomPrice}>₹{pandit.basePrice || 2100}</Text>
         </View>
         <TouchableOpacity style={styles.bookCtaBtn} onPress={() => onBookPandit(pandit)}>
-          <Text style={styles.bookCtaText}>Book with Pt. {pandit.user?.firstName || 'Pandit'}</Text>
+          <Text style={styles.bookCtaText}>Book with {pandit.fullName || `Pt. ${pandit.user?.firstName || 'Pandit'}`}</Text>
           <Ionicons name="arrow-forward" size={16} color={colors.textWhite} />
         </TouchableOpacity>
       </View>

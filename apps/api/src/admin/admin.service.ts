@@ -570,12 +570,16 @@ export class AdminService {
       successfulPayments,
       pendingPayments,
       failedPayments,
+      refundedPayments,
       paymentsWithAmount,
       recentBookings,
-      recentCustomers,
+      recentCustomersRaw,
       recentPandits,
       recentPayments,
       recentStatusHistory,
+      totalReviews,
+      totalCoupons,
+      recentReviews,
     ] = await Promise.all([
       this.prisma.customerProfile.count({ where: { user: { isDeleted: false } } }),
       this.prisma.panditProfile.count({ where: { user: { isDeleted: false } } }),
@@ -597,9 +601,10 @@ export class AdminService {
       this.prisma.payment.count({ where: { paymentStatus: 'SUCCESS' } }),
       this.prisma.payment.count({ where: { paymentStatus: 'PENDING' } }),
       this.prisma.payment.count({ where: { paymentStatus: 'FAILED' } }),
+      this.prisma.payment.count({ where: { paymentStatus: 'REFUNDED' } }),
       this.prisma.payment.findMany({
         where: { paymentStatus: 'SUCCESS' },
-        select: { amount: true },
+        select: { amount: true, razorpayPaymentId: true, razorpaySignature: true, paymentMethod: true },
       }),
       this.prisma.booking.findMany({
         take: 10,
@@ -636,8 +641,17 @@ export class AdminService {
         include: {
           booking: {
             include: {
-              customerProfile: true,
+              customerProfile: {
+                include: { user: { select: { email: true, phoneNumber: true } } },
+              },
               puja: true,
+            },
+          },
+          order: {
+            include: {
+              customerProfile: {
+                include: { user: { select: { email: true, phoneNumber: true } } },
+              },
             },
           },
         },
@@ -654,6 +668,22 @@ export class AdminService {
             },
           },
         },
+      }).catch(() => []),
+      this.prisma.review.count(),
+      this.prisma.coupon.count(),
+      this.prisma.review.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          customer: {
+            select: {
+              email: true,
+              customerProfile: { select: { firstName: true, lastName: true } },
+            },
+          },
+          panditProfile: { select: { fullName: true } },
+          booking: { select: { puja: { select: { title: true } } } },
+        },
       }),
     ]);
 
@@ -663,7 +693,55 @@ export class AdminService {
       return this.getDashboardStats();
     }
 
-    const totalRevenue = paymentsWithAmount.reduce(
+    // Enrich recentCustomers with verifiable login records from OtpVerification
+    const identifiers = recentCustomersRaw
+      .flatMap((c) => [c.user?.email, c.user?.phoneNumber])
+      .filter((v): v is string => Boolean(v));
+
+    const verifiedLogins =
+      identifiers.length > 0
+        ? await this.prisma.otpVerification.findMany({
+            where: {
+              phoneNumber: { in: identifiers },
+              isVerified: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : [];
+
+    const loginMap = new Map<string, { lastLoginAt: Date; method: string }>();
+    for (const log of verifiedLogins) {
+      if (!loginMap.has(log.phoneNumber)) {
+        loginMap.set(log.phoneNumber, {
+          lastLoginAt: log.createdAt,
+          method: log.purpose === 'LOGIN_PASSWORD' ? 'PASSWORD' : 'EMAIL_OTP',
+        });
+      }
+    }
+
+    const recentCustomers = recentCustomersRaw.map((c) => {
+      const login =
+        (c.user?.email && loginMap.get(c.user.email)) ||
+        (c.user?.phoneNumber && loginMap.get(c.user.phoneNumber)) ||
+        null;
+
+      return {
+        ...c,
+        lastLoginAt: login ? login.lastLoginAt : null,
+        lastLoginMethod: login ? login.method : null,
+      };
+    });
+
+    // Strictly exclude unverified test transactions (e.g. PAY_TEST_123456 without Razorpay HMAC signature)
+    const verifiedPayments = paymentsWithAmount.filter((p) => {
+      const isTest = Boolean(
+        p.razorpayPaymentId?.includes('TEST') ||
+        (p.paymentMethod === 'RAZORPAY' && !p.razorpaySignature)
+      );
+      return !isTest;
+    });
+
+    const totalRevenue = verifiedPayments.reduce(
       (sum, p) => sum + Number(p.amount || 0),
       0
     );
@@ -694,16 +772,24 @@ export class AdminService {
         cancelled: cancelledBookings,
       },
       payments: {
-        total: successfulPayments + pendingPayments + failedPayments,
+        total: successfulPayments + pendingPayments + failedPayments + refundedPayments,
         successful: successfulPayments,
         pending: pendingPayments,
         failed: failedPayments,
+        refunded: refundedPayments,
         totalRevenue,
+      },
+      reviews: {
+        total: totalReviews,
+      },
+      coupons: {
+        total: totalCoupons,
       },
       recentBookings,
       recentCustomers,
       recentPandits,
       recentPayments,
+      recentReviews,
       recentActivity: (() => {
         const activityItems: any[] = [];
 
@@ -771,11 +857,11 @@ export class AdminService {
   }
 
   /**
-   * Get all registered customers with search and booking statistics
+   * Get all registered customers with search, booking statistics, and verifiable login records
    */
   async getCustomers(query: { search?: string; page?: number; limit?: number }) {
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 20;
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.max(1, Number(query.limit) || 20);
     const skip = (page - 1) * limit;
 
     const where: Prisma.CustomerProfileWhereInput = {
@@ -817,17 +903,56 @@ export class AdminService {
       }),
     ]);
 
+    // Check verifiable historical logins in OtpVerification
+    const identifiers = customers
+      .flatMap((c) => [c.user?.email, c.user?.phoneNumber])
+      .filter((v): v is string => Boolean(v));
+
+    const verifiedLogins =
+      identifiers.length > 0
+        ? await this.prisma.otpVerification.findMany({
+            where: {
+              phoneNumber: { in: identifiers },
+              isVerified: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : [];
+
+    const loginMap = new Map<string, { lastLoginAt: Date; method: string }>();
+    for (const log of verifiedLogins) {
+      if (!loginMap.has(log.phoneNumber)) {
+        loginMap.set(log.phoneNumber, {
+          lastLoginAt: log.createdAt,
+          method: log.purpose === 'LOGIN_PASSWORD' ? 'PASSWORD' : 'EMAIL_OTP',
+        });
+      }
+    }
+
+    const customersWithLogin = customers.map((c) => {
+      const login =
+        (c.user?.email && loginMap.get(c.user.email)) ||
+        (c.user?.phoneNumber && loginMap.get(c.user.phoneNumber)) ||
+        null;
+
+      return {
+        ...c,
+        lastLoginAt: login ? login.lastLoginAt : null,
+        lastLoginMethod: login ? login.method : null,
+      };
+    });
+
     return {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
-      customers,
+      totalPages: Math.ceil(total / limit) || 1,
+      customers: customersWithLogin,
     };
   }
 
   /**
-   * Get single customer with bookings and addresses
+   * Get single customer with bookings, addresses, orders, and verified login history
    */
   async getCustomerDetails(id: string) {
     const customer = await this.prisma.customerProfile.findUnique({
@@ -852,6 +977,13 @@ export class AdminService {
             payments: true,
           },
         },
+        orders: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            orderItems: { include: { product: true } },
+            payments: true,
+          },
+        },
       },
     });
 
@@ -859,7 +991,43 @@ export class AdminService {
       throw new NotFoundException(`Customer '${id}' not found.`);
     }
 
-    return customer;
+    const identifiers = [customer.user?.email, customer.user?.phoneNumber].filter(
+      (v): v is string => Boolean(v),
+    );
+
+    const loginHistory =
+      identifiers.length > 0
+        ? await this.prisma.otpVerification.findMany({
+            where: {
+              phoneNumber: { in: identifiers },
+              isVerified: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+            select: {
+              id: true,
+              phoneNumber: true,
+              purpose: true,
+              createdAt: true,
+            },
+          })
+        : [];
+
+    return {
+      ...customer,
+      loginHistory: loginHistory.map((l) => ({
+        id: l.id,
+        timestamp: l.createdAt,
+        method: l.purpose === 'LOGIN_PASSWORD' ? 'PASSWORD' : 'EMAIL_OTP',
+        channel: l.phoneNumber,
+      })),
+      lastLoginAt: loginHistory[0]?.createdAt || null,
+      lastLoginMethod: loginHistory[0]
+        ? loginHistory[0].purpose === 'LOGIN_PASSWORD'
+          ? 'PASSWORD'
+          : 'EMAIL_OTP'
+        : null,
+    };
   }
 
   /**
@@ -1138,19 +1306,64 @@ export class AdminService {
   }
 
   /**
-   * Get all payments and transaction overview
+   * Get all payments and transaction overview with server-side pagination, search, and full financial summary
    */
-  async getPayments(query: { status?: string; page?: number; limit?: number }) {
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 20;
+  async getPayments(query: {
+    status?: string;
+    method?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const isAll = Number(query.limit) === -1 || Number(query.limit) === 0;
+    const limit = isAll ? 1000 : Math.max(1, Number(query.limit) || 20);
     const skip = (page - 1) * limit;
 
     const where: Prisma.PaymentWhereInput = {};
+
     if (query.status && query.status.toUpperCase() !== 'ALL') {
       where.paymentStatus = query.status.toUpperCase() as any;
     }
 
-    const [total, payments] = await Promise.all([
+    if (query.method && query.method.toUpperCase() !== 'ALL') {
+      where.paymentMethod = query.method.toUpperCase() as any;
+    }
+
+    if (query.startDate || query.endDate) {
+      where.createdAt = {};
+      if (query.startDate) {
+        where.createdAt.gte = new Date(query.startDate);
+      }
+      if (query.endDate) {
+        const end = new Date(query.endDate);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
+    }
+
+    if (query.search) {
+      const s = query.search.trim();
+      where.OR = [
+        { paymentNumber: { contains: s, mode: 'insensitive' } },
+        { razorpayPaymentId: { contains: s, mode: 'insensitive' } },
+        { razorpayOrderId: { contains: s, mode: 'insensitive' } },
+        { booking: { bookingNumber: { contains: s, mode: 'insensitive' } } },
+        { booking: { customerProfile: { firstName: { contains: s, mode: 'insensitive' } } } },
+        { booking: { customerProfile: { lastName: { contains: s, mode: 'insensitive' } } } },
+        { booking: { customerProfile: { user: { email: { contains: s, mode: 'insensitive' } } } } },
+        { booking: { customerProfile: { user: { phoneNumber: { contains: s, mode: 'insensitive' } } } } },
+        { order: { orderNumber: { contains: s, mode: 'insensitive' } } },
+        { order: { customerProfile: { firstName: { contains: s, mode: 'insensitive' } } } },
+        { order: { customerProfile: { lastName: { contains: s, mode: 'insensitive' } } } },
+        { order: { customerProfile: { user: { email: { contains: s, mode: 'insensitive' } } } } },
+        { order: { customerProfile: { user: { phoneNumber: { contains: s, mode: 'insensitive' } } } } },
+      ];
+    }
+
+    const [total, payments, allPaymentsSummary] = await Promise.all([
       this.prisma.payment.count({ where }),
       this.prisma.payment.findMany({
         where,
@@ -1160,20 +1373,124 @@ export class AdminService {
         include: {
           booking: {
             include: {
-              customerProfile: true,
-              panditProfile: true,
-              puja: true,
+              customerProfile: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      email: true,
+                      phoneNumber: true,
+                    },
+                  },
+                },
+              },
+              panditProfile: {
+                select: {
+                  id: true,
+                  fullName: true,
+                },
+              },
+              puja: {
+                select: {
+                  id: true,
+                  title: true,
+                  imageUrl: true,
+                },
+              },
+            },
+          },
+          order: {
+            include: {
+              customerProfile: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      email: true,
+                      phoneNumber: true,
+                    },
+                  },
+                },
+              },
+              orderItems: {
+                include: {
+                  product: {
+                    select: {
+                      id: true,
+                      name: true,
+                      images: true,
+                    },
+                  },
+                },
+              },
             },
           },
         },
       }),
+      // Authoritative financial totals across the entire database
+      this.prisma.payment.groupBy({
+        by: ['paymentStatus', 'paymentMethod'],
+        _count: { id: true },
+        _sum: { amount: true },
+      }),
     ]);
+
+    let totalPaidRevenue = 0;
+    let totalPendingAmount = 0;
+    let totalRefundedAmount = 0;
+    let totalFailedAmount = 0;
+    let successCount = 0;
+    let pendingCount = 0;
+    let failedCount = 0;
+    let refundedCount = 0;
+    let razorpayCount = 0;
+    let cashCount = 0;
+
+    for (const group of allPaymentsSummary) {
+      const count = group._count.id;
+      const sum = Number(group._sum.amount || 0);
+
+      if (group.paymentStatus === 'SUCCESS') {
+        totalPaidRevenue += sum;
+        successCount += count;
+      } else if (group.paymentStatus === 'PENDING') {
+        totalPendingAmount += sum;
+        pendingCount += count;
+      } else if (group.paymentStatus === 'REFUNDED') {
+        totalRefundedAmount += sum;
+        refundedCount += count;
+      } else if (group.paymentStatus === 'FAILED') {
+        totalFailedAmount += sum;
+        failedCount += count;
+      }
+
+      if (group.paymentMethod === 'RAZORPAY') {
+        razorpayCount += count;
+      } else if (group.paymentMethod === 'CASH') {
+        cashCount += count;
+      }
+    }
+
+    const totalRecordsInDb = successCount + pendingCount + failedCount + refundedCount;
 
     return {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit),
+      totalPages: Math.ceil(total / limit) || 1,
+      summary: {
+        totalRecordsInDb,
+        totalPaidRevenue,
+        totalPendingAmount,
+        totalRefundedAmount,
+        totalFailedAmount,
+        successCount,
+        pendingCount,
+        failedCount,
+        refundedCount,
+        razorpayCount,
+        cashCount,
+      },
       payments,
     };
   }

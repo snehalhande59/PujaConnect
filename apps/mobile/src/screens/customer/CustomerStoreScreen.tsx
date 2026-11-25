@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Platform,
   StatusBar,
+  Image,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +25,15 @@ interface CustomerStoreScreenProps {
   onNavigateCart: () => void;
 }
 
+const STORE_CATEGORIES = [
+  'All',
+  'Kits & Combos',
+  'Sacred Liquids',
+  'Incense & Dhoop',
+  'Puja Utensils',
+  'Havan & Yagya',
+];
+
 export const CustomerStoreScreen: React.FC<CustomerStoreScreenProps> = ({ onBack, onNavigateCart }) => {
   const { cart, itemCount, addToCart } = useCart();
   const insets = useSafeAreaInsets();
@@ -31,6 +42,7 @@ export const CustomerStoreScreen: React.FC<CustomerStoreScreenProps> = ({ onBack
     : Math.max(insets.top, 20) + 6;
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,6 +53,7 @@ export const CustomerStoreScreen: React.FC<CustomerStoreScreenProps> = ({ onBack
       setLoading(true);
       const res = await api.getProducts({
         search: searchQuery.trim() || undefined,
+        category: selectedCategory === 'All' ? undefined : selectedCategory,
       });
       setProducts(res || []);
     } catch (e) {
@@ -53,7 +66,7 @@ export const CustomerStoreScreen: React.FC<CustomerStoreScreenProps> = ({ onBack
 
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [selectedCategory]);
 
   const handleAddToCart = async (product: Product) => {
     try {
@@ -119,6 +132,37 @@ export const CustomerStoreScreen: React.FC<CustomerStoreScreenProps> = ({ onBack
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Category Filter Chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScroll}
+        >
+          {STORE_CATEGORIES.map((cat) => {
+            const isSelected = selectedCategory === cat;
+            return (
+              <TouchableOpacity
+                key={cat}
+                onPress={() => setSelectedCategory(cat)}
+                style={[
+                  styles.categoryChip,
+                  isSelected && styles.categoryChipSelected,
+                ]}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    isSelected && styles.categoryChipTextSelected,
+                  ]}
+                >
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Product Grid */}
@@ -156,7 +200,11 @@ export const CustomerStoreScreen: React.FC<CustomerStoreScreenProps> = ({ onBack
             return (
               <View style={styles.productCard}>
                 <View style={styles.productImgPlaceholder}>
-                  <Ionicons name="sparkles" size={28} color={colors.secondary} />
+                  {item.images && item.images.length > 0 ? (
+                    <Image source={{ uri: item.images[0] }} style={styles.productImage} resizeMode="cover" />
+                  ) : (
+                    <Ionicons name="sparkles" size={28} color={colors.secondary} />
+                  )}
                   <View style={styles.pureBadge}>
                     <Text style={styles.pureText}>100% PURE</Text>
                   </View>
@@ -323,6 +371,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 8,
     position: 'relative',
+    overflow: 'hidden',
+  },
+  productImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+  },
+  categoryScroll: {
+    paddingVertical: 10,
+    gap: 8,
+  },
+  categoryChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.backgroundLight,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  categoryChipSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  categoryChipText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  categoryChipTextSelected: {
+    color: colors.textWhite,
+    fontWeight: '700',
   },
   pureBadge: {
     position: 'absolute',

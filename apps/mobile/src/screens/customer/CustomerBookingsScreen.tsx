@@ -9,6 +9,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -32,6 +34,42 @@ export const CustomerBookingsScreen: React.FC<CustomerBookingsScreenProps> = ({
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Rating & Review State
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [selectedBookingForReview, setSelectedBookingForReview] = useState<Booking | null>(null);
+  const [rating, setRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  const openReviewModal = (booking: Booking) => {
+    setSelectedBookingForReview(booking);
+    setRating(5);
+    setReviewComment('');
+    setReviewModalVisible(true);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!selectedBookingForReview) return;
+    try {
+      setSubmittingReview(true);
+      await api.submitReview({
+        bookingId: selectedBookingForReview.id,
+        rating,
+        comment: reviewComment.trim(),
+      });
+      Alert.alert(
+        'धन्यवाद! (Review Submitted)',
+        'Your sacred rating has been recorded and submitted to PujaConnect.',
+        [{ text: 'OK', onPress: () => setReviewModalVisible(false) }]
+      );
+      fetchBookings();
+    } catch (e: any) {
+      Alert.alert('Review Error', e.message || 'Failed to submit rating. Please try again.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const fetchBookings = async () => {
     try {
@@ -248,19 +286,125 @@ export const CustomerBookingsScreen: React.FC<CustomerBookingsScreenProps> = ({
                   <Text style={styles.priceVal}>₹{item.totalAmount || item.totalPrice || 2100}/-</Text>
                 </View>
 
-                {item.status === 'PENDING' || item.status === 'CONFIRMED' ? (
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                  {item.status === 'PENDING' || item.status === 'CONFIRMED' ? (
+                    <TouchableOpacity
+                      style={styles.cancelBtn}
+                      onPress={() => handleCancelBooking(item.id)}
+                    >
+                      <Text style={styles.cancelBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
                   <TouchableOpacity
-                    style={styles.cancelBtn}
-                    onPress={() => handleCancelBooking(item.id)}
+                    style={styles.rateBtn}
+                    onPress={() => openReviewModal(item)}
                   >
-                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                    <Ionicons name="star" size={13} color="#D97706" />
+                    <Text style={styles.rateBtnText}>Rate & Review</Text>
                   </TouchableOpacity>
-                ) : null}
+                </View>
               </View>
             </View>
           )}
         />
       )}
+
+      {/* Review & Rating Modal */}
+      <Modal
+        visible={reviewModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setReviewModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.reviewModalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="star-half" size={20} color={colors.primary} />
+                <Text style={styles.modalTitle}>Rate Sacred Puja Experience</Text>
+              </View>
+              <TouchableOpacity onPress={() => setReviewModalVisible(false)}>
+                <Ionicons name="close" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.reviewSubtitle}>
+              {selectedBookingForReview?.puja?.title || 'Vedic Ritual'}
+            </Text>
+            <Text style={styles.reviewPanditName}>
+              {selectedBookingForReview?.panditProfile?.fullName
+                ? `Pt. ${selectedBookingForReview.panditProfile.fullName}`
+                : 'Purohit Vidhi Evaluation'}
+            </Text>
+
+            {/* Star Rating Selector */}
+            <View style={styles.starRow}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity
+                  key={star}
+                  onPress={() => setRating(star)}
+                  style={styles.starBtn}
+                >
+                  <Ionicons
+                    name={star <= rating ? 'star' : 'star-outline'}
+                    size={32}
+                    color={star <= rating ? '#F59E0B' : '#CBD5E1'}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.ratingLabel}>
+              {rating === 5
+                ? 'Divinely Satisfied (अत्यंत समाधानी - 5/5)'
+                : rating === 4
+                ? 'Very Good (उत्तम विधी - 4/5)'
+                : rating === 3
+                ? 'Good Experience (चांगला अनुभव - 3/5)'
+                : rating === 2
+                ? 'Average (साधारण - 2/5)'
+                : 'Needs Improvement (सुधारणा आवश्यक - 1/5)'}
+            </Text>
+
+            {/* Review Comment Input */}
+            <Text style={styles.commentLabel}>Your Feedback / आपला अनुभव (Optional):</Text>
+            <TextInput
+              style={styles.commentInput}
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              placeholder="e.g. Pt. Ji explained every mantra and vidhi with pure devotion..."
+              placeholderTextColor="#94A3B8"
+              multiline
+              numberOfLines={3}
+            />
+
+            {/* Action Buttons */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelModalBtn}
+                onPress={() => setReviewModalVisible(false)}
+              >
+                <Text style={styles.cancelModalBtnText}>Close</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.submitReviewBtn}
+                onPress={handleSubmitReview}
+                disabled={submittingReview}
+              >
+                {submittingReview ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+                    <Text style={styles.submitReviewBtnText}>Submit Rating</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -448,6 +592,131 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.error,
+  },
+  rateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFBEB',
+  },
+  rateBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  reviewModalCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  reviewSubtitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginTop: 12,
+  },
+  reviewPanditName: {
+    fontSize: 12,
+    color: '#D97706',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  starRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginVertical: 14,
+  },
+  starBtn: {
+    padding: 4,
+  },
+  ratingLabel: {
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#D97706',
+    marginBottom: 12,
+  },
+  commentLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  commentInput: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 10,
+    fontSize: 13,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+    textAlignVertical: 'top',
+    minHeight: 70,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 16,
+  },
+  cancelModalBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  cancelModalBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  submitReviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+  },
+  submitReviewBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   emptyContainer: {
     alignItems: 'center',

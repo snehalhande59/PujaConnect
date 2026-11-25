@@ -112,23 +112,61 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
     },
   ]);
 
+  const [activeCoupons, setActiveCoupons] = useState<any[]>([]);
+
   const loadData = async () => {
     try {
       setPanditsLoading(true);
-      const panditsRes = await api.getPandits({ city: selectedCity });
-      if (panditsRes && panditsRes.length > 0) {
-        setFeaturedPandits(panditsRes.slice(0, 8));
-      } else {
-        // Fallback to all pandits if current city has no specific listings yet
-        const allPandits = await api.getPandits();
-        setFeaturedPandits(allPandits || []);
+      // Fetch all verified Pandits directly from PostgreSQL
+      const allPandits = await api.getPandits().catch(() => []);
+      if (Array.isArray(allPandits) && allPandits.length > 0) {
+        // Sort matching city first so devotees see local pandits first while accessing the full directory
+        const sorted = [...allPandits].sort((a, b) => {
+          if (selectedCity && selectedCity !== 'All Cities') {
+            const aMatch = a.city?.toLowerCase().includes(selectedCity.toLowerCase());
+            const bMatch = b.city?.toLowerCase().includes(selectedCity.toLowerCase());
+            if (aMatch && !bMatch) return -1;
+            if (!aMatch && bMatch) return 1;
+          }
+          return 0;
+        });
+        setFeaturedPandits(sorted);
       }
+
       const myBookings = await api.getMyBookings();
       if (myBookings && myBookings.length > 0) {
         const active = myBookings.find(
           (b) => b.status === 'CONFIRMED' || b.status === 'PENDING'
         );
         setUpcomingBooking(active || myBookings[0]);
+      }
+
+      // Fetch dynamic active promotional coupons from Admin
+      const couponsRes = await api.getActiveCoupons().catch(() => []);
+      if (Array.isArray(couponsRes) && couponsRes.length > 0) {
+        setActiveCoupons(couponsRes);
+      }
+
+      // Fetch dynamic verified devotee reviews from PostgreSQL
+      const pubReviews = await api.getPublicReviews().catch(() => []);
+      if (Array.isArray(pubReviews) && pubReviews.length > 0) {
+        setReviewsList(
+          pubReviews.map((r: any) => ({
+            id: r.id,
+            name: r.customer?.customerProfile
+              ? `${r.customer.customerProfile.firstName} ${r.customer.customerProfile.lastName || ''}`.trim()
+              : (r.customer?.email?.split('@')[0] || 'Devotee'),
+            city: r.panditProfile?.fullName ? `Purohit: ${r.panditProfile.fullName}` : 'Verified Devotee',
+            rating: r.rating || 5,
+            date: new Date(r.createdAt).toLocaleDateString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+            }),
+            puja: r.booking?.puja?.title || 'Vedic Puja Ceremony',
+            comment: r.comment || 'Sacred ceremony performed with complete Vedic rituals.',
+          }))
+        );
       }
     } catch (e) {
       console.warn('Error loading data:', e);
@@ -429,6 +467,47 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
           </View>
         </View>
 
+        {/* Dynamic Special Festive Offers & Coupons (Live from Admin Dashboard) */}
+        {activeCoupons.length > 0 && (
+          <View style={styles.offersSection}>
+            <View style={styles.offersHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="gift" size={16} color="#D97706" />
+                <Text style={styles.offersSectionTitle}>Festive Offers & Coupons (विशेष सवलत)</Text>
+              </View>
+              <Text style={styles.offersCountBadge}>{activeCoupons.length} Active</Text>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.offersScrollContent}>
+              {activeCoupons.map((c) => (
+                <TouchableOpacity
+                  key={c.id || c.code}
+                  style={styles.offerCard}
+                  activeOpacity={0.85}
+                  onPress={onNavigateExplore}
+                >
+                  <View style={styles.offerCardTop}>
+                    <View style={styles.offerCodeBadge}>
+                      <Ionicons name="pricetag" size={10} color="#FFFFFF" />
+                      <Text style={styles.offerCodeBadgeText}>{c.code}</Text>
+                    </View>
+                    <Text style={styles.offerValue}>
+                      {c.discountAmount ? `₹${c.discountAmount} OFF` : `${c.discountPct}% OFF`}
+                    </Text>
+                  </View>
+                  <Text style={styles.offerSubtitle} numberOfLines={1}>
+                    {c.minSpend ? `On bookings above ₹${c.minSpend}` : 'Valid on all sacred rituals'}
+                  </Text>
+                  <View style={styles.offerCtaRow}>
+                    <Text style={styles.offerCtaText}>Apply at checkout</Text>
+                    <Ionicons name="arrow-forward" size={11} color="#B45309" />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* ------------------------------------------------------------- */}
         {/* EXACT REFERENCE IMAGE 2: POPULAR SERVICES & CITIES */}
         {/* ------------------------------------------------------------- */}
@@ -461,12 +540,14 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
           {/* Action Pills Row: Pooja Packages & View All Services */}
           <View style={styles.servicePillsRow}>
             <TouchableOpacity
-              style={styles.packagePill}
+              style={[styles.packagePill, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}
               activeOpacity={0.8}
               onPress={onNavigateStore}
             >
-              <Ionicons name="gift-outline" size={13} color="#78350F" />
-              <Text style={styles.packagePillText}>Pooja Packages</Text>
+              <Ionicons name="basket" size={14} color="#B45309" />
+              <Text style={[styles.packagePillText, { color: '#92400E', fontWeight: '800' }]}>
+                Samagri Store (पूजा सामग्री)
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -842,7 +923,7 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
                 onPress={() => onNavigatePanditDetail(pandit)}
               >
                 <Image
-                  source={APP_IMAGES.panditRameshwar}
+                  source={pandit.avatarUrl ? { uri: pandit.avatarUrl } : APP_IMAGES.panditRameshwar}
                   style={styles.panditAvatar}
                   resizeMode="cover"
                 />
@@ -853,7 +934,9 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
                 <Text style={styles.panditName} numberOfLines={1}>
                   {pandit.fullName}
                 </Text>
-                <Text style={styles.panditExp}>{pandit.experienceYears || 15}+ Yrs Exp</Text>
+                <Text style={styles.panditExp} numberOfLines={1}>
+                  📍 {pandit.city || 'Maharashtra'} • {pandit.experienceYears || 15}+ Yrs
+                </Text>
                 <Text style={styles.panditPrice}>₹{pandit.basePrice || 2100} Dakshina</Text>
               </TouchableOpacity>
             ))}
@@ -2566,5 +2649,95 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: colors.primary,
+  },
+  offersSection: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 4,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  offersHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  offersSectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  offersCountBadge: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  offersScrollContent: {
+    gap: 10,
+  },
+  offerCard: {
+    width: 190,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    shadowColor: '#D97706',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  offerCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  offerCodeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#D97706',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  offerCodeBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  offerValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  offerSubtitle: {
+    fontSize: 10,
+    color: '#78716C',
+    marginTop: 6,
+  },
+  offerCtaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#FEF3C7',
+  },
+  offerCtaText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
   },
 });

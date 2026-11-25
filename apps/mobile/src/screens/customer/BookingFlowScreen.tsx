@@ -170,6 +170,12 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
             setSelectedPandit(pandits[0]);
           }
         }
+
+        // Fetch live promotional coupons
+        const coupons = await api.getActiveCoupons().catch(() => []);
+        if (isMounted && Array.isArray(coupons)) {
+          setAvailableCoupons(coupons);
+        }
       } catch (e) {
         console.warn('Error loading booking prerequisites:', e);
       } finally {
@@ -182,11 +188,53 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
     };
   }, []);
 
+  // Coupon & Promotional Offers State
+  const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<any | null>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [couponMessage, setCouponMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Pricing Calculation
   const basePujaPrice = parseFloat(String(selectedPuja?.basePrice || 2500)) || 2500;
   const panditDakshina = parseFloat(String(selectedPandit?.basePrice || 2100)) || 2100;
   const samagriCost = includeSamagri ? 1500 : 0;
-  const totalAmount = Math.max(basePujaPrice, panditDakshina) + samagriCost;
+  const subtotal = Math.max(basePujaPrice, panditDakshina) + samagriCost;
+  const totalAmount = Math.max(0, subtotal - discountAmount);
+
+  const handleApplyCoupon = async (codeToApply?: string) => {
+    const code = (codeToApply || couponCode).trim().toUpperCase();
+    if (!code) {
+      setCouponMessage({ type: 'error', text: 'Please enter a coupon code.' });
+      return;
+    }
+    try {
+      setValidatingCoupon(true);
+      setCouponMessage(null);
+      const res = await api.validateCoupon(code, subtotal);
+      if (res.valid) {
+        setAppliedCoupon(res.coupon);
+        setDiscountAmount(res.discountAmount);
+        setCouponCode(res.code);
+        setCouponMessage({
+          type: 'success',
+          text: `Coupon '${res.code}' applied! Saved ₹${res.discountAmount}`,
+        });
+      }
+    } catch (e: any) {
+      setCouponMessage({ type: 'error', text: e.message || 'Invalid coupon code.' });
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setDiscountAmount(0);
+    setCouponCode('');
+    setCouponMessage(null);
+  };
 
   const handleNextStep = () => {
     setError(null);
@@ -244,7 +292,9 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
         city: city.trim(),
         pincode: pincode.trim(),
         includeSamagri,
-        specialInstructions: `${specialInstructions ? specialInstructions + ' | ' : ''}Paid via ${paymentDetails.method} (Txn: ${paymentDetails.paymentId})`,
+        discountAmount,
+        totalAmount,
+        specialInstructions: `${specialInstructions ? specialInstructions + ' | ' : ''}${appliedCoupon ? 'Coupon: ' + appliedCoupon.code + ' (-₹' + discountAmount + ') | ' : ''}Paid via ${paymentDetails.method} (Txn: ${paymentDetails.paymentId})`,
         customerName: 'Snehal Hande',
         customerPhone: '8459369260',
         paymentMethod: paymentDetails.method,
@@ -820,6 +870,92 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
               />
             </TouchableOpacity>
 
+            {/* Sacred Coupons & Special Offers Section */}
+            <View style={styles.card}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="pricetag" size={16} color={colors.primary} />
+                  <Text style={styles.sectionHeading}>Apply Sacred Coupon / कूपन कोड</Text>
+                </View>
+                {appliedCoupon && (
+                  <TouchableOpacity onPress={handleRemoveCoupon}>
+                    <Text style={{ fontSize: 12, color: colors.error, fontWeight: '700' }}>Remove</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {appliedCoupon ? (
+                <View style={styles.appliedCouponBanner}>
+                  <Ionicons name="checkmark-circle" size={18} color="#166534" />
+                  <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={styles.appliedCouponTitle}>Coupon &lsquo;{appliedCoupon.code}&rsquo; Active</Text>
+                    <Text style={styles.appliedCouponDesc}>You saved ₹{discountAmount} on this puja dakshina.</Text>
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.couponInputRow}>
+                    <TextInput
+                      style={styles.couponTextInput}
+                      placeholder="Enter promo code (e.g. SHUBHARAMBH)"
+                      placeholderTextColor="#94A3B8"
+                      value={couponCode}
+                      onChangeText={(t) => setCouponCode(t.toUpperCase())}
+                      autoCapitalize="characters"
+                    />
+                    <TouchableOpacity
+                      style={styles.applyCouponBtn}
+                      onPress={() => handleApplyCoupon()}
+                      disabled={validatingCoupon}
+                    >
+                      {validatingCoupon ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.applyCouponBtnText}>Apply</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  {couponMessage && (
+                    <Text style={[styles.couponMsg, couponMessage.type === 'error' ? styles.couponMsgError : styles.couponMsgSuccess]}>
+                      {couponMessage.text}
+                    </Text>
+                  )}
+
+                  {/* Available Offers Carousel */}
+                  {availableCoupons.length > 0 && (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={styles.availableOffersLabel}>Special Festive Offers for You:</Text>
+                      <View style={{ gap: 8, marginTop: 6 }}>
+                        {availableCoupons.map((c: any) => (
+                          <TouchableOpacity
+                            key={c.id || c.code}
+                            style={styles.couponOfferCard}
+                            onPress={() => handleApplyCoupon(c.code)}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <View style={styles.couponCodePill}>
+                                  <Text style={styles.couponCodePillText}>{c.code}</Text>
+                                </View>
+                                <Text style={styles.couponOfferTitle}>
+                                  {c.discountAmount ? `₹${c.discountAmount} OFF` : `${c.discountPct}% OFF`}
+                                </Text>
+                              </View>
+                              <Text style={styles.couponOfferDesc}>
+                                {c.minSpend ? `Min booking amount: ₹${c.minSpend}` : 'Valid on all Vedic ceremonies'}
+                              </Text>
+                            </View>
+                            <Text style={styles.tapToApplyText}>TAP TO APPLY</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+
             {/* Dakshina Ledger */}
             <View style={styles.card}>
               <Text style={styles.sectionHeading}>Dakshina Breakdown</Text>
@@ -840,6 +976,17 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
                 <Text style={styles.ledgerLabel}>Platform & Booking Fee</Text>
                 <Text style={[styles.ledgerVal, { color: '#166534' }]}>FREE</Text>
               </View>
+
+              {discountAmount > 0 && (
+                <View style={styles.ledgerRow}>
+                  <Text style={[styles.ledgerLabel, { color: '#166534', fontWeight: '700' }]}>
+                    Festive Coupon Discount ({appliedCoupon?.code})
+                  </Text>
+                  <Text style={[styles.ledgerVal, { color: '#166534', fontWeight: '700' }]}>
+                    - ₹{discountAmount}
+                  </Text>
+                </View>
+              )}
 
               <View style={[styles.divider, { marginVertical: 10 }]} />
 
@@ -1561,5 +1708,106 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: colors.primary,
+  },
+  appliedCouponBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 12,
+    padding: 12,
+  },
+  appliedCouponTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  appliedCouponDesc: {
+    fontSize: 11,
+    color: '#15803D',
+    marginTop: 2,
+  },
+  couponInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  couponTextInput: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  applyCouponBtn: {
+    height: 44,
+    paddingHorizontal: 18,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  applyCouponBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  couponMsg: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 6,
+  },
+  couponMsgError: {
+    color: '#DC2626',
+  },
+  couponMsgSuccess: {
+    color: '#166534',
+  },
+  availableOffersLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  couponOfferCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFBEB',
+  },
+  couponCodePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#D97706',
+  },
+  couponCodePillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  couponOfferTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  couponOfferDesc: {
+    fontSize: 10,
+    color: '#B45309',
+    marginTop: 2,
+  },
+  tapToApplyText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
   },
 });

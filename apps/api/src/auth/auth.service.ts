@@ -278,6 +278,21 @@ export class AuthService {
 
     this.logger.log(`Successful login: ${user.email} as ${user.role}`);
 
+    // Audit login event in PostgreSQL (zero-migration audit recording)
+    try {
+      await this.prisma.otpVerification.create({
+        data: {
+          phoneNumber: user.email,
+          otpHash: 'PASSWORD_LOGIN',
+          purpose: 'LOGIN_PASSWORD',
+          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          isVerified: true,
+        },
+      });
+    } catch (auditErr: any) {
+      this.logger.warn(`Could not persist password login audit: ${auditErr?.message}`);
+    }
+
     const firstName =
       user.customerProfile?.firstName ||
       (user.panditProfile ? user.panditProfile.fullName.split(" ")[0] : "User");

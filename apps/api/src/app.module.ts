@@ -19,6 +19,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { SupportModule } from './support/support.module';
 import { AdminModule } from './admin/admin.module';
 import { MailModule } from './mail/mail.module';
+import { CouponsModule } from './coupons/coupons.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { MailModule } from './mail/mail.module';
     CartModule,
     OrdersModule,
     ReviewsModule,
+    CouponsModule,
     NotificationsModule,
     SupportModule,
     AdminModule,

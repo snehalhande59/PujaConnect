@@ -9,6 +9,7 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -212,15 +213,21 @@ export const CustomerExploreScreen: React.FC<CustomerExploreScreenProps> = ({
             >
               <View style={styles.panditRow}>
                 <View style={styles.avatar}>
-                  <Ionicons name="person" size={28} color={colors.secondary} />
+                  {item.avatarUrl ? (
+                    <Image
+                      source={{ uri: item.avatarUrl }}
+                      style={{ width: 52, height: 52, borderRadius: 26 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Ionicons name="person" size={28} color={colors.secondary} />
+                  )}
                 </View>
 
                 <View style={styles.panditInfo}>
                   <View style={styles.nameHeader}>
                     <Text style={styles.panditName}>
-                      {item.user
-                        ? `Pt. ${item.user.firstName} ${item.user.lastName || ''}`.trim()
-                        : 'Pt. Vedic Shastri'}
+                      {item.fullName || (item.user ? `Pt. ${item.user.firstName} ${item.user.lastName || ''}`.trim() : 'Pt. Vedic Shastri')}
                     </Text>
                     <View style={styles.verifiedBadge}>
                       <Ionicons name="shield-checkmark" size={12} color="#166534" />
@@ -234,7 +241,7 @@ export const CustomerExploreScreen: React.FC<CustomerExploreScreenProps> = ({
 
                   <View style={styles.ratingBadge}>
                     <Ionicons name="star" size={12} color="#D97724" />
-                    <Text style={styles.ratingValue}>{item.rating || '4.9'}</Text>
+                    <Text style={styles.ratingValue}>{item.averageRating || item.rating || '4.9'}</Text>
                     <Text style={styles.reviewCount}>({item.totalReviews || 12}+ reviews)</Text>
                   </View>
                 </View>
