@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -100,6 +100,9 @@ export default function AdminCalendarPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [activeBookingDetail, setActiveBookingDetail] = useState<Booking | null>(null);
+
+  // Ref to auto-scroll to today's column in weekly view
+  const todayColumnRef = useRef<HTMLDivElement | null>(null);
 
   // Fetch verified pandits
   const fetchPandits = useCallback(async () => {
@@ -245,6 +248,14 @@ export default function AdminCalendarPage() {
     }
     return days;
   }, [selectedDate]);
+
+  // Auto-scroll today's column into view whenever weekly view is active or week changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (viewMode === 'weekly' && todayColumnRef.current) {
+      todayColumnRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+  }, [viewMode, weekDays]);
 
   // Days of current month
   const monthDays = useMemo(() => {
@@ -681,13 +692,19 @@ export default function AdminCalendarPage() {
             {/* 2. WEEKLY VIEW */}
             {viewMode === 'weekly' && (
               <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
-                <div className="grid grid-cols-1 md:grid-cols-7 divide-y md:divide-y-0 md:divide-x divide-stone-200">
+                <div
+                  className="grid grid-cols-1 md:grid-cols-7 divide-y md:divide-y-0 md:divide-x divide-stone-200 overflow-x-auto"
+                >
                   {weekDays.map((dayDate, i) => {
                     const dayBookings = filteredBookings.filter((b) => isSameDay(b.pujaDate, dayDate));
                     const isToday = isSameDay(new Date().toISOString(), dayDate);
 
                     return (
-                      <div key={i} className="min-h-[480px] flex flex-col bg-stone-50/40">
+                      <div
+                        key={i}
+                        ref={isToday ? todayColumnRef : null}
+                        className="min-h-[480px] flex flex-col bg-stone-50/40"
+                      >
                         {/* Day Column Header */}
                         <div
                           className={`p-3 text-center border-b border-stone-200 ${
@@ -704,6 +721,11 @@ export default function AdminCalendarPage() {
                           >
                             {dayDate.getDate()}
                           </span>
+                          {isToday && (
+                            <span className="text-[9px] font-extrabold text-amber-700 block mt-0.5 uppercase tracking-wider">
+                              Today
+                            </span>
+                          )}
                           <span className="text-[10px] text-stone-400 block mt-0.5">
                             {dayBookings.length} {dayBookings.length === 1 ? 'Ceremony' : 'Ceremonies'}
                           </span>

@@ -189,6 +189,26 @@ export default function AdminDashboardPage() {
         if (Array.isArray(pendingList)) setPendingPandits(pendingList);
       }
 
+      // If recentBookings from stats are empty, fetch directly from /admin/bookings as fallback
+      // This ensures dashboard always shows live bookings even if stats endpoint lags
+      try {
+        const bookingsRes = await fetch(`${API_BASE_URL}/admin/bookings?limit=10&_t=${Date.now()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (bookingsRes.ok) {
+          const bJson = await bookingsRes.json();
+          const bList: any[] =
+            bJson.data?.bookings ||
+            bJson.bookings ||
+            bJson.data?.data ||
+            bJson.data ||
+            [];
+          if (Array.isArray(bList) && bList.length > 0) {
+            setRecentBookings(bList);
+          }
+        }
+      } catch (_) { /* non-fatal */ }
+
       setLastSynced(new Date());
     } catch (err: any) {
       console.error('Error fetching dashboard metrics:', err);
@@ -990,8 +1010,11 @@ export default function AdminDashboardPage() {
           <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-xs space-y-4 lg:col-span-2">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-stone-900">Recent Customer Bookings</h3>
-                <p className="text-xs text-stone-500">Chronological list of ceremonies scheduled across India</p>
+                <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Customer Bookings
+                </h3>
+                <p className="text-xs text-stone-500">Every real puja booking placed via mobile app or website – customer, ceremony, pandit, dakshina and status</p>
               </div>
               <Link href="/admin/bookings" className="text-xs text-amber-700 font-bold hover:underline flex items-center gap-1">
                 <span>View All</span>
@@ -1008,7 +1031,10 @@ export default function AdminDashboardPage() {
               <div className="py-12 text-center text-xs text-stone-400">
                 <Calendar className="w-8 h-8 mx-auto mb-2 text-stone-300" />
                 <p className="font-semibold text-stone-600">No bookings found in database</p>
-                <p className="text-[11px] text-stone-400 mt-0.5">Real bookings placed via mobile/web will appear here</p>
+                <p className="text-[11px] text-stone-400 mt-0.5">Real bookings placed via mobile/web will appear here instantly</p>
+                <Link href="/admin/bookings" className="inline-block mt-3 px-4 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-xl hover:bg-amber-700 transition">
+                  Open Bookings Console →
+                </Link>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -1017,38 +1043,57 @@ export default function AdminDashboardPage() {
                     <tr>
                       <th className="p-3">Booking #</th>
                       <th className="p-3">Devotee</th>
-                      <th className="p-3">Puja Service</th>
-                      <th className="p-3">Assigned Purohit</th>
+                      <th className="p-3">Ceremony (Puja)</th>
+                      <th className="p-3">Assigned Pandit</th>
+                      <th className="p-3">Date</th>
                       <th className="p-3">Dakshina</th>
                       <th className="p-3">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100">
-                    {recentBookings.slice(0, 6).map((b) => {
+                    {recentBookings.slice(0, 8).map((b) => {
                       const custName = b.customerProfile
-                        ? `${b.customerProfile.firstName} ${b.customerProfile.lastName}`
-                        : 'Devotee';
-                      const panditName = b.panditProfile ? `Pt. ${b.panditProfile.fullName}` : 'Unassigned';
+                        ? `${b.customerProfile.firstName || ''} ${b.customerProfile.lastName || ''}`.trim()
+                        : b.customer?.name || 'Devotee';
+                      const panditRaw = b.panditProfile?.fullName || b.pandit?.fullName || '';
+                      const panditName = panditRaw
+                        ? `Pt. ${panditRaw.replace(/^Pt\.\s*/i, '')}`
+                        : 'Unassigned';
+                      const pujaTitle =
+                        b.puja?.title ||
+                        b.puja?.name ||
+                        b.customPujaName ||
+                        'Vedic Ritual';
+                      const pujaDate = b.pujaDate
+                        ? new Date(b.pujaDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                        : '—';
 
                       return (
-                        <tr key={b.id} className="hover:bg-stone-50/80 transition">
-                          <td className="p-3 font-mono font-bold text-stone-900">
-                            {b.bookingNumber || b.id.slice(0, 8)}
+                        <tr key={b.id} className="hover:bg-amber-50/30 transition">
+                          <td className="p-3 font-mono font-bold text-stone-900 text-[11px]">
+                            {b.bookingNumber || `#${b.id.slice(0, 8)}`}
                           </td>
                           <td className="p-3">
-                            <span className="font-semibold text-stone-900 block">{custName}</span>
-                            <span className="text-[10px] text-stone-400">{b.city || 'Pune'}</span>
+                            <span className="font-semibold text-stone-900 block">{custName || 'Devotee'}</span>
+                            <span className="text-[10px] text-stone-400">{b.city || b.customerProfile?.city || ''}</span>
                           </td>
                           <td className="p-3">
-                            <span className="font-medium text-stone-800">{b.puja?.title || 'Vedic Ritual'}</span>
+                            <span className="font-bold text-stone-900 block">{pujaTitle}</span>
+                            {b.pujaTimeSlot && (
+                              <span className="text-[10px] text-amber-700 font-medium">{b.pujaTimeSlot}</span>
+                            )}
                           </td>
                           <td className="p-3">
-                            <span className={b.panditProfile ? 'text-amber-800 font-medium' : 'text-stone-400 italic'}>
+                            <span className={panditRaw ? 'text-amber-800 font-bold block' : 'text-stone-400 italic block'}>
                               {panditName}
                             </span>
+                            {b.panditProfile?.city && (
+                              <span className="text-[10px] text-stone-400">{b.panditProfile.city}</span>
+                            )}
                           </td>
+                          <td className="p-3 text-stone-700 font-semibold text-[11px] whitespace-nowrap">{pujaDate}</td>
                           <td className="p-3 font-bold text-stone-900">
-                            ₹{Number(b.totalAmount || 0).toLocaleString()}
+                            ₹{Number(b.totalAmount || 0).toLocaleString('en-IN')}
                           </td>
                           <td className="p-3">
                             <span
