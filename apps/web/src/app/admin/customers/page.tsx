@@ -58,15 +58,19 @@ export default function AdminCustomersPage() {
 
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const fetchCustomers = useCallback(async () => {
+  const fetchCustomers = useCallback(async (opts?: boolean | any) => {
+    const silent = opts === true;
     const token = getClientToken();
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const url = new URL(`${API_BASE_URL}/admin/customers`);
       if (search.trim()) url.searchParams.append('search', search.trim());
+      url.searchParams.append('_t', Date.now().toString());
 
       const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
       if (res.ok) {
         const json = await res.json();
@@ -82,6 +86,8 @@ export default function AdminCustomersPage() {
 
   useEffect(() => {
     fetchCustomers();
+    const interval = setInterval(() => fetchCustomers(true), 10000);
+    return () => clearInterval(interval);
   }, [fetchCustomers]);
 
   // Open customer details

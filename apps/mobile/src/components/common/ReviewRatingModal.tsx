@@ -79,6 +79,7 @@ export const ReviewRatingModal: React.FC<ReviewRatingModalProps> = ({
         bookingId: selectedBookingId || undefined,
         rating,
         comment: comment.trim(),
+        authorName: name.trim() || undefined,
       });
 
       Alert.alert(

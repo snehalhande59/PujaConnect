@@ -27,15 +27,19 @@ export default function AdminReviewsPage() {
   const [ratingFilter, setRatingFilter] = useState('ALL');
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const fetchReviews = useCallback(async () => {
+  const fetchReviews = useCallback(async (opts?: boolean | any) => {
+    const silent = opts === true;
     const token = getClientToken();
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const url = new URL(`${API_BASE_URL}/admin/reviews`);
       if (ratingFilter !== 'ALL') url.searchParams.append('rating', ratingFilter);
+      url.searchParams.append('_t', Date.now().toString());
 
       const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
       if (res.ok) {
         const json = await res.json();
@@ -51,6 +55,9 @@ export default function AdminReviewsPage() {
 
   useEffect(() => {
     fetchReviews();
+    // Auto-poll every 8 seconds so newly submitted reviews appear live without manual delay
+    const interval = setInterval(() => fetchReviews(true), 8000);
+    return () => clearInterval(interval);
   }, [fetchReviews]);
 
   const handleTogglePublish = async (id: string, currentPublished: boolean) => {

@@ -12,6 +12,39 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/a
 export default function CustomerBookingsPage() {
   const [allBookings, setAllBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  const handleCancelBooking = async (rawId: string, bookingNumber: string) => {
+    if (!confirm(`Are you sure you want to cancel booking #${bookingNumber}?`)) return;
+    const token = getClientToken();
+    if (!token) return;
+
+    try {
+      setCancellingId(rawId);
+      const res = await fetch(`${API_BASE_URL}/bookings/${rawId}/cancel`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: 'Devotee cancelled reservation from dashboard' }),
+      });
+
+      if (res.ok) {
+        setAllBookings((prev) =>
+          prev.map((item) => (item.rawId === rawId ? { ...item, status: 'CANCELLED' } : item))
+        );
+        alert('Your ceremony reservation has been cancelled successfully.');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.message || 'Failed to cancel reservation.');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Error communicating with server.');
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   useEffect(() => {
     async function loadBookings() {
@@ -33,6 +66,7 @@ export default function CustomerBookingsPage() {
           if (Array.isArray(items)) {
             const mapped = items.map((b: any) => ({
               id: b.bookingNumber || b.id,
+              rawId: b.id,
               pujaName: b.puja?.title || 'Vedic Ceremony',
               panditName: b.panditProfile?.fullName || 'Assigned Gurukul Pandit',
               date: b.pujaDate ? new Date(b.pujaDate).toLocaleDateString() : 'Scheduled Date',
@@ -137,6 +171,25 @@ export default function CustomerBookingsPage() {
                     <p className="text-base font-extrabold text-maroon">{b.totalAmount}</p>
                   </div>
                 </div>
+
+                {(b.status === 'CONFIRMED' || b.status === 'PENDING') && (
+                  <div className="flex items-center justify-end pt-3 border-t border-beige/40">
+                    <button
+                      onClick={() => handleCancelBooking(b.rawId, b.id)}
+                      disabled={cancellingId === b.rawId}
+                      className="px-3.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+                    >
+                      {cancellingId === b.rawId ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Cancelling...</span>
+                        </>
+                      ) : (
+                        <span>Cancel Sacred Reservation</span>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

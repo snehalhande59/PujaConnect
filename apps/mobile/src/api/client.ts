@@ -618,6 +618,7 @@ export const api = {
     rating: number;
     comment?: string;
     panditProfileId?: string;
+    authorName?: string;
   }) {
     return apiRequest('/reviews', {
       method: 'POST',

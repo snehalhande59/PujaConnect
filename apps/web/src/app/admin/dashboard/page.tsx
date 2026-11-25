@@ -108,12 +108,17 @@ export default function AdminDashboardPage() {
       if (!silent) setLoading(true);
       else setIsRefreshing(true);
 
+      const cacheBust = `_t=${Date.now()}`;
       const [statsRes, pendingRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/admin/dashboard/stats`, {
-          headers: { Authorization: `Bearer ${token}` },
+        fetch(`${API_BASE_URL}/admin/dashboard/stats?${cacheBust}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }),
-        fetch(`${API_BASE_URL}/admin/pandits/pending`, {
-          headers: { Authorization: `Bearer ${token}` },
+        fetch(`${API_BASE_URL}/admin/pandits/pending?${cacheBust}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }),
       ]);
 
@@ -191,7 +196,8 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
-    const interval = setInterval(() => fetchDashboardData(true), 60000);
+    // Fast 10-second polling so new devotee ratings, bookings and payments appear live
+    const interval = setInterval(() => fetchDashboardData(true), 10000);
     return () => clearInterval(interval);
   }, [fetchDashboardData]);
 

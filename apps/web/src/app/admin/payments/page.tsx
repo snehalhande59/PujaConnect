@@ -67,19 +67,23 @@ export default function AdminPaymentsPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const fetchPayments = useCallback(async () => {
+  const fetchPayments = useCallback(async (opts?: boolean | any) => {
+    const silent = opts === true;
     const token = getClientToken();
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const url = new URL(`${API_BASE_URL}/admin/payments`);
       if (statusFilter !== 'ALL') url.searchParams.append('status', statusFilter);
       if (methodFilter !== 'ALL') url.searchParams.append('method', methodFilter);
       if (debouncedSearch.trim()) url.searchParams.append('search', debouncedSearch.trim());
       url.searchParams.append('page', String(page));
       url.searchParams.append('limit', String(limit));
+      url.searchParams.append('_t', Date.now().toString());
 
       const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (res.ok) {
@@ -122,6 +126,8 @@ export default function AdminPaymentsPage() {
 
   useEffect(() => {
     fetchPayments();
+    const interval = setInterval(() => fetchPayments(true), 10000);
+    return () => clearInterval(interval);
   }, [fetchPayments]);
 
   const handleStatusChange = (newStatus: string) => {

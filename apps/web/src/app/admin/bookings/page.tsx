@@ -47,16 +47,20 @@ export default function AdminBookingsPage() {
   const [auditHistory, setAuditHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  const fetchBookings = useCallback(async () => {
+  const fetchBookings = useCallback(async (opts?: boolean | any) => {
+    const silent = opts === true;
     const token = getClientToken();
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const url = new URL(`${API_BASE_URL}/admin/bookings`);
       if (statusFilter !== 'ALL') url.searchParams.append('status', statusFilter);
       if (search.trim()) url.searchParams.append('search', search.trim());
+      url.searchParams.append('_t', Date.now().toString());
 
       const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
       if (res.ok) {
         const json = await res.json();
@@ -72,6 +76,8 @@ export default function AdminBookingsPage() {
 
   useEffect(() => {
     fetchBookings();
+    const interval = setInterval(() => fetchBookings(true), 10000);
+    return () => clearInterval(interval);
   }, [fetchBookings]);
 
   const handleUpdateStatus = async (bookingId: string, newStatus: string) => {

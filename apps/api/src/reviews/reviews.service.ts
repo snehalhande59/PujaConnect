@@ -87,13 +87,40 @@ export class ReviewsService {
     const sanitizedRating = Math.min(5, Math.max(1, Math.round(Number(dto.rating) || 5)));
     const sanitizedComment = dto.comment?.trim() || null;
 
-    // Check if review already exists for this booking by this user
-    const existing = await this.prisma.review.findFirst({
-      where: {
-        bookingId: booking.id,
-        customerId: effectiveUserId,
-      },
-    });
+    // If authorName is provided from mobile app, update devotee customerProfile so reviewer name reflects accurately
+    if (dto.authorName && effectiveUserId) {
+      const parts = dto.authorName.trim().split(/\s+/);
+      const firstName = parts[0] || 'Devotee';
+      const lastName = parts.slice(1).join(' ') || '';
+      try {
+        await this.prisma.customerProfile.upsert({
+          where: { userId: effectiveUserId },
+          create: {
+            userId: effectiveUserId,
+            firstName,
+            lastName,
+          },
+          update: {
+            firstName,
+            lastName,
+          },
+        });
+      } catch (e: any) {
+        this.logger.warn(`Could not upsert customer profile name: ${e?.message}`);
+      }
+    }
+
+    // Only update existing review if bookingId was explicitly provided for an existing booking.
+    // General app reviews from home screen always insert a new record so all devotee ratings persist independently.
+    let existing: any = null;
+    if (dto.bookingId) {
+      existing = await this.prisma.review.findFirst({
+        where: {
+          bookingId: booking.id,
+          customerId: effectiveUserId,
+        },
+      });
+    }
 
     let review: any;
 

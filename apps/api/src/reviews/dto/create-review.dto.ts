@@ -17,4 +17,8 @@ export class CreateReviewDto {
   @IsString()
   @IsOptional()
   panditProfileId?: string;
+
+  @IsString()
+  @IsOptional()
+  authorName?: string;
 }

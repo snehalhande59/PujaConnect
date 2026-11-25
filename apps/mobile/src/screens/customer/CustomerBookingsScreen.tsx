@@ -100,6 +100,7 @@ export const CustomerBookingsScreen: React.FC<CustomerBookingsScreenProps> = ({
           onPress: async () => {
             try {
               await api.cancelBooking(bookingId, 'Devotee requested cancellation');
+              Alert.alert('बुकिंग रद्द झाले', 'आपली पूजा आरक्षण यशस्वीरीत्या रद्द करण्यात आले आहे.');
               fetchBookings();
             } catch (e: any) {
               Alert.alert('Cancellation Error', e.message || 'Failed to cancel booking.');

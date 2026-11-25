@@ -100,7 +100,9 @@ export default function AdminPanditsPage() {
       params.append('limit', limit.toString());
 
       const res = await fetch(`${API_BASE_URL}/admin/pandits?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (!res.ok) {
