@@ -35,6 +35,7 @@ export default function AdminPaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [methodFilter, setMethodFilter] = useState('ALL');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'BOOKINGS' | 'SHOP_ORDERS' | 'PANDIT_PAYOUTS'>('ALL');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -242,6 +243,32 @@ export default function AdminPaymentsPage() {
           </div>
         </div>
 
+        {/* Transaction Category Selector: Bookings vs Shop vs Payouts */}
+        <div className="flex items-center gap-2 bg-stone-100 p-1.5 rounded-2xl text-xs font-semibold overflow-x-auto">
+          {[
+            { key: 'ALL', label: 'All Transactions (सर्व व्यवहार)', icon: IndianRupee },
+            { key: 'BOOKINGS', label: 'Puja Booking Payments (पूजा दक्षिणा)', icon: Calendar },
+            { key: 'SHOP_ORDERS', label: 'Samagri Shop Orders (सामग्री खरेदी)', icon: ShoppingBag },
+            { key: 'PANDIT_PAYOUTS', label: 'Pandit Settlements & Payouts (पंडित पेआऊट)', icon: Sparkles },
+          ].map((t) => {
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTypeFilter(t.key as any)}
+                className={`px-4 py-2 rounded-xl transition flex items-center gap-2 cursor-pointer ${
+                  typeFilter === t.key
+                    ? 'bg-white text-stone-900 shadow-xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <Icon className="w-4 h-4 text-amber-700" />
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* Filters, Method Selector & Live Search */}
         <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-3">
           <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 text-xs">
@@ -363,7 +390,14 @@ export default function AdminPaymentsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
-                  {payments.map((p) => {
+                  {payments
+                    .filter((p) => {
+                      if (typeFilter === 'BOOKINGS') return Boolean(p.booking);
+                      if (typeFilter === 'SHOP_ORDERS') return Boolean(p.order);
+                      if (typeFilter === 'PANDIT_PAYOUTS') return Boolean(p.booking?.panditProfileId || p.booking?.panditProfile);
+                      return true;
+                    })
+                    .map((p) => {
                     const isSuccess = p.paymentStatus === 'SUCCESS';
                     const isFailed = p.paymentStatus === 'FAILED';
                     const isPending = p.paymentStatus === 'PENDING';

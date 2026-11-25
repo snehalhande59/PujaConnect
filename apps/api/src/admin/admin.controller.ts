@@ -375,4 +375,26 @@ export class AdminController {
   async deleteCoupon(@Param('id') id: string) {
     return this.adminService.deleteCoupon(id);
   }
+
+  // ==========================================
+  // NOTIFICATIONS SYSTEM (PART 4)
+  // ==========================================
+
+  @Get('notifications')
+  @ApiOperation({ summary: 'Get live admin notifications and unread count' })
+  async getNotifications() {
+    return this.adminService.getNotifications();
+  }
+
+  @Patch('notifications/:id/read')
+  @ApiOperation({ summary: 'Mark specific notification as read' })
+  async markNotificationRead(@Param('id') id: string) {
+    return this.adminService.markNotificationRead(id);
+  }
+
+  @Patch('notifications/read-all')
+  @ApiOperation({ summary: 'Mark all notifications as read' })
+  async markAllNotificationsRead() {
+    return this.adminService.markAllNotificationsRead();
+  }
 }

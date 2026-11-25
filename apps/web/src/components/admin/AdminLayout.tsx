@@ -20,6 +20,9 @@ import {
   Tag,
   TrendingUp,
   Settings,
+  Bell,
+  Check,
+  Clock,
   LogOut,
   Lock,
   Menu,
@@ -78,6 +81,7 @@ const navSections: NavSection[] = [
     title: 'Quality & Community',
     items: [
       { name: 'Reviews & Ratings', href: '/admin/reviews', icon: Star },
+      { name: 'Notifications', href: '/admin/notifications', icon: Bell, showBadge: true },
       { name: 'Support Help Desk', href: '/admin/support', icon: LifeBuoy },
       { name: 'Coupons & Promos', href: '/admin/coupons', icon: Tag },
     ],
@@ -85,7 +89,6 @@ const navSections: NavSection[] = [
   {
     title: 'System & Intelligence',
     items: [
-      { name: 'Reports & Audits', href: '/admin/reports', icon: TrendingUp },
       { name: 'Platform Settings', href: '/admin/settings', icon: Settings },
     ],
   },
@@ -102,6 +105,9 @@ export default function AdminLayout({ children, pendingPanditsCount = 0 }: Admin
   const [cancellationAlert, setCancellationAlert] = useState<{ id: string; bookingNumber: string; customer: string; puja: string; reason: string; time: string } | null>(null);
   const [newBookingAlert, setNewBookingAlert] = useState<{ id: string; bookingNumber: string; customer: string; pandit: string; puja: string; amount: number; time: string } | null>(null);
   const [newReviewAlert, setNewReviewAlert] = useState<{ id: string; name: string; rating: number; comment: string; time: string } | null>(null);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
+  const [recentNotifications, setRecentNotifications] = useState<any[]>([]);
+  const [notificationDropdownOpen, setNotificationDropdownOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const user = getSavedUserProfile();
@@ -236,6 +242,20 @@ export default function AdminLayout({ children, pendingPanditsCount = 0 }: Admin
               }
             }
           }
+          // 4. Check Live Unread Notifications
+          fetch(`${API_BASE_URL}/admin/notifications?_t=${Date.now()}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((nData) => {
+              if (nData) {
+                const notifs = nData.data?.notifications || nData.notifications || nData.data || [];
+                const unread = nData.data?.unreadCount ?? nData.unreadCount ?? 0;
+                setRecentNotifications(Array.isArray(notifs) ? notifs.slice(0, 5) : []);
+                setUnreadNotificationsCount(typeof unread === 'number' ? unread : 0);
+              }
+            })
+            .catch(() => {});
         }
       } catch (err) {}
     };
@@ -244,6 +264,34 @@ export default function AdminLayout({ children, pendingPanditsCount = 0 }: Admin
     pollAdminAlerts();
     return () => clearInterval(interval);
   }, [router]);
+
+  const handleMarkNotificationRead = async (id: string, link?: string) => {
+    const token = getClientToken();
+    try {
+      setRecentNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+      );
+      setUnreadNotificationsCount((c) => Math.max(0, c - 1));
+      await fetch(`${API_BASE_URL}/admin/notifications/${id}/read`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setNotificationDropdownOpen(false);
+      if (link) router.push(link);
+    } catch (err) {}
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    const token = getClientToken();
+    try {
+      setRecentNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadNotificationsCount(0);
+      await fetch(`${API_BASE_URL}/admin/notifications/read-all`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (err) {}
+  };
 
   const handleSignOut = () => {
     clearClientSession();
@@ -294,6 +342,87 @@ export default function AdminLayout({ children, pendingPanditsCount = 0 }: Admin
         </div>
 
         <div className="flex items-center gap-3 text-xs">
+          {/* Notification Bell Dropdown (Part 4) */}
+          <div className="relative">
+            <button
+              onClick={() => setNotificationDropdownOpen(!notificationDropdownOpen)}
+              className="relative p-2 rounded-xl text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition border border-transparent hover:border-stone-200 cursor-pointer"
+              title="Notifications"
+              aria-label="View notifications"
+            >
+              <Bell className="w-5 h-5 text-stone-600" />
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-600 text-white font-extrabold text-[9px] flex items-center justify-center shadow-xs">
+                  {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                </span>
+              )}
+            </button>
+
+            {notificationDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white border border-stone-200 rounded-2xl shadow-2xl z-50 overflow-hidden text-xs text-stone-800 animate-fade-in">
+                <div className="p-3.5 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-amber-700" />
+                    <span className="font-bold text-stone-900 text-sm">Notifications</span>
+                    {unreadNotificationsCount > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px]">
+                        {unreadNotificationsCount} New
+                      </span>
+                    )}
+                  </div>
+                  {unreadNotificationsCount > 0 && (
+                    <button
+                      onClick={handleMarkAllNotificationsRead}
+                      className="text-[11px] text-amber-700 hover:text-amber-900 font-bold hover:underline"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-80 overflow-y-auto divide-y divide-stone-100">
+                  {recentNotifications.length === 0 ? (
+                    <div className="p-8 text-center text-stone-400">
+                      <Bell className="w-8 h-8 mx-auto mb-1 text-stone-300" />
+                      <p className="font-semibold text-stone-700 text-xs">No Notifications</p>
+                      <p className="text-[11px] text-stone-400">All system events are up to date</p>
+                    </div>
+                  ) : (
+                    recentNotifications.map((notif) => (
+                      <div
+                        key={notif.id}
+                        onClick={() => handleMarkNotificationRead(notif.id, notif.link || '/admin/notifications')}
+                        className={`p-3 hover:bg-stone-50 transition cursor-pointer flex items-start gap-3 ${
+                          !notif.isRead ? 'bg-amber-50/40' : ''
+                        }`}
+                      >
+                        <div className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-amber-500" style={{ opacity: notif.isRead ? 0 : 1 }} />
+                        <div className="flex-1 space-y-0.5">
+                          <p className="font-bold text-stone-900 text-xs leading-snug">{notif.title}</p>
+                          <p className="text-stone-600 text-[11px] line-clamp-2 leading-relaxed">{notif.message}</p>
+                          <span className="text-[10px] text-stone-400 block pt-0.5">
+                            {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="p-2.5 bg-stone-50 border-t border-stone-200 text-center">
+                  <Link
+                    href="/admin/notifications"
+                    onClick={() => setNotificationDropdownOpen(false)}
+                    className="text-amber-800 hover:text-amber-950 font-bold text-xs inline-flex items-center gap-1"
+                  >
+                    <span>View all notifications</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+
           <Link
             href="/"
             target="_blank"

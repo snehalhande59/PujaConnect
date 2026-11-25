@@ -227,9 +227,15 @@ export const CustomerExploreScreen: React.FC<CustomerExploreScreenProps> = ({
                 <View style={styles.panditInfo}>
                   <View style={styles.nameHeader}>
                     <Text style={styles.panditName}>
-                      {item.fullName
-                        ? (item.fullName.startsWith('Pt.') ? item.fullName : `Pt. ${item.fullName}`)
-                        : (item.user?.firstName ? `Pt. ${item.user.firstName} ${item.user.lastName || ''}`.trim() : 'Pt. Vedic Shastri')}
+                      {(() => {
+                        const raw =
+                          item.fullName ||
+                          (item as any).name ||
+                          (item.user?.firstName ? `${item.user.firstName} ${item.user.lastName || ''}`.trim() : '') ||
+                          (item as any).panditName;
+                        if (!raw) return 'Pt. Vedic Scholar';
+                        return raw.startsWith('Pt.') ? raw : `Pt. ${raw}`;
+                      })()}
                     </Text>
                     <View style={styles.verifiedBadge}>
                       <Ionicons name="shield-checkmark" size={12} color="#166534" />

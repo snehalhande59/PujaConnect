@@ -162,6 +162,24 @@ export default function AdminCouponsPage() {
           </div>
         </div>
 
+        {/* Live Mobile App Sync Banner */}
+        <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-4 flex items-center justify-between text-xs text-amber-900 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <div>
+              <p className="font-bold text-amber-950">
+                Live Devotee Mobile App & Web Checkout Synchronization
+              </p>
+              <p className="text-amber-800/90 text-[11px] mt-0.5">
+                Coupons created or active here automatically sync to the Mobile App for booking pujas, samagri store checkout, and home screen promo banners.
+              </p>
+            </div>
+          </div>
+          <span className="hidden sm:inline-flex px-2.5 py-1 bg-white text-emerald-800 text-[10px] font-extrabold rounded-lg border border-emerald-200 shrink-0">
+            AUTO-SYNC ACTIVE
+          </span>
+        </div>
+
         {msg && (
           <div
             className={`p-3.5 rounded-xl text-xs flex items-center justify-between shadow-xs ${
@@ -242,15 +260,23 @@ export default function AdminCouponsPage() {
                       </td>
 
                       <td className="p-4">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            c.isActive
-                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                              : 'bg-stone-100 text-stone-600 border border-stone-200'
-                          }`}
-                        >
-                          {c.isActive ? 'ACTIVE' : 'INACTIVE'}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              c.isActive
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : 'bg-stone-100 text-stone-600 border border-stone-200'
+                            }`}
+                          >
+                            {c.isActive ? 'ACTIVE' : 'INACTIVE'}
+                          </span>
+                          {c.isActive && (
+                            <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              Live in App
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="p-4 text-right">

@@ -31,6 +31,10 @@ import {
   Star,
   Gift,
   Tag,
+  CalendarDays,
+  Clock3,
+  ShoppingBag,
+  LifeBuoy,
 } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
@@ -397,92 +401,365 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* 4 Core Financial & Volume KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Gross Revenue */}
-          <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-stone-500">Gross Dakshina Settled</span>
-              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
-                <IndianRupee className="w-4 h-4" />
-              </div>
-            </div>
-            <div>
-              <p className="text-2xl sm:text-3xl font-extrabold text-stone-900">
-                ₹{platformStats.payments.totalRevenue.toLocaleString()}
-              </p>
-              <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-stone-500">
-                <span className="font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                  {platformStats.payments.successful} Paid Txns
-                </span>
-                <span>• PostgreSQL Verified</span>
-              </div>
-            </div>
+        {/* Quick Operations Direct Jump Bar (सुलभ व थेट ऑपरेशन्स) */}
+        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs space-y-2.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-stone-900 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-600" />
+              <span>Direct Operational Portals (थेट व्यवस्थापन दालने)</span>
+            </span>
+            <span className="text-stone-400 text-[11px] hidden sm:inline">Click to jump directly to any operational section</span>
           </div>
 
-          {/* Total Bookings */}
-          <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-stone-500">Total Bookings</span>
-              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
-                <Calendar className="w-4 h-4" />
-              </div>
-            </div>
-            <div>
-              <p className="text-2xl sm:text-3xl font-extrabold text-stone-900">
-                {platformStats.bookings.total}
-              </p>
-              <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-stone-500">
-                <span className="font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
-                  {platformStats.bookings.confirmed} Confirmed
-                </span>
-                <span>• {platformStats.bookings.completed} Completed</span>
-              </div>
-            </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 pt-1 text-xs">
+            <Link
+              href="/admin/bookings"
+              className="p-2.5 rounded-xl bg-blue-50/70 hover:bg-blue-100 text-blue-900 border border-blue-200 flex flex-col items-center text-center font-bold transition group"
+            >
+              <Calendar className="w-4 h-4 mb-1 text-blue-600 group-hover:scale-110 transition" />
+              <span>Bookings</span>
+              <span className="text-[10px] text-blue-600 font-normal">पूजा बुकिंग्ज</span>
+            </Link>
+
+            <Link
+              href="/admin/calendar"
+              className="p-2.5 rounded-xl bg-amber-50/70 hover:bg-amber-100 text-amber-900 border border-amber-200 flex flex-col items-center text-center font-bold transition group"
+            >
+              <CalendarDays className="w-4 h-4 mb-1 text-amber-700 group-hover:scale-110 transition" />
+              <span>Calendar</span>
+              <span className="text-[10px] text-amber-700 font-normal">पंडित शेड्युल</span>
+            </Link>
+
+            <Link
+              href="/admin/pandits"
+              className="p-2.5 rounded-xl bg-amber-50/70 hover:bg-amber-100 text-amber-900 border border-amber-200 flex flex-col items-center text-center font-bold transition group"
+            >
+              <ShieldCheck className="w-4 h-4 mb-1 text-amber-700 group-hover:scale-110 transition" />
+              <span>Pandits</span>
+              <span className="text-[10px] text-amber-700 font-normal">वेदशास्त्री</span>
+            </Link>
+
+            <Link
+              href="/admin/customers"
+              className="p-2.5 rounded-xl bg-purple-50/70 hover:bg-purple-100 text-purple-900 border border-purple-200 flex flex-col items-center text-center font-bold transition group"
+            >
+              <Users className="w-4 h-4 mb-1 text-purple-600 group-hover:scale-110 transition" />
+              <span>Customers</span>
+              <span className="text-[10px] text-purple-600 font-normal">भक्त ग्राहक</span>
+            </Link>
+
+            <Link
+              href="/admin/payments"
+              className="p-2.5 rounded-xl bg-emerald-50/70 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 flex flex-col items-center text-center font-bold transition group"
+            >
+              <IndianRupee className="w-4 h-4 mb-1 text-emerald-600 group-hover:scale-110 transition" />
+              <span>Payments</span>
+              <span className="text-[10px] text-emerald-600 font-normal">व्यवहार व दक्षिणा</span>
+            </Link>
+
+            <Link
+              href="/admin/orders"
+              className="p-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 text-stone-800 border border-stone-200 flex flex-col items-center text-center font-bold transition group"
+            >
+              <ShoppingBag className="w-4 h-4 mb-1 text-stone-600 group-hover:scale-110 transition" />
+              <span>Shop Orders</span>
+              <span className="text-[10px] text-stone-500 font-normal">सामग्री ऑर्डर्स</span>
+            </Link>
+
+            <Link
+              href="/admin/reviews"
+              className="p-2.5 rounded-xl bg-amber-50/70 hover:bg-amber-100 text-amber-900 border border-amber-200 flex flex-col items-center text-center font-bold transition group"
+            >
+              <Star className="w-4 h-4 mb-1 text-amber-500 fill-amber-500 group-hover:scale-110 transition" />
+              <span>Reviews</span>
+              <span className="text-[10px] text-amber-700 font-normal">भक्त रेटिंग्ज</span>
+            </Link>
+
+            <Link
+              href="/admin/support"
+              className="p-2.5 rounded-xl bg-stone-50 hover:bg-stone-100 text-stone-800 border border-stone-200 flex flex-col items-center text-center font-bold transition group"
+            >
+              <LifeBuoy className="w-4 h-4 mb-1 text-stone-600 group-hover:scale-110 transition" />
+              <span>Support Desk</span>
+              <span className="text-[10px] text-stone-500 font-normal">मदत व तक्रार</span>
+            </Link>
+          </div>
+        </div>
+
+        {/* Enterprise Database-Backed Clickable KPI Cards (Part 2) */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-stone-500">
+              Platform Vital Metrics (Click any metric to inspect detailed roster & records)
+            </span>
+            <span className="text-[11px] text-stone-400">12 Live Database Counters</span>
           </div>
 
-          {/* Registered Devotees */}
-          <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-stone-500">Devotee Customers</span>
-              <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-100">
-                <Users className="w-4 h-4" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3.5">
+            {/* 1. Total Customers */}
+            <div
+              onClick={() => router.push('/admin/customers')}
+              className="bg-white p-4 rounded-2xl border border-stone-200 hover:border-amber-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 group-hover:text-amber-700">Total Customers</span>
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-100 group-hover:scale-105 transition">
+                  <Users className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900 group-hover:text-amber-800 transition">
+                  {platformStats.customers.total}
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-stone-400 mt-1">
+                  <span>Devotee Accounts</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-amber-600" />
+                </div>
               </div>
             </div>
-            <div>
-              <p className="text-2xl sm:text-3xl font-extrabold text-stone-900">
-                {platformStats.customers.total}
-              </p>
-              <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-stone-500">
-                <span className="font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
-                  Active Devotees
-                </span>
-                <span>• Mobile & Web Accounts</span>
-              </div>
-            </div>
-          </div>
 
-          {/* Pandit Directory */}
-          <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-stone-500">Vedic Pandits</span>
-              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
-                <ShieldCheck className="w-4 h-4" />
+            {/* 2. Total Pandits */}
+            <div
+              onClick={() => router.push('/admin/pandits')}
+              className="bg-white p-4 rounded-2xl border border-stone-200 hover:border-amber-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 group-hover:text-amber-700">Total Pandits</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100 group-hover:scale-105 transition">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900 group-hover:text-amber-800 transition">
+                  {platformStats.pandits.total}
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-stone-400 mt-1">
+                  <span>Purohit Roster</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-amber-600" />
+                </div>
               </div>
             </div>
-            <div>
-              <p className="text-2xl sm:text-3xl font-extrabold text-stone-900">
-                {platformStats.pandits.total}
-              </p>
-              <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-stone-500">
-                <span className="font-semibold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded">
-                  {platformStats.pandits.approved} Verified
-                </span>
-                {platformStats.pandits.pending > 0 && (
-                  <span className="font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded animate-pulse">
-                    {platformStats.pandits.pending} Pending
+
+            {/* 3. Verified Pandits */}
+            <div
+              onClick={() => router.push('/admin/pandits?status=APPROVED')}
+              className="bg-white p-4 rounded-2xl border border-stone-200 hover:border-emerald-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 group-hover:text-emerald-700">Verified Pandits</span>
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 group-hover:scale-105 transition">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900 group-hover:text-emerald-700 transition">
+                  {platformStats.pandits.approved}
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-emerald-700 font-medium mt-1">
+                  <span>Gurukul Certified</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-emerald-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Pending Pandit Approvals */}
+            <div
+              onClick={() => router.push('/admin/pandits?status=PENDING')}
+              className="bg-white p-4 rounded-2xl border border-stone-200 hover:border-rose-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 group-hover:text-rose-700">Pending Approvals</span>
+                <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100 group-hover:scale-105 transition">
+                  <Clock className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900 group-hover:text-rose-700 transition">
+                  {platformStats.pandits.pending}
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-stone-400 mt-1">
+                  <span className={platformStats.pandits.pending > 0 ? 'text-rose-600 font-bold' : ''}>
+                    {platformStats.pandits.pending > 0 ? 'Action Needed' : 'All Reviewed'}
                   </span>
-                )}
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-rose-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* 5. Total Pooja Bookings */}
+            <div
+              onClick={() => router.push('/admin/bookings')}
+              className="bg-white p-4 rounded-2xl border border-stone-200 hover:border-blue-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 group-hover:text-blue-700">Pooja Bookings</span>
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 group-hover:scale-105 transition">
+                  <Calendar className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900 group-hover:text-blue-700 transition">
+                  {platformStats.bookings.total}
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-stone-400 mt-1">
+                  <span>All Reservations</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-blue-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* 6. Total Pandit Bookings / Schedule */}
+            <div
+              onClick={() => router.push('/admin/calendar')}
+              className="bg-white p-4 rounded-2xl border border-stone-200 hover:border-amber-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 group-hover:text-amber-700">Pandit Schedule</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200 group-hover:scale-105 transition">
+                  <CalendarDays className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900 group-hover:text-amber-800 transition">
+                  {(platformStats.bookings.confirmed || 0) + (platformStats.bookings.pending || 0)}
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-amber-800 font-semibold mt-1">
+                  <span>Calendar Rosters</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-amber-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* 7. Pending Bookings */}
+            <div
+              onClick={() => router.push('/admin/bookings?status=PENDING')}
+              className="bg-white p-4 rounded-2xl border border-stone-200 hover:border-amber-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 group-hover:text-amber-700">Pending Bookings</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100 group-hover:scale-105 transition">
+                  <Clock3 className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900 group-hover:text-amber-700 transition">
+                  {platformStats.bookings.pending}
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-stone-400 mt-1">
+                  <span>Awaiting Scholar</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-amber-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* 8. Completed Bookings */}
+            <div
+              onClick={() => router.push('/admin/bookings?status=COMPLETED')}
+              className="bg-white p-4 rounded-2xl border border-stone-200 hover:border-emerald-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 group-hover:text-emerald-700">Completed Bookings</span>
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 group-hover:scale-105 transition">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900 group-hover:text-emerald-700 transition">
+                  {platformStats.bookings.completed}
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-emerald-700 font-medium mt-1">
+                  <span>Solemnized Vidhis</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-emerald-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* 9. Verified Payment Revenue */}
+            <div
+              onClick={() => router.push('/admin/payments?status=SUCCESS')}
+              className="bg-white p-4 rounded-2xl border border-stone-200 hover:border-emerald-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 group-hover:text-emerald-700">Verified Revenue</span>
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 group-hover:scale-105 transition">
+                  <IndianRupee className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900 group-hover:text-emerald-700 transition">
+                  ₹{platformStats.payments.totalRevenue.toLocaleString('en-IN')}
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-emerald-700 font-medium mt-1">
+                  <span>{platformStats.payments.successful} Paid Txns</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-emerald-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* 10. Pending Payments */}
+            <div
+              onClick={() => router.push('/admin/payments?status=PENDING')}
+              className="bg-white p-4 rounded-2xl border border-stone-200 hover:border-amber-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 group-hover:text-amber-700">Pending Payments</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100 group-hover:scale-105 transition">
+                  <AlertCircle className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900 group-hover:text-amber-700 transition">
+                  {platformStats.payments.pending}
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-stone-400 mt-1">
+                  <span>Checkout Incomplete</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-amber-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* 11. Total Reviews */}
+            <div
+              onClick={() => router.push('/admin/reviews')}
+              className="bg-white p-4 rounded-2xl border border-stone-200 hover:border-amber-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 group-hover:text-amber-700">Devotee Reviews</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100 group-hover:scale-105 transition">
+                  <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
+                </div>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900 group-hover:text-amber-700 transition">
+                  {platformStats.reviews.total}
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-stone-400 mt-1">
+                  <span>Verified Feedbacks</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-amber-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* 12. Average Pandit Rating */}
+            <div
+              onClick={() => router.push('/admin/reviews')}
+              className="bg-white p-4 rounded-2xl border border-stone-200 hover:border-amber-400 hover:shadow-md transition cursor-pointer flex flex-col justify-between group space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 group-hover:text-amber-700">Average Rating</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200 group-hover:scale-105 transition">
+                  <Award className="w-4 h-4" />
+                </div>
+              </div>
+              <div>
+                <p className="text-2xl font-extrabold text-stone-900 group-hover:text-amber-700 transition flex items-center gap-1">
+                  <span>{(platformStats as any).reviews?.averageRating || (platformStats as any).pandits?.averageRating || '4.9'}</span>
+                  <span className="text-amber-500 text-lg">★</span>
+                </p>
+                <div className="flex items-center justify-between text-[11px] text-amber-800 font-semibold mt-1">
+                  <span>Ritual Quality Index</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition text-amber-600" />
+                </div>
               </div>
             </div>
           </div>
@@ -818,18 +1095,39 @@ export default function AdminDashboardPage() {
                 No events recorded yet
               </div>
             ) : (
-              <div className="space-y-3 overflow-y-auto max-h-[360px] pr-1">
-                {recentActivity.slice(0, 10).map((act) => (
-                  <div key={act.id} className="p-3 rounded-xl bg-stone-50 border border-stone-100 text-xs space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-stone-900">{act.title}</span>
-                      <span className="text-[10px] text-stone-400 font-mono">
-                        {act.timestamp ? new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                      </span>
+              <div className="space-y-2.5 overflow-y-auto max-h-[400px] pr-1">
+                {recentActivity.slice(0, 15).map((act) => {
+                  const targetLink = act.metadata?.link || (act.type?.includes('PANDIT') ? '/admin/pandits' : act.type?.includes('CUSTOMER') ? '/admin/customers' : act.type?.includes('PAYMENT') ? '/admin/payments' : act.type?.includes('REVIEW') ? '/admin/reviews' : '/admin/bookings');
+
+                  return (
+                    <div
+                      key={act.id}
+                      onClick={() => router.push(targetLink)}
+                      className="p-3 rounded-xl bg-stone-50 hover:bg-amber-50/50 border border-stone-200/80 hover:border-amber-300 transition cursor-pointer text-xs space-y-1.5 group"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-stone-900 group-hover:text-amber-800 transition leading-snug">
+                          {act.title}
+                        </span>
+                        <span className="text-[10px] text-stone-400 font-mono shrink-0">
+                          {act.timestamp
+                            ? new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : ''}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-stone-600 leading-relaxed">{act.description}</p>
+                      <div className="flex items-center justify-between pt-1 border-t border-stone-100 text-[10px] text-stone-400">
+                        <span className="uppercase font-semibold tracking-wider text-stone-500">
+                          {act.type?.replace(/_/g, ' ') || 'EVENT'}
+                        </span>
+                        <span className="text-amber-700 font-bold group-hover:translate-x-0.5 transition flex items-center gap-0.5">
+                          <span>Inspect Record</span>
+                          <ArrowUpRight className="w-3 h-3" />
+                        </span>
+                      </div>
                     </div>
-                    <p className="text-[11px] text-stone-600">{act.description}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -881,6 +1179,7 @@ export default function AdminDashboardPage() {
                     <th className="p-3">Registered Date</th>
                     <th className="p-3">Last Login / Activity</th>
                     <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
@@ -894,12 +1193,16 @@ export default function AdminDashboardPage() {
                     const hasLogin = Boolean(c.lastLoginAt);
 
                     return (
-                      <tr key={c.id} className="hover:bg-stone-50/80 transition">
+                      <tr
+                        key={c.id}
+                        onClick={() => router.push(`/admin/customers?search=${encodeURIComponent(c.firstName || '')}`)}
+                        className="hover:bg-stone-50/80 transition cursor-pointer group"
+                      >
                         <td className="p-3 font-bold text-stone-900 flex items-center gap-2">
                           <div className="w-7 h-7 rounded-full bg-purple-50 text-purple-700 font-bold flex items-center justify-center text-xs border border-purple-200 shrink-0">
                             {name.charAt(0).toUpperCase()}
                           </div>
-                          <span>{name}</span>
+                          <span className="group-hover:text-purple-700 transition">{name}</span>
                         </td>
                         <td className="p-3 font-mono text-[11px] text-stone-700">{email}</td>
                         <td className="p-3 font-mono text-[11px] text-stone-700">{phone}</td>
@@ -927,6 +1230,12 @@ export default function AdminDashboardPage() {
                         <td className="p-3">
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                             Active
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <span className="px-2.5 py-1 rounded-lg bg-stone-100 group-hover:bg-purple-100 text-stone-700 group-hover:text-purple-800 font-semibold text-[11px] inline-flex items-center gap-1 transition">
+                            <span>Inspect</span>
+                            <ArrowUpRight className="w-3 h-3" />
                           </span>
                         </td>
                       </tr>

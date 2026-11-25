@@ -32,6 +32,7 @@ export default function AdminOrdersPage() {
 
   // Edit Tracking Modal
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
+  const [inspectingOrder, setInspectingOrder] = useState<any | null>(null);
   const [trackingNumber, setTrackingNumber] = useState('');
 
   const fetchOrders = useCallback(async () => {
@@ -204,6 +205,7 @@ export default function AdminOrdersPage() {
                     <th className="p-4">Order ID</th>
                     <th className="p-4">Customer</th>
                     <th className="p-4">Total Amount</th>
+                    <th className="p-4">Payment & Gateway</th>
                     <th className="p-4">Delivery City</th>
                     <th className="p-4">AWB Tracking</th>
                     <th className="p-4">Fulfillment Status</th>
@@ -231,6 +233,29 @@ export default function AdminOrdersPage() {
 
                         <td className="p-4 font-extrabold text-stone-900">
                           ₹{Number(o.totalAmount || 0).toLocaleString()}
+                        </td>
+
+                        <td className="p-4">
+                          {o.payments && o.payments.length > 0 ? (
+                            <div>
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  o.payments[0].paymentStatus === 'SUCCESS'
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                    : o.payments[0].paymentStatus === 'FAILED'
+                                    ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                                    : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                }`}
+                              >
+                                {o.payments[0].paymentStatus === 'SUCCESS' ? 'PAID' : o.payments[0].paymentStatus}
+                              </span>
+                              <span className="text-[10px] text-stone-400 font-mono block mt-0.5">
+                                {o.payments[0].paymentNumber || o.payments[0].paymentMethod || 'Razorpay'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-stone-400 italic">COD / Direct</span>
+                          )}
                         </td>
 
                         <td className="p-4 text-stone-600">
@@ -275,6 +300,15 @@ export default function AdminOrdersPage() {
 
                         <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setInspectingOrder(o)}
+                              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-[10px] font-bold inline-flex items-center gap-1"
+                              title="Inspect Full Order"
+                            >
+                              <Eye className="w-3 h-3 text-amber-700" />
+                              <span>Inspect</span>
+                            </button>
+
                             <button
                               onClick={() => {
                                 setEditingOrder(o);
@@ -352,6 +386,122 @@ export default function AdminOrdersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Inspect Full Order Modal */}
+      {inspectingOrder && (
+        <div className="fixed inset-0 bg-stone-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-xl text-xs text-stone-800 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 block">
+                  Shop Order Fulfillment Record
+                </span>
+                <h3 className="font-bold text-base text-stone-900">
+                  Order #{inspectingOrder.orderNumber || inspectingOrder.id}
+                </h3>
+              </div>
+              <button
+                onClick={() => setInspectingOrder(null)}
+                className="p-1 rounded-lg border border-stone-200 hover:bg-stone-100 text-stone-500"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Status & Amount Summary */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-1">
+                <span className="text-[11px] text-stone-500 block">Fulfillment Status</span>
+                <span className="font-bold text-xs uppercase px-2 py-0.5 rounded-full inline-block bg-amber-100 text-amber-800">
+                  {inspectingOrder.status}
+                </span>
+              </div>
+              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-1">
+                <span className="text-[11px] text-stone-500 block">Total Order Amount</span>
+                <span className="font-extrabold text-base text-stone-900 block">
+                  ₹{Number(inspectingOrder.totalAmount || 0).toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Customer & Shipping Details */}
+            <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-1.5">
+              <span className="font-bold text-stone-900 block">Customer & Delivery Address</span>
+              <p className="font-semibold text-stone-800">
+                {inspectingOrder.customerProfile?.firstName} {inspectingOrder.customerProfile?.lastName}
+              </p>
+              <p className="text-stone-600 font-mono text-[11px]">{inspectingOrder.customerProfile?.user?.email}</p>
+              <p className="text-stone-600 font-mono text-[11px]">{inspectingOrder.customerProfile?.user?.phoneNumber}</p>
+              <p className="text-stone-700 text-xs pt-1 border-t border-stone-200">
+                📍 {inspectingOrder.shippingAddress?.addressLine1 || 'Shipping Address'},{' '}
+                {inspectingOrder.shippingAddress?.city || 'Pune'} - {inspectingOrder.shippingAddress?.pincode || ''}
+              </p>
+            </div>
+
+            {/* Payment Details */}
+            <div className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-200 space-y-1.5">
+              <span className="font-bold text-emerald-900 block">Payment Verification</span>
+              {inspectingOrder.payments && inspectingOrder.payments.length > 0 ? (
+                <div className="space-y-1 text-emerald-950">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold">Status: {inspectingOrder.payments[0].paymentStatus}</span>
+                    <span className="font-mono text-[11px] font-bold">₹{inspectingOrder.payments[0].amount}</span>
+                  </div>
+                  <p className="font-mono text-[11px]">Ref: {inspectingOrder.payments[0].paymentNumber}</p>
+                  <p className="text-[11px]">Method: {inspectingOrder.payments[0].paymentMethod || 'Razorpay UPI'}</p>
+                </div>
+              ) : (
+                <p className="text-stone-500 italic">No online payment recorded (COD or Direct Checkout)</p>
+              )}
+            </div>
+
+            {/* Items List */}
+            <div className="space-y-2">
+              <span className="font-bold text-stone-900 block">Ordered Samagri & Puja Items</span>
+              {Array.isArray(inspectingOrder.orderItems) && inspectingOrder.orderItems.length > 0 ? (
+                <div className="divide-y divide-stone-100 border border-stone-200 rounded-xl overflow-hidden">
+                  {inspectingOrder.orderItems.map((item: any) => (
+                    <div key={item.id} className="p-2.5 flex items-center justify-between bg-white text-xs">
+                      <div>
+                        <p className="font-bold text-stone-900">{item.product?.name || 'Vedic Samagri'}</p>
+                        <p className="text-stone-400 text-[10px]">Qty: {item.quantity}</p>
+                      </div>
+                      <span className="font-bold text-stone-800">
+                        ₹{(Number(item.price || 0) * item.quantity).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-stone-400 italic">Complete Pure Samagri Kit Included with Ceremony</p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-stone-100">
+              <div className="flex items-center gap-1.5">
+                {inspectingOrder.status !== 'DELIVERED' && (
+                  <button
+                    onClick={() => {
+                      handleUpdateStatus(inspectingOrder.id, inspectingOrder.status === 'SHIPPED' ? 'DELIVERED' : 'SHIPPED');
+                      setInspectingOrder(null);
+                    }}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold"
+                  >
+                    {inspectingOrder.status === 'SHIPPED' ? 'Mark Delivered' : 'Dispatch Order'}
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setInspectingOrder(null)}
+                className="px-4 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl font-semibold"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
