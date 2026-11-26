@@ -64,6 +64,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
   const [cooldown, setCooldown] = useState(0);
   const [reqId, setReqId] = useState<string | undefined>(undefined);
   const [otpLength, setOtpLength] = useState<number>(4);
+  const [isMobileIntegrationEnabled, setIsMobileIntegrationEnabled] = useState(false);
   const [showWidget, setShowWidget] = useState(false);
 
   // Status & loading
@@ -120,6 +121,12 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
               setOtpLength(Number(length));
               console.log('[MSG91 SDK] Dynamic widget otpLength loaded:', length);
             }
+            const isMobile = res?.data?.mobileIntegration === 1;
+            setIsMobileIntegrationEnabled(Boolean(isMobile));
+            console.log(
+              '[MSG91 SDK] Mobile integration status:',
+              isMobile ? 'Enabled' : 'Disabled (Web Only in MSG91 panel)',
+            );
           })
           .catch((err: any) => {
             console.warn('[MSG91 SDK] getWidgetProcess error:', err?.message);
@@ -815,20 +822,22 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                     style={{ marginTop: 16 }}
                   />
 
-                  {/* Official MSG91 Modal Widget Verification Button */}
-                  <TouchableOpacity
-                    onPress={() => {
-                      setError(null);
-                      setShowWidget(true);
-                    }}
-                    style={styles.openWidgetBtn}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
-                    <Text style={styles.openWidgetBtnText}>
-                      Verify via MSG91 Official Widget
-                    </Text>
-                  </TouchableOpacity>
+                  {/* Official MSG91 Modal Widget Verification Button (Active when Mobile Integration is enabled in MSG91) */}
+                  {isMobileIntegrationEnabled && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setError(null);
+                        setShowWidget(true);
+                      }}
+                      style={styles.openWidgetBtn}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
+                      <Text style={styles.openWidgetBtnText}>
+                        Verify via MSG91 Official Widget
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ) : (
                 // Step 2: Mobile SMS OTP Verification (Dynamic 4 or 6 Digits)
@@ -881,20 +890,22 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                     style={{ marginTop: 12 }}
                   />
 
-                  {/* Direct MSG91 Official Widget Fallback */}
-                  <TouchableOpacity
-                    onPress={() => {
-                      setError(null);
-                      setShowWidget(true);
-                    }}
-                    style={styles.openWidgetSecondaryBtn}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="shield-checkmark-outline" size={15} color={colors.primary} />
-                    <Text style={styles.openWidgetSecondaryBtnText}>
-                      Having issue? Verify with MSG91 Official Widget
-                    </Text>
-                  </TouchableOpacity>
+                  {/* Direct MSG91 Official Widget Fallback (only when Mobile Integration is enabled) */}
+                  {isMobileIntegrationEnabled && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setError(null);
+                        setShowWidget(true);
+                      }}
+                      style={styles.openWidgetSecondaryBtn}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="shield-checkmark-outline" size={15} color={colors.primary} />
+                      <Text style={styles.openWidgetSecondaryBtnText}>
+                        Having issue? Verify with MSG91 Official Widget
+                      </Text>
+                    </TouchableOpacity>
+                  )}
 
                   {/* Resend Action Row */}
                   <View style={styles.otpActionsRow}>
@@ -975,9 +986,9 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Official MSG91 DefaultWidget Modal */}
+      {/* Official MSG91 DefaultWidget Modal (Rendered only when enabled for mobile in MSG91 dashboard) */}
       <DefaultWidget
-        visible={showWidget}
+        visible={showWidget && isMobileIntegrationEnabled}
         onClose={() => setShowWidget(false)}
         onCompletion={handleVerificationComplete}
         widgetId={MSG91_WIDGET_ID}
