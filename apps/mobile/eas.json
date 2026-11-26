@@ -18,7 +18,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://pujaconnect-api-he9b.onrender.com/api/v1",
-        "EXPO_PUBLIC_MSG91_WIDGET_ID": "366b796a706d353331323931"
+        "EXPO_PUBLIC_MSG91_WIDGET_ID": "366b796a706d353331323931",
+        "EXPO_PUBLIC_MSG91_WIDGET_TOKEN_AUTH": "591944TWzfN2X0K6b07c6c7P1"
       }
     },
     "production-apk": {
@@ -28,7 +29,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://pujaconnect-api-he9b.onrender.com/api/v1",
-        "EXPO_PUBLIC_MSG91_WIDGET_ID": "366b796a706d353331323931"
+        "EXPO_PUBLIC_MSG91_WIDGET_ID": "366b796a706d353331323931",
+        "EXPO_PUBLIC_MSG91_WIDGET_TOKEN_AUTH": "591944TWzfN2X0K6b07c6c7P1"
       }
     },
     "production": {
@@ -38,7 +40,8 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://pujaconnect-api-he9b.onrender.com/api/v1",
-        "EXPO_PUBLIC_MSG91_WIDGET_ID": "366b796a706d353331323931"
+        "EXPO_PUBLIC_MSG91_WIDGET_ID": "366b796a706d353331323931",
+        "EXPO_PUBLIC_MSG91_WIDGET_TOKEN_AUTH": "591944TWzfN2X0K6b07c6c7P1"
       }
     }
   },

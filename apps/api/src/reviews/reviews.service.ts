@@ -40,16 +40,34 @@ export class ReviewsService {
     }
 
     let booking: any = null;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
     if (dto.bookingId) {
-      booking = await this.prisma.booking.findUnique({
-        where: { id: dto.bookingId },
-        include: {
-          customerProfile: true,
-          panditProfile: true,
-          puja: true,
-        },
-      });
+      const cleanBookingId = String(dto.bookingId).trim();
+      try {
+        if (UUID_REGEX.test(cleanBookingId)) {
+          booking = await this.prisma.booking.findUnique({
+            where: { id: cleanBookingId },
+            include: {
+              customerProfile: true,
+              panditProfile: true,
+              puja: true,
+            },
+          });
+        } else {
+          // If bookingId is non-UUID (e.g. DS-123456 or DEV-...), lookup by unique bookingNumber
+          booking = await this.prisma.booking.findFirst({
+            where: { bookingNumber: cleanBookingId },
+            include: {
+              customerProfile: true,
+              panditProfile: true,
+              puja: true,
+            },
+          });
+        }
+      } catch (err: any) {
+        this.logger.warn(`Could not lookup booking ${cleanBookingId}: ${err?.message}`);
+      }
     }
 
     // Fallback 1: Find latest booking belonging to this devotee

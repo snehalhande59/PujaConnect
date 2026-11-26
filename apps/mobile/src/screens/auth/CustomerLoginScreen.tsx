@@ -25,7 +25,7 @@ const MSG91_WIDGET_ID =
 const MSG91_TOKEN_AUTH =
   process.env.EXPO_PUBLIC_MSG91_WIDGET_TOKEN_AUTH ||
   process.env.EXPO_PUBLIC_MSG91_TOKEN_AUTH ||
-  '';
+  '591944TWzfN2X0K6b07c6c7P1';
 
 interface CustomerLoginScreenProps {
   onBack: () => void;
@@ -240,9 +240,12 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         );
       } catch (sdkError: any) {
         // SDK failure stops here and reports the error. NO fallback to old REST API.
-        const errMsg =
+        let errMsg =
           sdkError?.message ||
           'Failed to dispatch SMS verification code. Please check your mobile number and try again.';
+        if (errMsg === 'AuthenticationFailure' || errMsg.includes('AuthenticationFailure')) {
+          errMsg = 'SMS gateway authentication error. Please retry in a moment or sign in using Email OTP.';
+        }
         setError(errMsg);
       } finally {
         setLoading(false);

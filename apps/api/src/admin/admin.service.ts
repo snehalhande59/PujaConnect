@@ -628,7 +628,7 @@ export class AdminService {
         take: 10,
         orderBy: { createdAt: 'desc' },
         include: {
-          user: { select: { email: true, phoneNumber: true, createdAt: true, isActive: true } },
+          user: { select: { email: true, phoneNumber: true, createdAt: true, updatedAt: true, isActive: true } },
           _count: { select: { bookings: true } },
         },
       }),
@@ -721,7 +721,12 @@ export class AdminService {
       if (!loginMap.has(log.phoneNumber)) {
         loginMap.set(log.phoneNumber, {
           lastLoginAt: log.createdAt,
-          method: log.purpose === 'LOGIN_PASSWORD' ? 'PASSWORD' : 'EMAIL_OTP',
+          method:
+            log.purpose === 'LOGIN_MOBILE_OTP'
+              ? 'MOBILE_OTP'
+              : log.purpose === 'LOGIN_PASSWORD'
+              ? 'PASSWORD'
+              : 'EMAIL_OTP',
         });
       }
     }
@@ -732,10 +737,13 @@ export class AdminService {
         (c.user?.phoneNumber && loginMap.get(c.user.phoneNumber)) ||
         null;
 
+      const fallbackTime = c.user?.updatedAt || c.user?.createdAt || c.createdAt;
+      const fallbackMethod = c.user?.phoneNumber ? 'MOBILE_OTP' : 'EMAIL_OTP';
+
       return {
         ...c,
-        lastLoginAt: login ? login.lastLoginAt : null,
-        lastLoginMethod: login ? login.method : null,
+        lastLoginAt: login ? login.lastLoginAt : fallbackTime,
+        lastLoginMethod: login ? login.method : fallbackMethod,
       };
     });
 
@@ -954,7 +962,12 @@ export class AdminService {
       if (!loginMap.has(log.phoneNumber)) {
         loginMap.set(log.phoneNumber, {
           lastLoginAt: log.createdAt,
-          method: log.purpose === 'LOGIN_PASSWORD' ? 'PASSWORD' : 'EMAIL_OTP',
+          method:
+            log.purpose === 'LOGIN_MOBILE_OTP'
+              ? 'MOBILE_OTP'
+              : log.purpose === 'LOGIN_PASSWORD'
+              ? 'PASSWORD'
+              : 'EMAIL_OTP',
         });
       }
     }
@@ -965,10 +978,13 @@ export class AdminService {
         (c.user?.phoneNumber && loginMap.get(c.user.phoneNumber)) ||
         null;
 
+      const fallbackTime = c.user?.updatedAt || c.user?.createdAt || c.createdAt;
+      const fallbackMethod = c.user?.phoneNumber ? 'MOBILE_OTP' : 'EMAIL_OTP';
+
       return {
         ...c,
-        lastLoginAt: login ? login.lastLoginAt : null,
-        lastLoginMethod: login ? login.method : null,
+        lastLoginAt: login ? login.lastLoginAt : fallbackTime,
+        lastLoginMethod: login ? login.method : fallbackMethod,
       };
     });
 

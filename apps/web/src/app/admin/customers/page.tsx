@@ -442,8 +442,14 @@ export default function AdminCustomersPage() {
                                     minute: '2-digit',
                                   })}
                                 </span>
-                                <span className="px-1 py-0.2 rounded bg-amber-50 text-amber-800 font-bold text-[9px] border border-amber-200">
-                                  {c.lastLoginMethod || 'OTP'}
+                                <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 font-bold text-[9px] border border-amber-200">
+                                  {c.lastLoginMethod === 'MOBILE_OTP'
+                                    ? '📱 Mobile OTP'
+                                    : c.lastLoginMethod === 'EMAIL_OTP'
+                                    ? '✉️ Email OTP'
+                                    : c.lastLoginMethod === 'PASSWORD'
+                                    ? '🔑 Password'
+                                    : c.lastLoginMethod || '📱 Mobile OTP'}
                                 </span>
                               </div>
                             </div>

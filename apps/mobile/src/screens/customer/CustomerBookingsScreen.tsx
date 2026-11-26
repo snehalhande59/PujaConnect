@@ -53,19 +53,24 @@ export const CustomerBookingsScreen: React.FC<CustomerBookingsScreenProps> = ({
     if (!selectedBookingForReview) return;
     try {
       setSubmittingReview(true);
+      const bookingRef = selectedBookingForReview.id || (selectedBookingForReview as any).bookingNumber || undefined;
       await api.submitReview({
-        bookingId: selectedBookingForReview.id,
+        bookingId: bookingRef,
         rating,
         comment: reviewComment.trim(),
       });
       Alert.alert(
-        'धन्यवाद! (Review Submitted)',
-        'Your sacred rating has been recorded and submitted to PujaConnect.',
+        'धन्यवाद! (Review Submitted) 🙏',
+        'Your sacred rating has been recorded and submitted to DevSutra.',
         [{ text: 'OK', onPress: () => setReviewModalVisible(false) }]
       );
       fetchBookings();
     } catch (e: any) {
-      Alert.alert('Review Error', e.message || 'Failed to submit rating. Please try again.');
+      const friendlyMsg =
+        e.message?.includes('prisma') || e.message?.includes('UUID')
+          ? 'Failed to link review with booking record. Please try again.'
+          : e.message || 'Failed to submit rating. Please try again.';
+      Alert.alert('Review Error', friendlyMsg);
     } finally {
       setSubmittingReview(false);
     }

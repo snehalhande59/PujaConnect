@@ -750,6 +750,9 @@ export class AuthService {
         data: { updatedAt: new Date() },
       });
 
+      // Track verified login session & notify Admin portal in real-time
+      await this.recordLoginSessionAndNotifyAdmins(user, normalizedIdentifier, 'EMAIL_OTP', false);
+
       const token = this.jwtService.sign({
         sub: user.id,
         email: user.email,
@@ -969,6 +972,9 @@ export class AuthService {
         data: { updatedAt: new Date() },
       });
 
+      // Track verified login session & notify Admin portal in real-time
+      await this.recordLoginSessionAndNotifyAdmins(user, expectedPhone, 'MOBILE_OTP', false);
+
       const token = this.jwtService.sign({
         sub: user.id,
         email: user.email,
@@ -1130,6 +1136,9 @@ export class AuthService {
       `Created new Devotee via MSG91 SDK: ${user.phoneNumber} (ID: ${user.id})`,
     );
 
+    // Track verified login session & notify Admin portal in real-time
+    await this.recordLoginSessionAndNotifyAdmins(user, expectedPhone, 'MOBILE_OTP', true);
+
     const token = this.jwtService.sign({
       sub: user.id,
       email: user.email,
@@ -1154,5 +1163,60 @@ export class AuthService {
         hasCompletedProfile: false,
       },
     };
+  }
+
+  /**
+   * Record verified customer login/registration session in OtpVerification table
+   * and push active notification to all Admin consoles.
+   */
+  private async recordLoginSessionAndNotifyAdmins(
+    user: any,
+    identifier: string,
+    method: 'MOBILE_OTP' | 'EMAIL_OTP' | 'PASSWORD',
+    isNewCustomer: boolean,
+  ): Promise<void> {
+    try {
+      // 1. Record in OtpVerification table for accurate customer directory presence
+      const purpose = method === 'MOBILE_OTP' ? 'LOGIN_MOBILE_OTP' : method === 'PASSWORD' ? 'LOGIN_PASSWORD' : 'EMAIL_OTP';
+      await this.prisma.otpVerification.create({
+        data: {
+          phoneNumber: identifier,
+          otpHash: 'MSG91_VERIFIED',
+          purpose,
+          isVerified: true,
+          expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days
+        },
+      });
+    } catch (e: any) {
+      this.logger.warn(`Could not persist OtpVerification record: ${e?.message}`);
+    }
+
+    try {
+      // 2. Dispatch real-time Admin notification
+      const admins = await this.prisma.user.findMany({
+        where: { role: Role.ADMIN, isDeleted: false },
+        select: { id: true },
+      });
+
+      const customerName = `${user.customerProfile?.firstName || 'Devotee'} ${user.customerProfile?.lastName || ''}`.trim();
+      const methodLabel = method === 'MOBILE_OTP' ? 'Mobile OTP' : method === 'PASSWORD' ? 'Password' : 'Email OTP';
+      const actionLabel = isNewCustomer ? 'New Devotee Registered' : 'Devotee Sign-in';
+      const title = `📱 ${actionLabel}: ${identifier}`;
+      const message = `${customerName} (${identifier}) signed in successfully via ${methodLabel}.`;
+
+      for (const admin of admins) {
+        await this.prisma.notification.create({
+          data: {
+            userId: admin.id,
+            title,
+            message,
+            type: 'SYSTEM',
+            link: '/admin/customers',
+          },
+        });
+      }
+    } catch (e: any) {
+      this.logger.warn(`Could not dispatch admin login notification: ${e?.message}`);
+    }
   }
 }
