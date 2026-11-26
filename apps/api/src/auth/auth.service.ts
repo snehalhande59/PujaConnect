@@ -18,6 +18,7 @@ import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { RegisterPanditDto } from "./dto/register-pandit.dto";
 import { SendOtpDto } from "./dto/send-otp.dto";
 import { VerifyOtpDto } from "./dto/verify-otp.dto";
+import { VerifyWidgetTokenDto } from "./dto/verify-widget-token.dto";
 import { SmsService } from "./sms.service";
 import { MailService } from "../mail/mail.service";
 
@@ -580,6 +581,16 @@ export class AuthService {
    */
   async verifyCustomerOtp(dto: VerifyOtpDto) {
     const rawIdentifier = (dto.identifier || dto.email || dto.phoneNumber || dto.phone || '').trim();
+
+    // If MSG91 access token is provided from React Native SDK verifyOTP
+    if (dto.accessToken) {
+      return this.verifyCustomerWidgetToken({
+        phoneNumber: rawIdentifier,
+        accessToken: dto.accessToken,
+        fullName: dto.fullName,
+      });
+    }
+
     if (!rawIdentifier || !dto.otp) {
       throw new BadRequestException('Identifier and verification code are required.');
     }
@@ -827,6 +838,223 @@ export class AuthService {
 
     this.logger.log(
       `Created new Devotee via ${isEmail ? 'Email' : 'Mobile'} OTP: ${user.phoneNumber || user.email} (ID: ${user.id})`,
+    );
+
+    const token = this.jwtService.sign({
+      sub: user.id,
+      email: user.email,
+      role: Role.CUSTOMER,
+    });
+
+    return {
+      success: true,
+      message: 'Welcome to DevSutra! Account created successfully.',
+      token,
+      isNewCustomer: true,
+      hasCompletedProfile: false,
+      role: Role.CUSTOMER,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: Role.CUSTOMER,
+        firstName: 'Devotee',
+        lastName: '',
+        phoneNumber: user.phoneNumber,
+        city: null,
+        hasCompletedProfile: false,
+      },
+    };
+  }
+
+  /**
+   * Cryptographically verify MSG91 access token and authenticate or register customer
+   */
+  async verifyCustomerWidgetToken(dto: VerifyWidgetTokenDto) {
+    const rawPhone = (dto.phoneNumber || '').trim();
+    const cleanToken = (dto.accessToken || '').trim();
+
+    if (!rawPhone || !cleanToken) {
+      throw new BadRequestException('Phone number and MSG91 access token are required.');
+    }
+
+    const expectedPhone = this.smsService.normalizePhoneNumber(rawPhone);
+    if (!this.smsService.isValidIndianMobile(expectedPhone)) {
+      throw new BadRequestException(
+        'Please enter a valid 10-digit Indian mobile number.',
+      );
+    }
+
+    // Call MSG91 server-to-server endpoint using MSG91_AUTH_KEY
+    const verifyResult = await this.smsService.verifyAccessToken(cleanToken);
+
+    if (!verifyResult.success || !verifyResult.identifier) {
+      this.logger.warn(`[MSG91 Widget Token] Verification failed for ${expectedPhone}: ${verifyResult.error}`);
+      throw new UnauthorizedException(
+        verifyResult.error || 'Invalid or expired MSG91 verification token.',
+      );
+    }
+
+    // Strict equality check between normalized phone number and MSG91 verified identifier
+    if (verifyResult.identifier !== expectedPhone) {
+      this.logger.error(
+        `[MSG91 Widget Token] Identifier mismatch: expected ${expectedPhone}, verified ${verifyResult.identifier}`,
+      );
+      throw new UnauthorizedException(
+        'Verified mobile number does not match requested phone number.',
+      );
+    }
+
+    // Find existing user by phone
+    let user = await this.prisma.user.findFirst({
+      where: { phoneNumber: expectedPhone },
+      include: {
+        customerProfile: true,
+        panditProfile: true,
+      },
+    });
+
+    // -------------------------------------------------------------
+    // POST-VERIFICATION ROLE & ACCOUNT IDENTIFICATION (Zero Escalation)
+    // -------------------------------------------------------------
+
+    // Case 1: Existing Pandit Account (DO NOT create customer or grant customer permissions)
+    if (user && user.role === Role.PANDIT) {
+      this.logger.log(`Pandit verified via MSG91 SDK: Pt. ${user.panditProfile?.fullName || user.email}`);
+      const token = this.jwtService.sign({
+        sub: user.id,
+        email: user.email,
+        role: Role.PANDIT,
+      });
+
+      const fullName = user.panditProfile?.fullName || 'Vedic Pandit';
+      const firstName = fullName.split(' ')[0] || 'Pt.';
+      const lastName = fullName.split(' ').slice(1).join(' ') || 'Ji';
+
+      return {
+        success: true,
+        message: `Namaste Pt. ${fullName}! Welcome to the Pandit Portal.`,
+        token,
+        isNewCustomer: false,
+        role: Role.PANDIT,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: Role.PANDIT,
+          firstName,
+          lastName,
+          phoneNumber: user.phoneNumber,
+          city: user.panditProfile?.city || null,
+          verificationStatus: user.panditProfile?.verificationStatus || 'PENDING',
+        },
+      };
+    }
+
+    // Case 2: Existing Admin Account
+    if (user && user.role === Role.ADMIN) {
+      this.logger.log(`Admin verified via MSG91 SDK: ${user.email}`);
+      const token = this.jwtService.sign({
+        sub: user.id,
+        email: user.email,
+        role: Role.ADMIN,
+      });
+
+      return {
+        success: true,
+        message: 'Welcome to the DevSutra Admin Console.',
+        token,
+        isNewCustomer: false,
+        role: Role.ADMIN,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: Role.ADMIN,
+          firstName: 'Admin',
+          lastName: '',
+          phoneNumber: user.phoneNumber,
+        },
+      };
+    }
+
+    // Case 3: Existing Customer Account
+    if (user && user.role === Role.CUSTOMER) {
+      if (!user.customerProfile) {
+        const names = (dto.fullName || 'Sacred Devotee').trim().split(/\s+/);
+        const firstName = names[0] || 'Devotee';
+        const lastName = names.slice(1).join(' ') || '';
+        user.customerProfile = await this.prisma.customerProfile.create({
+          data: {
+            userId: user.id,
+            firstName,
+            lastName,
+          },
+        });
+      }
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { updatedAt: new Date() },
+      });
+
+      const token = this.jwtService.sign({
+        sub: user.id,
+        email: user.email,
+        role: Role.CUSTOMER,
+      });
+
+      const hasCompletedProfile = Boolean(
+        user.customerProfile?.firstName &&
+        user.customerProfile?.firstName.toLowerCase() !== 'devotee' &&
+        user.customerProfile?.city,
+      );
+
+      return {
+        success: true,
+        message: 'Logged in successfully!',
+        token,
+        isNewCustomer: false,
+        hasCompletedProfile,
+        role: Role.CUSTOMER,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: Role.CUSTOMER,
+          firstName: user.customerProfile?.firstName || 'Devotee',
+          lastName: user.customerProfile?.lastName || '',
+          phoneNumber: user.phoneNumber,
+          city: user.customerProfile?.city || null,
+          hasCompletedProfile,
+        },
+      };
+    }
+
+    // Case 4: New User -> Register Customer Account
+    const phoneDigits = expectedPhone.replace(/[^0-9]/g, '');
+    const defaultEmail = `devotee.${phoneDigits}@devsutra.in`;
+
+    const unguessablePassword = crypto.randomBytes(32).toString('hex');
+    const passwordHash = await bcrypt.hash(unguessablePassword, 12);
+
+    user = await this.prisma.user.create({
+      data: {
+        email: defaultEmail,
+        phoneNumber: expectedPhone,
+        passwordHash,
+        role: Role.CUSTOMER,
+        customerProfile: {
+          create: {
+            firstName: 'Devotee',
+            lastName: '',
+          },
+        },
+      },
+      include: {
+        customerProfile: true,
+        panditProfile: true,
+      },
+    });
+
+    this.logger.log(
+      `Created new Devotee via MSG91 SDK: ${user.phoneNumber} (ID: ${user.id})`,
     );
 
     const token = this.jwtService.sign({

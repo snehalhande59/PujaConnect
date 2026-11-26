@@ -347,6 +347,31 @@ export const api = {
     return res;
   },
 
+  async verifyCustomerWidgetToken(
+    phoneNumber: string,
+    accessToken: string,
+    fullName?: string,
+  ) {
+    const trimmedPhone = phoneNumber.trim();
+    const body: Record<string, any> = {
+      phoneNumber: trimmedPhone,
+      accessToken: accessToken.trim(),
+    };
+    if (fullName && fullName.trim()) {
+      body.fullName = fullName.trim();
+    }
+
+    const res = await apiRequest('/auth/customer/verify-widget-token', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    if (res.token && res.user) {
+      await storage.setToken(res.token);
+      await storage.setUser(res.user);
+    }
+    return res;
+  },
+
   async registerCustomer(params: {
     email: string;
     password: string;

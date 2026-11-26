@@ -16,6 +16,16 @@ import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { useAuth } from '../../context/AuthContext';
 import { DevSutraLogo } from '../../components/common/DevSutraLogo';
+import { OTPWidget } from '@msg91comm/sendotp-react-native';
+
+declare const process: any;
+
+const MSG91_WIDGET_ID =
+  process.env.EXPO_PUBLIC_MSG91_WIDGET_ID || '366b796a706d353331323931';
+const MSG91_TOKEN_AUTH =
+  process.env.EXPO_PUBLIC_MSG91_WIDGET_TOKEN_AUTH ||
+  process.env.EXPO_PUBLIC_MSG91_TOKEN_AUTH ||
+  '';
 
 interface CustomerLoginScreenProps {
   onBack: () => void;
@@ -30,7 +40,12 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
   onLoginSuccess,
   onNavigateForgotPassword,
 }) => {
-  const { sendCustomerOtp, loginCustomerWithOtp, loginCustomer } = useAuth();
+  const {
+    sendCustomerOtp,
+    loginCustomerWithOtp,
+    loginCustomerWithWidgetToken,
+    loginCustomer,
+  } = useAuth();
 
   // Three primary login methods clearly visible at the top:
   // 1. Email OTP
@@ -53,6 +68,17 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Initialize official MSG91 React Native SDK
+  useEffect(() => {
+    try {
+      if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
+        OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
+      }
+    } catch (e) {
+      console.warn('[MSG91 SDK] initializeWidget error:', e);
+    }
+  }, []);
 
   // Cooldown countdown timer
   useEffect(() => {
@@ -128,7 +154,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         setLoading(false);
       }
     } else if (method === 'mobile_otp') {
-      // Mobile SMS OTP via MSG91
+      // Mobile SMS OTP via official MSG91 React Native SDK
       const cleaned = phone.trim().replace(/[^0-9]/g, '');
       if (!cleaned) {
         setError('Please enter your 10-digit mobile number.');
@@ -145,23 +171,56 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         return;
       }
 
+      const sdkIdentifier = `91${cleaned}`;
       const formattedPhone = `+91${cleaned}`;
 
       try {
         setLoading(true);
-        const res = await sendCustomerOtp(formattedPhone, 'sms');
+
+        // Ensure widget is initialized
+        if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
+          await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
+        }
+
+        // Send OTP using official MSG91 React Native SDK
+        const sdkRes = await OTPWidget.sendOTP({ identifier: sdkIdentifier });
+
+        const extractedReqId =
+          sdkRes?.reqId ||
+          sdkRes?.data?.reqId ||
+          (typeof sdkRes?.message === 'string' && sdkRes.message.length > 15
+            ? sdkRes.message.trim()
+            : undefined);
+
+        if (extractedReqId) {
+          setReqId(extractedReqId);
+        }
+
         setOtpSent(true);
-        if (res?.reqId) setReqId(res.reqId);
-        setCooldown(res?.cooldownSeconds || 60);
+        setCooldown(60);
         setSuccess(
-          res?.message ||
-            `A 6-digit verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
+          sdkRes?.message && typeof sdkRes.message === 'string' && sdkRes.message.length < 80
+            ? sdkRes.message
+            : `A 6-digit verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
         );
-      } catch (e: any) {
-        setError(
-          e.message ||
-            'Failed to deliver SMS verification code. Please check your number and try again.',
-        );
+      } catch (sdkError: any) {
+        console.warn('[MSG91 SDK] sendOTP failed, attempting server dispatch fallback:', sdkError);
+        try {
+          const res = await sendCustomerOtp(formattedPhone, 'sms');
+          setOtpSent(true);
+          if (res?.reqId) setReqId(res.reqId);
+          setCooldown(res?.cooldownSeconds || 60);
+          setSuccess(
+            res?.message ||
+              `A 6-digit verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
+          );
+        } catch (backendError: any) {
+          setError(
+            sdkError?.message ||
+              backendError?.message ||
+              'Failed to deliver SMS verification code. Please check your number and try again.',
+          );
+        }
       } finally {
         setLoading(false);
       }
@@ -180,10 +239,64 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
       return;
     }
 
-    const identifier =
-      method === 'email_otp'
-        ? email.trim()
-        : `+91${phone.trim().replace(/[^0-9]/g, '')}`;
+    if (method === 'mobile_otp') {
+      const cleanPhone = `+91${phone.trim().replace(/[^0-9]/g, '')}`;
+
+      try {
+        setLoading(true);
+
+        // 1. Verify OTP with official MSG91 React Native SDK
+        let accessToken: string | undefined = undefined;
+        try {
+          if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
+            await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
+          }
+
+          const verifyRes = await OTPWidget.verifyOTP({
+            reqId: reqId || '',
+            otp: cleanOtp,
+          });
+
+          accessToken =
+            verifyRes?.['access-token'] ||
+            verifyRes?.accessToken ||
+            verifyRes?.data?.['access-token'] ||
+            verifyRes?.data?.accessToken;
+        } catch (sdkVerifyErr: any) {
+          console.warn('[MSG91 SDK] verifyOTP failed:', sdkVerifyErr);
+          const errMsg =
+            sdkVerifyErr?.message ||
+            'Invalid or expired verification code. Please try again.';
+          setError(errMsg);
+          setLoading(false);
+          return;
+        }
+
+        // 2. Cryptographically validate with NestJS backend
+        // Zero-Trust Security: session is issued ONLY after NestJS verifies the MSG91 access-token
+        let res: any;
+        if (accessToken) {
+          res = await loginCustomerWithWidgetToken(cleanPhone, accessToken);
+        } else {
+          res = await loginCustomerWithOtp(cleanPhone, cleanOtp, undefined, reqId);
+        }
+
+        if (res.user?.role === 'PANDIT') {
+          setSuccess(`Namaste Pt. ${res.user.firstName || ''}! Redirecting to Pandit Portal...`);
+        } else {
+          setSuccess('Verification successful!');
+        }
+        onLoginSuccess(res.user, Boolean(res.isNewCustomer));
+      } catch (e: any) {
+        setError(e.message || 'Invalid or expired verification code. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // Email OTP Flow
+    const identifier = email.trim();
 
     try {
       setLoading(true);

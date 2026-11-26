@@ -22,11 +22,15 @@ export class VerifyOtpDto {
   @IsString()
   identifier?: string;
 
-  @ApiProperty({ example: '123456', description: '6-digit verification code' })
-  @IsNotEmpty({ message: 'Verification code is required.' })
+  @ApiPropertyOptional({ example: '123456', description: '6-digit verification code' })
+  @IsOptional()
   @IsString({ message: 'Verification code must be a string.' })
-  @Length(6, 6, { message: 'Verification code must be exactly 6 digits.' })
-  otp: string;
+  otp?: string;
+
+  @ApiPropertyOptional({ example: 'eyJhbGciOiJIUzI1NiJ9...', description: 'MSG91 JWT access token returned by OTPWidget.verifyOTP()' })
+  @IsOptional()
+  @IsString()
+  accessToken?: string;
 
   @ApiPropertyOptional({ example: 'Monica Pardeshi', description: 'Full name for new customer registration' })
   @IsOptional()

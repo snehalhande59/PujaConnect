@@ -37,6 +37,8 @@ export class SmsService {
   ).trim();
   private readonly msg91WidgetTokenAuth = (
     process.env.MSG91_WIDGET_TOKEN_AUTH ||
+    process.env.MSG91_TOKEN_AUTH ||
+    process.env.WIDGET_TOKEN_AUTH ||
     ''
   ).trim();
   private readonly msg91TemplateId =
@@ -177,12 +179,18 @@ export class SmsService {
         identifier: mobileNumber,
       };
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
+      const authKeyToUse = this.msg91AuthKey || this.msg91WidgetTokenAuth;
+      if (authKeyToUse) {
+        headers['authkey'] = authKeyToUse;
+      }
+
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
+        headers,
         body: JSON.stringify(body),
       });
 
@@ -278,12 +286,18 @@ export class SmsService {
         otp: cleanOtp,
       };
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
+      const authKeyToUse = this.msg91AuthKey || this.msg91WidgetTokenAuth;
+      if (authKeyToUse) {
+        headers['authkey'] = authKeyToUse;
+      }
+
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
+        headers,
         body: JSON.stringify(body),
       });
 
@@ -342,6 +356,98 @@ export class SmsService {
   }
 
   /**
+   * Securely verify MSG91 Widget Access Token with MSG91 server
+   * POST https://api.msg91.com/api/v5/widget/verifyAccessToken
+   * Headers: { authkey: MSG91_AUTH_KEY, 'Content-Type': 'application/json' }
+   * Body: { "access-token": accessToken }
+   */
+  async verifyAccessToken(accessToken: string): Promise<{
+    success: boolean;
+    identifier?: string;
+    error?: string;
+  }> {
+    const cleanToken = accessToken?.trim();
+    if (!cleanToken) {
+      return { success: false, error: 'Access token is required for verification.' };
+    }
+
+    const authKey = this.msg91AuthKey || this.msg91WidgetTokenAuth;
+    if (!authKey) {
+      this.logger.error(
+        '[MSG91] Cannot verify access token: MSG91_AUTH_KEY is not configured on the server.',
+      );
+      return {
+        success: false,
+        error: 'MSG91 server authorization key is not configured on the server.',
+      };
+    }
+
+    try {
+      const url = 'https://api.msg91.com/api/v5/widget/verifyAccessToken';
+      const body = { 'access-token': cleanToken };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          authkey: authKey,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (
+        !response.ok ||
+        data.type === 'error' ||
+        data.type === 'failed' ||
+        data.status === 'fail' ||
+        data.hasError
+      ) {
+        const errorMsg =
+          data.message ||
+          (typeof data === 'string'
+            ? data
+            : `MSG91 verifyAccessToken error ${response.status}`);
+        this.logger.warn(`[MSG91] verifyAccessToken rejected: ${errorMsg}`);
+        return { success: false, error: errorMsg };
+      }
+
+      // Successful verification returns verified identifier in message or data
+      const verifiedIdentifier =
+        (typeof data.message === 'string' && data.message.length > 5
+          ? data.message.trim()
+          : undefined) ||
+        data.data?.identifier ||
+        data.data?.mobile ||
+        data.identifier;
+
+      if (!verifiedIdentifier) {
+        return {
+          success: false,
+          error:
+            data.message ||
+            'MSG91 did not return a verified phone number for this access token.',
+        };
+      }
+
+      this.logger.log(`[MSG91] Access token cryptographically verified by MSG91`);
+
+      return {
+        success: true,
+        identifier: this.normalizePhoneNumber(verifiedIdentifier),
+      };
+    } catch (err: any) {
+      this.logger.error(`[MSG91] verifyAccessToken connection error: ${err.message}`);
+      return {
+        success: false,
+        error: err.message || 'Failed to communicate with MSG91 gateway.',
+      };
+    }
+  }
+
+  /**
    * Resend/Retry OTP via MSG91 Widget Retry OTP API
    * POST https://api.msg91.com/api/v5/widget/retryOtp
    * Body: { widgetId, tokenAuth, reqId, retryChannel? }
@@ -375,12 +481,18 @@ export class SmsService {
         body.retryType = retryType;
       }
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      };
+      const authKeyToUse = this.msg91AuthKey || this.msg91WidgetTokenAuth;
+      if (authKeyToUse) {
+        headers['authkey'] = authKeyToUse;
+      }
+
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
+        headers,
         body: JSON.stringify(body),
       });
 

@@ -26,6 +26,7 @@ import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { SendOtpDto } from "./dto/send-otp.dto";
 import { VerifyOtpDto } from "./dto/verify-otp.dto";
+import { VerifyWidgetTokenDto } from "./dto/verify-widget-token.dto";
 
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { CurrentUser } from "./decorators/current-user.decorator";
@@ -126,6 +127,22 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.verifyCustomerOtp(dto);
+    this.setAuthCookie(res, result.token);
+    return result;
+  }
+
+  @Post("customer/verify-widget-token")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Cryptographically verify MSG91 React Native SDK access token and issue session" })
+  @ApiResponse({
+    status: 200,
+    description: "Access token verified successfully via MSG91 server. Session token issued.",
+  })
+  async verifyCustomerWidgetToken(
+    @Body() dto: VerifyWidgetTokenDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyCustomerWidgetToken(dto);
     this.setAuthCookie(res, result.token);
     return result;
   }

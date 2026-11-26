@@ -15,6 +15,11 @@ interface AuthContextType {
     fullName?: string,
     reqId?: string,
   ) => Promise<any>;
+  loginCustomerWithWidgetToken: (
+    phoneNumber: string,
+    accessToken: string,
+    fullName?: string,
+  ) => Promise<any>;
   registerCustomer: (params: any) => Promise<any>;
   loginPandit: (email: string, pass: string) => Promise<any>;
   registerPandit: (params: any) => Promise<any>;
@@ -75,6 +80,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res;
   };
 
+  const handleLoginCustomerWithWidgetToken = async (
+    phoneNumber: string,
+    accessToken: string,
+    fullName?: string,
+  ) => {
+    const res = await api.verifyCustomerWidgetToken(phoneNumber, accessToken, fullName);
+    setUser(res.user);
+    setRole(res.user.role);
+    setToken(res.token);
+    return res;
+  };
+
   const handleRegisterCustomer = async (params: any) => {
     const res = await api.registerCustomer(params);
     setUser(res.user);
@@ -129,6 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginCustomer: handleLoginCustomer,
         sendCustomerOtp: handleSendCustomerOtp,
         loginCustomerWithOtp: handleLoginCustomerWithOtp,
+        loginCustomerWithWidgetToken: handleLoginCustomerWithWidgetToken,
         registerCustomer: handleRegisterCustomer,
         loginPandit: handleLoginPandit,
         registerPandit: handleRegisterPandit,
