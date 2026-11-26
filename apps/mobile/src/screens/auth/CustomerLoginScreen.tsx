@@ -63,6 +63,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
   const [otpSent, setOtpSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [reqId, setReqId] = useState<string | undefined>(undefined);
+  const [otpLength, setOtpLength] = useState<number>(4);
   const [showWidget, setShowWidget] = useState(false);
 
   // Status & loading
@@ -74,9 +75,16 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
   const handleVerificationComplete = async (result: any) => {
     console.log('[MSG91 DefaultWidget] Verification complete:', result);
     if (result?.success) {
-      const accessToken = result.message;
+      const accessToken =
+        result['access-token'] || result.accessToken || result.message;
       const rawIdentifier = result.identifier || phone;
-      const cleanPhone = rawIdentifier.startsWith('+') ? rawIdentifier : `+${rawIdentifier}`;
+      const digits = (rawIdentifier || '').replace(/[^0-9]/g, '');
+      const cleanPhone =
+        digits.length === 10
+          ? `+91${digits}`
+          : digits.startsWith('91') && digits.length === 12
+          ? `+${digits}`
+          : `+${digits}`;
 
       try {
         setLoading(true);
@@ -100,11 +108,22 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     }
   };
 
-  // Initialize official MSG91 React Native SDK
+  // Initialize official MSG91 React Native SDK & dynamically fetch widget configuration
   useEffect(() => {
     try {
       if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
         OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
+        OTPWidget.getWidgetProcess()
+          .then((res: any) => {
+            const length = res?.data?.otpLength;
+            if (length && !isNaN(Number(length))) {
+              setOtpLength(Number(length));
+              console.log('[MSG91 SDK] Dynamic widget otpLength loaded:', length);
+            }
+          })
+          .catch((err: any) => {
+            console.warn('[MSG91 SDK] getWidgetProcess error:', err?.message);
+          });
       }
     } catch (e) {
       console.warn('[MSG91 SDK] initializeWidget error:', e);
@@ -291,8 +310,8 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     setSuccess(null);
 
     const cleanOtp = otp.trim().replace(/[^0-9]/g, '');
-    if (!cleanOtp || cleanOtp.length < 4 || cleanOtp.length > 6) {
-      setError('Please enter the complete verification code.');
+    if (!cleanOtp) {
+      setError(`Please enter the complete ${otpLength}-digit verification code.`);
       return;
     }
 
@@ -316,20 +335,28 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
           }
 
+          console.log('[MSG91 Calling verifyOTP]:', { reqId, otp: cleanOtp, widgetId: MSG91_WIDGET_ID });
           const verifyRes = await OTPWidget.verifyOTP({
             reqId,
             otp: cleanOtp,
           });
+          console.log('[MSG91 verifyOTP response]:', JSON.stringify(verifyRes));
 
           if (
             verifyRes?.type === 'error' ||
             verifyRes?.type === 'failed' ||
             verifyRes?.status === 'fail'
           ) {
-            throw new Error(
+            const rawMsg = (verifyRes?.message || '').toLowerCase();
+            let userMsg =
               verifyRes?.message ||
-                'Invalid or expired verification code. Please try again.',
-            );
+              'Invalid or expired verification code. Please try again.';
+            if (rawMsg.includes('verification failed')) {
+              userMsg = `Invalid OTP code. Please enter the ${otpLength}-digit code received in your latest SMS (${maskPhone(
+                cleanPhone,
+              )}), or tap "Verify with MSG91 Official Widget" below.`;
+            }
+            throw new Error(userMsg);
           }
 
           accessToken =
@@ -767,7 +794,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                       color={colors.goldDark}
                     />
                     <Text style={styles.infoRowText}>
-                      We will send a 6-digit SMS verification code to your Indian mobile number via MSG91.
+                      We will send a {otpLength}-digit SMS verification code to your Indian mobile number via MSG91.
                     </Text>
                   </View>
 
@@ -804,7 +831,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   </TouchableOpacity>
                 </View>
               ) : (
-                // Step 2: 6-Digit Mobile SMS OTP Verification
+                // Step 2: Mobile SMS OTP Verification (Dynamic 4 or 6 Digits)
                 <View>
                   <View style={styles.verifyTargetBox}>
                     <View style={{ flex: 1 }}>
@@ -829,15 +856,15 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   </View>
 
                   <Input
-                    label="Enter 6-Digit Verification Code *"
-                    placeholder="• • • • • •"
+                    label={`Enter ${otpLength}-Digit Verification Code *`}
+                    placeholder={otpLength === 4 ? '• • • •' : '• • • • • •'}
                     value={otp}
                     onChangeText={(val) => {
                       setOtp(val.replace(/[^0-9]/g, ''));
                       setError(null);
                     }}
                     keyboardType="number-pad"
-                    maxLength={6}
+                    maxLength={otpLength}
                     leftIcon="lock-closed-outline"
                     style={styles.otpInputText}
                     editable={!loading}
@@ -853,6 +880,21 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                     icon={<Ionicons name="arrow-forward" size={18} color={colors.textWhite} />}
                     style={{ marginTop: 12 }}
                   />
+
+                  {/* Direct MSG91 Official Widget Fallback */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setError(null);
+                      setShowWidget(true);
+                    }}
+                    style={styles.openWidgetSecondaryBtn}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="shield-checkmark-outline" size={15} color={colors.primary} />
+                    <Text style={styles.openWidgetSecondaryBtnText}>
+                      Having issue? Verify with MSG91 Official Widget
+                    </Text>
+                  </TouchableOpacity>
 
                   {/* Resend Action Row */}
                   <View style={styles.otpActionsRow}>
@@ -946,8 +988,9 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         matchBorderToPrimaryColor={true}
         defaultCountry={{
           name: 'India',
-          dial_code: '+91',
+          dial_code: '91',
           code: 'IN',
+          flag: '🇮🇳',
         }}
         defaultVerificationType="mobile"
       />
@@ -1252,6 +1295,24 @@ const styles = StyleSheet.create({
   openWidgetBtnText: {
     fontSize: 13,
     fontWeight: '700',
+    color: colors.primary,
+  },
+  openWidgetSecondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.borderLight || '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  openWidgetSecondaryBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
     color: colors.primary,
   },
 });
