@@ -16,16 +16,16 @@ import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { useAuth } from '../../context/AuthContext';
 import { DevSutraLogo } from '../../components/common/DevSutraLogo';
-import { OTPWidget } from '@msg91comm/sendotp-react-native';
+import { OTPWidget, DefaultWidget } from '@msg91comm/sendotp-react-native';
 
 declare const process: any;
 
 const MSG91_WIDGET_ID =
-  process.env.EXPO_PUBLIC_MSG91_WIDGET_ID || '366b796a706d353331323931';
+  process.env.EXPO_PUBLIC_MSG91_WIDGET_ID || '366b7a694f47303732323236';
 const MSG91_TOKEN_AUTH =
   process.env.EXPO_PUBLIC_MSG91_WIDGET_TOKEN_AUTH ||
   process.env.EXPO_PUBLIC_MSG91_TOKEN_AUTH ||
-  '591944TWzfN2X0K6b07c6c7P1';
+  '295404TnCaCSX6Dohd6b07ff1bP1';
 
 interface CustomerLoginScreenProps {
   onBack: () => void;
@@ -63,11 +63,42 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
   const [otpSent, setOtpSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [reqId, setReqId] = useState<string | undefined>(undefined);
+  const [showWidget, setShowWidget] = useState(false);
 
   // Status & loading
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Handle completion from official MSG91 DefaultWidget modal
+  const handleVerificationComplete = async (result: any) => {
+    console.log('[MSG91 DefaultWidget] Verification complete:', result);
+    if (result?.success) {
+      const accessToken = result.message;
+      const rawIdentifier = result.identifier || phone;
+      const cleanPhone = rawIdentifier.startsWith('+') ? rawIdentifier : `+${rawIdentifier}`;
+
+      try {
+        setLoading(true);
+        const res = await loginCustomerWithWidgetToken(cleanPhone, accessToken);
+        if (res.user?.role === 'PANDIT') {
+          setSuccess(`Namaste Pt. ${res.user.firstName || ''}! Redirecting to Pandit Portal...`);
+        } else {
+          setSuccess('Verification successful! Welcome to DevSutra.');
+        }
+        setShowWidget(false);
+        onLoginSuccess(res.user, Boolean(res.isNewCustomer));
+      } catch (backendErr: any) {
+        setError(backendErr.message || 'Verification token accepted, but devotee sign-in failed.');
+        setShowWidget(false);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setError(result?.message || 'Verification was cancelled or failed.');
+      setShowWidget(false);
+    }
+  };
 
   // Initialize official MSG91 React Native SDK
   useEffect(() => {
@@ -756,6 +787,21 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                     }
                     style={{ marginTop: 16 }}
                   />
+
+                  {/* Official MSG91 Modal Widget Verification Button */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setError(null);
+                      setShowWidget(true);
+                    }}
+                    style={styles.openWidgetBtn}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
+                    <Text style={styles.openWidgetBtnText}>
+                      Verify via MSG91 Official Widget
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               ) : (
                 // Step 2: 6-Digit Mobile SMS OTP Verification
@@ -886,6 +932,25 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Official MSG91 DefaultWidget Modal */}
+      <DefaultWidget
+        visible={showWidget}
+        onClose={() => setShowWidget(false)}
+        onCompletion={handleVerificationComplete}
+        widgetId={MSG91_WIDGET_ID}
+        tokenAuth={MSG91_TOKEN_AUTH}
+        theme="light"
+        primaryColor={colors.primary}
+        primaryButtonTextColor="#FFFFFF"
+        matchBorderToPrimaryColor={true}
+        defaultCountry={{
+          name: 'India',
+          dial_code: '+91',
+          code: 'IN',
+        }}
+        defaultVerificationType="mobile"
+      />
     </SafeAreaView>
   );
 };
@@ -1170,5 +1235,23 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     color: colors.textLight,
     textAlign: 'center',
+  },
+  openWidgetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  openWidgetBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });

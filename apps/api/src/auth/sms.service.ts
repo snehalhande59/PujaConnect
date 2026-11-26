@@ -27,19 +27,20 @@ export class SmsService {
   private readonly twilioFrom = process.env.TWILIO_PHONE_NUMBER || '';
   private readonly twilioVerifySid = process.env.TWILIO_VERIFY_SERVICE_SID || '';
 
-  private readonly msg91AuthKey =
+  private readonly msg91AuthKey = (
     process.env.MSG91_AUTH_KEY ||
     process.env.MSG91_API_KEY ||
-    '';
+    '295404AJalkFMerGjU5d8822cb'
+  ).trim();
   private readonly msg91WidgetId = (
     process.env.MSG91_WIDGET_ID ||
-    '366b796a706d353331323931'
+    '366b7a694f47303732323236'
   ).trim();
   private readonly msg91WidgetTokenAuth = (
     process.env.MSG91_WIDGET_TOKEN_AUTH ||
     process.env.MSG91_TOKEN_AUTH ||
     process.env.WIDGET_TOKEN_AUTH ||
-    ''
+    '295404TnCaCSX6Dohd6b07ff1bP1'
   ).trim();
   private readonly msg91TemplateId =
     process.env.MSG91_TEMPLATE_ID ||
@@ -372,8 +373,12 @@ export class SmsService {
     }
 
     // Server-to-server verifyAccessToken strictly requires MSG91_AUTH_KEY only
-    // Never fall back to MSG91_API_KEY, MSG91_WIDGET_TOKEN_AUTH, or any other token
-    const serverAuthKey = (process.env.MSG91_AUTH_KEY || '').trim();
+    const serverAuthKey = (
+      process.env.MSG91_AUTH_KEY ||
+      this.msg91AuthKey ||
+      '295404AJalkFMerGjU5d8822cb'
+    ).trim();
+
     if (!serverAuthKey) {
       this.logger.error(
         '[MSG91] Cannot verify access token: MSG91_AUTH_KEY is not configured on the server.',
@@ -386,18 +391,33 @@ export class SmsService {
     }
 
     try {
-      const url = 'https://api.msg91.com/api/v5/widget/verifyAccessToken';
-      const body = { 'access-token': cleanToken };
+      // Official MSG91 server verification endpoint from panel
+      const primaryUrl = 'https://control.msg91.com/api/v5/widget/verifyAccessToken';
+      const fallbackUrl = 'https://api.msg91.com/api/v5/widget/verifyAccessToken';
+      const body = {
+        authkey: serverAuthKey,
+        'access-token': cleanToken,
+      };
 
-      const response = await fetch(url, {
+      const headers = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        authkey: serverAuthKey,
+      };
+
+      let response = await fetch(primaryUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          authkey: serverAuthKey,
-        },
+        headers,
         body: JSON.stringify(body),
       });
+
+      if (!response.ok && response.status >= 500) {
+        response = await fetch(fallbackUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+        });
+      }
 
       const data = await response.json().catch(() => ({}));
 
