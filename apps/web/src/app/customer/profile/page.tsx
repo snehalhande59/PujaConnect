@@ -7,7 +7,7 @@ import Footer from '@/components/layout/Footer';
 import { getSavedUserProfile, getClientToken, AuthUser } from '@/lib/auth';
 import { User, MapPin, Mail, Phone, Save, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pujaconnect-api-he9b.onrender.com/api/v1';
 
 export default function CustomerProfilePage() {
   const router = useRouter();

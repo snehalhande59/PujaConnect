@@ -90,7 +90,7 @@ export default function HomePage() {
   const [liveReviews, setLiveReviews] = useState<any[]>([]);
 
   useEffect(() => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'https://pujaconnect-api-he9b.onrender.com/api/v1';
 
     const fallbackPanditImages = [
       '/images/pandits/pandit-acharya.jpg',

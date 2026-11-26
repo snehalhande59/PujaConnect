@@ -65,7 +65,7 @@ function BookingContent() {
     }
 
     // Fetch live Pandits from PostgreSQL
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'https://pujaconnect-api-he9b.onrender.com/api/v1';
     fetch(`${apiBase}/pandits`)
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
