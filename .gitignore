@@ -12,3 +12,5 @@ coverage/
 
 apps/api/uploads/pandit-documents/
 *.tsbuildinfo
+apps/mobile/android/
+apps/mobile/ios/

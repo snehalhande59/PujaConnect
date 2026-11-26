@@ -154,7 +154,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         setLoading(false);
       }
     } else if (method === 'mobile_otp') {
-      // Mobile SMS OTP via official MSG91 React Native SDK
+      // Mobile SMS OTP via official MSG91 React Native SDK ONLY
       const cleaned = phone.trim().replace(/[^0-9]/g, '');
       if (!cleaned) {
         setError('Please enter your 10-digit mobile number.');
@@ -174,6 +174,13 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
       const sdkIdentifier = `91${cleaned}`;
       const formattedPhone = `+91${cleaned}`;
 
+      if (!MSG91_TOKEN_AUTH) {
+        setError(
+          'SMS authentication is not configured. Please sign in using Email OTP or restart the app.',
+        );
+        return;
+      }
+
       try {
         setLoading(true);
 
@@ -185,42 +192,58 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         // Send OTP using official MSG91 React Native SDK
         const sdkRes = await OTPWidget.sendOTP({ identifier: sdkIdentifier });
 
+        if (sdkRes?.type !== 'success') {
+          throw new Error(
+            sdkRes?.message || 'Failed to dispatch SMS verification code.',
+          );
+        }
+
+        // Handle Invisible OTP / Direct Verification (if silent network auth succeeded)
+        const directToken =
+          sdkRes?.invisibleVerified === true
+            ? sdkRes?.['access-token'] ||
+              sdkRes?.accessToken ||
+              (typeof sdkRes?.message === 'string' ? sdkRes.message : undefined)
+            : sdkRes?.['access-token'] || sdkRes?.accessToken;
+
+        if (directToken) {
+          const res = await loginCustomerWithWidgetToken(formattedPhone, directToken);
+          if (res.user?.role === 'PANDIT') {
+            setSuccess(`Namaste Pt. ${res.user.firstName || ''}! Redirecting to Pandit Portal...`);
+          } else {
+            setSuccess('Verification successful!');
+          }
+          onLoginSuccess(res.user, Boolean(res.isNewCustomer));
+          return;
+        }
+
+        // As documented in official SDK Readme (line 113) and DefaultWidget/services/otpService.ts:
+        // sendOTP returns { type: 'success', message: '<reqId>' }
         const extractedReqId =
           sdkRes?.reqId ||
           sdkRes?.data?.reqId ||
-          (typeof sdkRes?.message === 'string' && sdkRes.message.length > 15
+          (typeof sdkRes?.message === 'string' && sdkRes.message.trim().length > 0
             ? sdkRes.message.trim()
             : undefined);
 
-        if (extractedReqId) {
-          setReqId(extractedReqId);
+        if (!extractedReqId) {
+          throw new Error(
+            'Verification session could not be established. Please try again.',
+          );
         }
 
+        setReqId(extractedReqId);
         setOtpSent(true);
         setCooldown(60);
         setSuccess(
-          sdkRes?.message && typeof sdkRes.message === 'string' && sdkRes.message.length < 80
-            ? sdkRes.message
-            : `A 6-digit verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
+          `A 6-digit verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
         );
       } catch (sdkError: any) {
-        console.warn('[MSG91 SDK] sendOTP failed, attempting server dispatch fallback:', sdkError);
-        try {
-          const res = await sendCustomerOtp(formattedPhone, 'sms');
-          setOtpSent(true);
-          if (res?.reqId) setReqId(res.reqId);
-          setCooldown(res?.cooldownSeconds || 60);
-          setSuccess(
-            res?.message ||
-              `A 6-digit verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
-          );
-        } catch (backendError: any) {
-          setError(
-            sdkError?.message ||
-              backendError?.message ||
-              'Failed to deliver SMS verification code. Please check your number and try again.',
-          );
-        }
+        // SDK failure stops here and reports the error. NO fallback to old REST API.
+        const errMsg =
+          sdkError?.message ||
+          'Failed to dispatch SMS verification code. Please check your mobile number and try again.';
+        setError(errMsg);
       } finally {
         setLoading(false);
       }
@@ -242,10 +265,17 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     if (method === 'mobile_otp') {
       const cleanPhone = `+91${phone.trim().replace(/[^0-9]/g, '')}`;
 
+      // Never call verifyOTP with an empty reqId
+      if (!reqId) {
+        setError('Verification session expired or missing. Please request a new verification code.');
+        setOtpSent(false);
+        return;
+      }
+
       try {
         setLoading(true);
 
-        // 1. Verify OTP with official MSG91 React Native SDK
+        // 1. Verify OTP strictly through official MSG91 React Native SDK
         let accessToken: string | undefined = undefined;
         try {
           if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
@@ -253,17 +283,32 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
           }
 
           const verifyRes = await OTPWidget.verifyOTP({
-            reqId: reqId || '',
+            reqId,
             otp: cleanOtp,
           });
+
+          if (
+            verifyRes?.type === 'error' ||
+            verifyRes?.type === 'failed' ||
+            verifyRes?.status === 'fail'
+          ) {
+            throw new Error(
+              verifyRes?.message ||
+                'Invalid or expired verification code. Please try again.',
+            );
+          }
 
           accessToken =
             verifyRes?.['access-token'] ||
             verifyRes?.accessToken ||
             verifyRes?.data?.['access-token'] ||
-            verifyRes?.data?.accessToken;
+            verifyRes?.data?.accessToken ||
+            (verifyRes?.type === 'success' &&
+            typeof verifyRes?.message === 'string' &&
+            verifyRes.message.trim().length > 0
+              ? verifyRes.message.trim()
+              : undefined);
         } catch (sdkVerifyErr: any) {
-          console.warn('[MSG91 SDK] verifyOTP failed:', sdkVerifyErr);
           const errMsg =
             sdkVerifyErr?.message ||
             'Invalid or expired verification code. Please try again.';
@@ -272,14 +317,16 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
           return;
         }
 
-        // 2. Cryptographically validate with NestJS backend
-        // Zero-Trust Security: session is issued ONLY after NestJS verifies the MSG91 access-token
-        let res: any;
-        if (accessToken) {
-          res = await loginCustomerWithWidgetToken(cleanPhone, accessToken);
-        } else {
-          res = await loginCustomerWithOtp(cleanPhone, cleanOtp, undefined, reqId);
+        // 2. Validate that an Access Token was returned by MSG91
+        if (!accessToken) {
+          setError('Verification failed. No valid verification token received from MSG91.');
+          setLoading(false);
+          return;
         }
+
+        // 3. Cryptographically validate token with NestJS backend
+        // Never trust client-side OTP success alone! Never fallback to loginCustomerWithOtp!
+        const res = await loginCustomerWithWidgetToken(cleanPhone, accessToken);
 
         if (res.user?.role === 'PANDIT') {
           setSuccess(`Namaste Pt. ${res.user.firstName || ''}! Redirecting to Pandit Portal...`);
@@ -311,6 +358,70 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
       setError(e.message || 'Invalid or expired verification code. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 3. Resend OTP Request (Email OTP via backend, Mobile OTP via SDK retryOTP)
+  const handleResendOtp = async () => {
+    if (loading || cooldown > 0) return;
+    setError(null);
+    setSuccess(null);
+
+    if (method === 'email_otp') {
+      // Email OTP resend continues using existing backend flow
+      return handleSendOtp();
+    }
+
+    if (method === 'mobile_otp') {
+      if (!reqId) {
+        setError('No active verification session found. Please send a new OTP first.');
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
+          await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
+        }
+
+        // Official SDK retryOTP with SMS channel 11
+        const retryRes = await OTPWidget.retryOTP({
+          reqId,
+          retryChannel: 11,
+        });
+
+        // Do not show resend success unless the SDK explicitly confirms success (type === 'success')
+        if (retryRes?.type !== 'success') {
+          throw new Error(
+            retryRes?.message || 'Failed to resend SMS verification code.',
+          );
+        }
+
+        // As documented in DefaultWidget/services/otpService.ts:
+        // const newReqId = response.reqId || response.message;
+        // If a new reqId is returned, update state; otherwise retain the existing reqId
+        const newReqId =
+          retryRes?.reqId ||
+          retryRes?.data?.reqId ||
+          (typeof retryRes?.message === 'string' && retryRes.message.trim().length > 0
+            ? retryRes.message.trim()
+            : undefined);
+
+        if (newReqId) {
+          setReqId(newReqId);
+        }
+
+        setCooldown(60);
+        setSuccess('Verification code resent via SMS.');
+      } catch (retryErr: any) {
+        const errorMsg =
+          retryErr?.message ||
+          'Failed to resend SMS code. Please wait and try again.';
+        setError(errorMsg);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -573,7 +684,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                       </View>
                     ) : (
                       <TouchableOpacity
-                        onPress={handleSendOtp}
+                        onPress={handleResendOtp}
                         disabled={loading}
                         style={styles.resendBtn}
                       >
@@ -703,7 +814,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                       </View>
                     ) : (
                       <TouchableOpacity
-                        onPress={handleSendOtp}
+                        onPress={handleResendOtp}
                         disabled={loading}
                         style={styles.resendBtn}
                       >

@@ -371,14 +371,17 @@ export class SmsService {
       return { success: false, error: 'Access token is required for verification.' };
     }
 
-    const authKey = this.msg91AuthKey || this.msg91WidgetTokenAuth;
-    if (!authKey) {
+    // Server-to-server verifyAccessToken strictly requires MSG91_AUTH_KEY only
+    // Never fall back to MSG91_API_KEY, MSG91_WIDGET_TOKEN_AUTH, or any other token
+    const serverAuthKey = (process.env.MSG91_AUTH_KEY || '').trim();
+    if (!serverAuthKey) {
       this.logger.error(
         '[MSG91] Cannot verify access token: MSG91_AUTH_KEY is not configured on the server.',
       );
       return {
         success: false,
-        error: 'MSG91 server authorization key is not configured on the server.',
+        error:
+          'MSG91 master authorization key (MSG91_AUTH_KEY) is not configured on the server.',
       };
     }
 
@@ -391,7 +394,7 @@ export class SmsService {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          authkey: authKey,
+          authkey: serverAuthKey,
         },
         body: JSON.stringify(body),
       });
@@ -400,8 +403,7 @@ export class SmsService {
 
       if (
         !response.ok ||
-        data.type === 'error' ||
-        data.type === 'failed' ||
+        data.type !== 'success' ||
         data.status === 'fail' ||
         data.hasError
       ) {
@@ -409,34 +411,48 @@ export class SmsService {
           data.message ||
           (typeof data === 'string'
             ? data
-            : `MSG91 verifyAccessToken error ${response.status}`);
+            : `MSG91 verifyAccessToken error: ${response.status}`);
         this.logger.warn(`[MSG91] verifyAccessToken rejected: ${errorMsg}`);
         return { success: false, error: errorMsg };
       }
 
-      // Successful verification returns verified identifier in message or data
-      const verifiedIdentifier =
-        (typeof data.message === 'string' && data.message.length > 5
+      // MSG91 documented success response format: { type: "success", message: "919999999999" }
+      // Verified identifier is returned in the 'message' field (or data.identifier / data.mobile)
+      // Strictly extract only if it matches a valid numeric phone string (10 to 15 digits)
+      const rawVerifiedId =
+        (typeof data.message === 'string' && /^\+?[0-9]{10,15}$/.test(data.message.trim())
           ? data.message.trim()
           : undefined) ||
-        data.data?.identifier ||
-        data.data?.mobile ||
-        data.identifier;
+        (typeof data.data?.identifier === 'string' && /^\+?[0-9]{10,15}$/.test(data.data.identifier.trim())
+          ? data.data.identifier.trim()
+          : undefined) ||
+        (typeof data.data?.mobile === 'string' && /^\+?[0-9]{10,15}$/.test(data.data.mobile.trim())
+          ? data.data.mobile.trim()
+          : undefined);
 
-      if (!verifiedIdentifier) {
+      if (!rawVerifiedId) {
+        this.logger.warn(
+          '[MSG91] verifyAccessToken returned non-phone identifier or generic message',
+        );
         return {
           success: false,
-          error:
-            data.message ||
-            'MSG91 did not return a verified phone number for this access token.',
+          error: 'MSG91 did not return a valid verified phone number.',
         };
       }
 
-      this.logger.log(`[MSG91] Access token cryptographically verified by MSG91`);
+      const normalized = this.normalizePhoneNumber(rawVerifiedId);
+      if (!this.isValidIndianMobile(normalized)) {
+        return {
+          success: false,
+          error: 'Verified number is not a valid Indian mobile number.',
+        };
+      }
+
+      this.logger.log('[MSG91] Access token cryptographically verified by MSG91');
 
       return {
         success: true,
-        identifier: this.normalizePhoneNumber(verifiedIdentifier),
+        identifier: normalized,
       };
     } catch (err: any) {
       this.logger.error(`[MSG91] verifyAccessToken connection error: ${err.message}`);

@@ -601,9 +601,13 @@ export class AuthService {
     }
 
     const isEmail = rawIdentifier.includes('@');
-    const normalizedIdentifier = isEmail
-      ? rawIdentifier.toLowerCase()
-      : this.smsService.normalizePhoneNumber(rawIdentifier);
+    if (!isEmail) {
+      throw new BadRequestException(
+        'Mobile OTP authentication requires a verified MSG91 Access Token. Please verify via the mobile application.',
+      );
+    }
+
+    const normalizedIdentifier = rawIdentifier.toLowerCase();
 
     // Find latest active unverified OTP for this identifier
     const record = await this.prisma.otpVerification.findFirst({
@@ -634,46 +638,18 @@ export class AuthService {
       );
     }
 
-    if (isEmail) {
-      // Verify Email OTP against stored SHA-256 hash
-      const isValid = this.smsService.verifyOtpHash(cleanOtp, record.otpHash);
-      if (!isValid) {
-        await this.prisma.otpVerification.update({
-          where: { id: record.id },
-          data: { attempts: record.attempts + 1 },
-        });
+    // Verify Email OTP against stored SHA-256 hash
+    const isValid = this.smsService.verifyOtpHash(cleanOtp, record.otpHash);
+    if (!isValid) {
+      await this.prisma.otpVerification.update({
+        where: { id: record.id },
+        data: { attempts: record.attempts + 1 },
+      });
 
-        const remaining = 5 - (record.attempts + 1);
-        throw new UnauthorizedException(
-          `Invalid verification code. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Please request a new code.'}`,
-        );
-      }
-    } else {
-      // Verify Mobile SMS OTP through MSG91 Widget Verify OTP API
-      const reqId =
-        dto.reqId ||
-        (record.otpHash && record.otpHash.startsWith('msg91:')
-          ? record.otpHash.replace(/^msg91:/, '')
-          : undefined);
-
-      const verifyResult = await this.smsService.verifyOtpWidget(
-        cleanOtp,
-        reqId,
-        normalizedIdentifier,
+      const remaining = 5 - (record.attempts + 1);
+      throw new UnauthorizedException(
+        `Invalid verification code. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Please request a new code.'}`,
       );
-
-      if (!verifyResult.success) {
-        await this.prisma.otpVerification.update({
-          where: { id: record.id },
-          data: { attempts: record.attempts + 1 },
-        });
-
-        const remaining = 5 - (record.attempts + 1);
-        throw new UnauthorizedException(
-          verifyResult.error ||
-            `Invalid or expired verification code. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Please request a new code.'}`,
-        );
-      }
     }
 
     // Mark OTP as verified
@@ -682,11 +658,9 @@ export class AuthService {
       data: { isVerified: true },
     });
 
-    // Resolve user by email or phone
+    // Resolve user by email
     let user = await this.prisma.user.findFirst({
-      where: isEmail
-        ? { email: normalizedIdentifier }
-        : { phoneNumber: normalizedIdentifier },
+      where: { email: normalizedIdentifier },
       include: {
         customerProfile: true,
         panditProfile: true,
@@ -1034,24 +1008,123 @@ export class AuthService {
     const unguessablePassword = crypto.randomBytes(32).toString('hex');
     const passwordHash = await bcrypt.hash(unguessablePassword, 12);
 
-    user = await this.prisma.user.create({
-      data: {
-        email: defaultEmail,
-        phoneNumber: expectedPhone,
-        passwordHash,
-        role: Role.CUSTOMER,
-        customerProfile: {
-          create: {
-            firstName: 'Devotee',
-            lastName: '',
+    try {
+      user = await this.prisma.user.create({
+        data: {
+          email: defaultEmail,
+          phoneNumber: expectedPhone,
+          passwordHash,
+          role: Role.CUSTOMER,
+          customerProfile: {
+            create: {
+              firstName: 'Devotee',
+              lastName: '',
+            },
           },
         },
-      },
-      include: {
-        customerProfile: true,
-        panditProfile: true,
-      },
-    });
+        include: {
+          customerProfile: true,
+          panditProfile: true,
+        },
+      });
+    } catch (createErr: any) {
+      // Handle Prisma P2002 unique constraint race condition safely
+      if (createErr?.code === 'P2002') {
+        this.logger.warn(
+          `[MSG91 Widget Token] Concurrent registration detected (P2002) for ${expectedPhone}. Re-fetching record.`,
+        );
+        user = await this.prisma.user.findFirst({
+          where: { phoneNumber: expectedPhone },
+          include: {
+            customerProfile: true,
+            panditProfile: true,
+          },
+        });
+
+        if (user) {
+          // Re-apply role checks strictly
+          if (user.role === Role.PANDIT) {
+            const token = this.jwtService.sign({
+              sub: user.id,
+              email: user.email,
+              role: Role.PANDIT,
+            });
+            return {
+              success: true,
+              message: `Namaste Pt. ${user.panditProfile?.fullName || 'Pandit'}! Welcome to the Pandit Portal.`,
+              token,
+              isNewCustomer: false,
+              role: Role.PANDIT,
+              user: {
+                id: user.id,
+                email: user.email,
+                role: Role.PANDIT,
+                firstName: user.panditProfile?.fullName?.split(' ')[0] || 'Pt.',
+                lastName: user.panditProfile?.fullName?.split(' ').slice(1).join(' ') || 'Ji',
+                phoneNumber: user.phoneNumber,
+                city: user.panditProfile?.city || null,
+                verificationStatus: user.panditProfile?.verificationStatus || 'PENDING',
+              },
+            };
+          }
+
+          if (user.role === Role.ADMIN) {
+            const token = this.jwtService.sign({
+              sub: user.id,
+              email: user.email,
+              role: Role.ADMIN,
+            });
+            return {
+              success: true,
+              message: 'Welcome to the DevSutra Admin Console.',
+              token,
+              isNewCustomer: false,
+              role: Role.ADMIN,
+              user: {
+                id: user.id,
+                email: user.email,
+                role: Role.ADMIN,
+                firstName: 'Admin',
+                lastName: '',
+                phoneNumber: user.phoneNumber,
+              },
+            };
+          }
+
+          if (user.role === Role.CUSTOMER) {
+            const token = this.jwtService.sign({
+              sub: user.id,
+              email: user.email,
+              role: Role.CUSTOMER,
+            });
+            const hasCompletedProfile = Boolean(
+              user.customerProfile?.firstName &&
+              user.customerProfile?.firstName.toLowerCase() !== 'devotee' &&
+              user.customerProfile?.city,
+            );
+            return {
+              success: true,
+              message: 'Logged in successfully!',
+              token,
+              isNewCustomer: false,
+              hasCompletedProfile,
+              role: Role.CUSTOMER,
+              user: {
+                id: user.id,
+                email: user.email,
+                role: Role.CUSTOMER,
+                firstName: user.customerProfile?.firstName || 'Devotee',
+                lastName: user.customerProfile?.lastName || '',
+                phoneNumber: user.phoneNumber,
+                city: user.customerProfile?.city || null,
+                hasCompletedProfile,
+              },
+            };
+          }
+        }
+      }
+      throw createErr;
+    }
 
     this.logger.log(
       `Created new Devotee via MSG91 SDK: ${user.phoneNumber} (ID: ${user.id})`,
