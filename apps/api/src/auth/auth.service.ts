@@ -862,7 +862,7 @@ export class AuthService {
     }
 
     // Call MSG91 server-to-server endpoint using MSG91_AUTH_KEY
-    const verifyResult = await this.smsService.verifyAccessToken(cleanToken);
+    const verifyResult = await this.smsService.verifyAccessToken(cleanToken, expectedPhone);
 
     if (!verifyResult.success || !verifyResult.identifier) {
       this.logger.warn(`[MSG91 Widget Token] Verification failed for ${expectedPhone}: ${verifyResult.error}`);
