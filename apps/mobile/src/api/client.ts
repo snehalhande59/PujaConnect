@@ -19,20 +19,23 @@ declare const __DEV__: boolean;
 export const PRODUCTION_API_URL = 'https://pujaconnect-api-he9b.onrender.com/api/v1';
 export const LOCAL_API_PORT = 3001;
 
-// Dynamic host determination:
-// 1. Explicit EXPO_PUBLIC_API_URL environment variable has top priority.
-// 2. In local development (__DEV__ is true):
-//    - Connects to local backend on port 3001.
-//    - Extracts Expo host IP from hostUri so physical mobile devices reach PC.
-//    - Uses 10.0.2.2:3001 on Android emulator.
-//    - Uses 127.0.0.1:3001 on Web / iOS simulator.
-// 3. Defaults to live HTTPS production Render API URL for release builds.
+/**
+ * Dynamic host determination:
+ * 1. Default to live HTTPS production Render API URL for standalone and production builds.
+ * 2. Works anywhere on any network (mobile cellular data, home Wi-Fi, office Wi-Fi).
+ * 3. Local emulator / LAN IP is only used during local development if EXPO_PUBLIC_USE_LOCAL_API === 'true'.
+ */
 export const getApiBaseUrl = (): string => {
+  // 1. Explicit HTTPS production URL in environment variable
   if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
+    const envUrl = process.env.EXPO_PUBLIC_API_URL.trim();
+    if (envUrl.startsWith('https://')) {
+      return envUrl;
+    }
   }
 
-  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+  // 2. Local dev mode only when explicitly requested
+  if (typeof __DEV__ !== 'undefined' && __DEV__ && process.env?.EXPO_PUBLIC_USE_LOCAL_API === 'true') {
     const hostUri =
       Constants.expoConfig?.hostUri ||
       (Constants as any)?.manifest?.debuggerHost ||
@@ -52,11 +55,13 @@ export const getApiBaseUrl = (): string => {
     return `http://127.0.0.1:${LOCAL_API_PORT}/api/v1`;
   }
 
+  // 3. Fallback to app.json extra.apiUrl if valid HTTPS
   const extraUrl = Constants.expoConfig?.extra?.apiUrl;
-  if (extraUrl) {
-    return extraUrl;
+  if (extraUrl && typeof extraUrl === 'string' && extraUrl.trim().startsWith('https://')) {
+    return extraUrl.trim();
   }
 
+  // 4. Default to live production Render API URL
   return PRODUCTION_API_URL;
 };
 

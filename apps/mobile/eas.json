@@ -17,7 +17,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://pujaconnect-api-he9b.onrender.com/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://pujaconnect-api-he9b.onrender.com/api/v1",
+        "EXPO_PUBLIC_MSG91_WIDGET_ID": "366b796a706d353331323931"
       }
     },
     "production-apk": {
@@ -26,7 +27,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://pujaconnect-api-he9b.onrender.com/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://pujaconnect-api-he9b.onrender.com/api/v1",
+        "EXPO_PUBLIC_MSG91_WIDGET_ID": "366b796a706d353331323931"
       }
     },
     "production": {
@@ -35,7 +37,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://pujaconnect-api-he9b.onrender.com/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://pujaconnect-api-he9b.onrender.com/api/v1",
+        "EXPO_PUBLIC_MSG91_WIDGET_ID": "366b796a706d353331323931"
       }
     }
   },
