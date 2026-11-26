@@ -334,10 +334,11 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             verifyRes?.type === 'failed' ||
             verifyRes?.status === 'fail'
           ) {
-            throw new Error(
-              verifyRes?.message ||
-                'Invalid or expired verification code. Please try again.',
-            );
+            let msg = verifyRes?.message;
+            if (!msg || msg.toLowerCase().includes('verification failed')) {
+              msg = 'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा किंवा Resend SMS वर क्लिक करा.';
+            }
+            throw new Error(msg);
           }
 
           accessToken =
@@ -351,9 +352,12 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
               ? verifyRes.message.trim()
               : undefined);
         } catch (sdkVerifyErr: any) {
-          const errMsg =
+          let errMsg =
             sdkVerifyErr?.message ||
-            'Invalid or expired verification code. Please try again.';
+            'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा.';
+          if (errMsg.toLowerCase().includes('verification failed')) {
+            errMsg = 'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा किंवा Resend SMS वर क्लिक करा.';
+          }
           setError(errMsg);
           setLoading(false);
           return;
@@ -361,7 +365,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
 
         // 2. Validate that an Access Token was returned by MSG91
         if (!accessToken) {
-          setError('Verification failed. No valid verification token received from MSG91.');
+          setError('चुकीचा OTP पडताळणी कोड (Invalid OTP). कृपया पुन्हा तपासा किंवा Resend SMS करा.');
           setLoading(false);
           return;
         }
@@ -373,11 +377,15 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         if (res.user?.role === 'PANDIT') {
           setSuccess(`Namaste Pt. ${res.user.firstName || ''}! Redirecting to Pandit Portal...`);
         } else {
-          setSuccess('Verification successful!');
+          setSuccess('Verification successful! Welcome to DevSutra.');
         }
         onLoginSuccess(res.user, Boolean(res.isNewCustomer));
       } catch (e: any) {
-        setError(e.message || 'Invalid or expired verification code. Please try again.');
+        let msg = e.message || 'पडताळणी अयशस्वी झाली. कृपया पुन्हा प्रयत्न करा.';
+        if (msg.toLowerCase().includes('verification failed')) {
+          msg = 'पडताळणी अयशस्वी झाली (Verification failed). कृपया पुन्हा OTP पाठवून प्रयत्न करा.';
+        }
+        setError(msg);
       } finally {
         setLoading(false);
       }

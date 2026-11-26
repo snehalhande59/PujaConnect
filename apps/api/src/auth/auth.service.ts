@@ -872,7 +872,12 @@ export class AuthService {
     }
 
     // Strict equality check between normalized phone number and MSG91 verified identifier
-    if (verifyResult.identifier !== expectedPhone) {
+    const normalizedExpected = this.smsService.normalizePhoneNumber(expectedPhone);
+    const normalizedVerified = this.smsService.normalizePhoneNumber(verifyResult.identifier);
+    const last10Expected = normalizedExpected.replace(/[^0-9]/g, '').slice(-10);
+    const last10Verified = normalizedVerified.replace(/[^0-9]/g, '').slice(-10);
+
+    if (normalizedExpected !== normalizedVerified && last10Expected !== last10Verified) {
       this.logger.error(
         `[MSG91 Widget Token] Identifier mismatch: expected ${expectedPhone}, verified ${verifyResult.identifier}`,
       );
