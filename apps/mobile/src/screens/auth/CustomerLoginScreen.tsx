@@ -186,7 +186,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         setOtpSent(true);
         setCooldown(res?.cooldownSeconds || 60);
         setSuccess(
-          res?.message || `A 6-digit verification code has been sent to ${maskEmail(trimmed)}.`,
+          res?.message || `A verification code has been sent to ${maskEmail(trimmed)}.`,
         );
       } catch (e: any) {
         setError(
@@ -279,7 +279,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         setOtpSent(true);
         setCooldown(60);
         setSuccess(
-          `A 6-digit verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
+          `A verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
         );
       } catch (sdkError: any) {
         // SDK failure stops here and reports the error. NO fallback to old REST API.
@@ -673,7 +673,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                       color={colors.goldDark}
                     />
                     <Text style={styles.infoRowText}>
-                      We will email you a 6-digit verification code. No password required!
+                      We will email you a verification code. No password required!
                     </Text>
                   </View>
 
@@ -734,8 +734,8 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   </View>
 
                   <Input
-                    label="Enter 6-Digit Verification Code *"
-                    placeholder="• • • • • •"
+                    label="Enter Verification Code (4 किंवा 6-अंकी OTP) *"
+                    placeholder="• • • •"
                     value={otp}
                     onChangeText={(val) => {
                       setOtp(val.replace(/[^0-9]/g, ''));
@@ -817,7 +817,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                       color={colors.goldDark}
                     />
                     <Text style={styles.infoRowText}>
-                      We will send a 6-digit SMS verification code to your Indian mobile number via MSG91.
+                      We will send an SMS verification code to your Indian mobile number via MSG91.
                     </Text>
                   </View>
 
@@ -878,8 +878,8 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   </View>
 
                   <Input
-                    label="Enter 6-Digit Verification Code *"
-                    placeholder="• • • • • •"
+                    label="Enter Verification Code (4 किंवा 6-अंकी OTP) *"
+                    placeholder="• • • •"
                     value={otp}
                     onChangeText={(val) => {
                       setOtp(val.replace(/[^0-9]/g, ''));

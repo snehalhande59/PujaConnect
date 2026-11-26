@@ -96,9 +96,12 @@ export class SmsService {
   }
 
   /**
-   * Generate cryptographically secure 6-digit numeric OTP
+   * Generate cryptographically secure numeric OTP (defaults to 4 digits as per MSG91 widget setting, or 6 digits)
    */
-  generateOtp(): string {
+  generateOtp(digits: number = 4): string {
+    if (digits === 4) {
+      return crypto.randomInt(1000, 10000).toString();
+    }
     const min = 100000;
     const max = 999999;
     return crypto.randomInt(min, max + 1).toString();
