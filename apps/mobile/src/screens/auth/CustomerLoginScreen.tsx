@@ -382,8 +382,14 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         onLoginSuccess(res.user, Boolean(res.isNewCustomer));
       } catch (e: any) {
         let msg = e.message || 'पडताळणी अयशस्वी झाली. कृपया पुन्हा प्रयत्न करा.';
-        if (msg.toLowerCase().includes('verification failed')) {
-          msg = 'पडताळणी अयशस्वी झाली (Verification failed). कृपया पुन्हा OTP पाठवून प्रयत्न करा.';
+        const lower = msg.toLowerCase();
+        if (
+          lower.includes('verification failed') ||
+          lower.includes('authentication') ||
+          lower.includes('unauthorized') ||
+          lower.includes('invalid')
+        ) {
+          msg = 'पडताळणी अयशस्वी झाली किंवा कोड कालबाह्य झाला आहे. कृपया Resend SMS वर क्लिक करून नवीन कोडने प्रयत्न करा.';
         }
         setError(msg);
       } finally {

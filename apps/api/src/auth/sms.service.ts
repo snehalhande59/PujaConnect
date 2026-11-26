@@ -28,8 +28,9 @@ export class SmsService {
   private readonly twilioVerifySid = process.env.TWILIO_VERIFY_SERVICE_SID || '';
 
   private readonly msg91AuthKey = (
-    process.env.MSG91_AUTH_KEY ||
-    '295404AJalkFMerGjU5d8822cb'
+    process.env.MSG91_AUTH_KEY && !process.env.MSG91_AUTH_KEY.startsWith('591944')
+      ? process.env.MSG91_AUTH_KEY
+      : '295404AJalkFMerGjU5d8822cb'
   ).trim();
   private readonly msg91WidgetId = (
     process.env.MSG91_WIDGET_ID ||
@@ -376,10 +377,13 @@ export class SmsService {
       new Set(
         [
           '295404AJalkFMerGjU5d8822cb',
-          (process.env.MSG91_AUTH_KEY || '').trim(),
-          (process.env.MSG91_MASTER_AUTH_KEY || '').trim(),
-          this.msg91WidgetTokenAuth,
-        ].filter(Boolean),
+          process.env.MSG91_AUTH_KEY && !process.env.MSG91_AUTH_KEY.startsWith('591944')
+            ? process.env.MSG91_AUTH_KEY.trim()
+            : undefined,
+          process.env.MSG91_MASTER_AUTH_KEY && !process.env.MSG91_MASTER_AUTH_KEY.startsWith('591944')
+            ? process.env.MSG91_MASTER_AUTH_KEY.trim()
+            : undefined,
+        ].filter((k): k is string => Boolean(k && k.trim())),
       ),
     );
 
@@ -391,32 +395,51 @@ export class SmsService {
     let lastError = 'Failed to connect to MSG91 token verification service.';
 
     for (const serverAuthKey of candidateKeys) {
-      const body = {
-        authkey: serverAuthKey,
-        'access-token': cleanToken,
-      };
+      // Test both official payload format (body-only authkey as documented in MSG91 dashboard curl)
+      // and dual header+body format
+      const attemptConfigs = [
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: {
+            authkey: serverAuthKey,
+            'access-token': cleanToken,
+          },
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            authkey: serverAuthKey,
+          },
+          body: {
+            authkey: serverAuthKey,
+            'access-token': cleanToken,
+            accessToken: cleanToken,
+          },
+        },
+      ];
 
       for (const url of endpoints) {
-        try {
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Accept: 'application/json',
-              authkey: serverAuthKey,
-            },
-            body: JSON.stringify(body),
-          });
+        for (const config of attemptConfigs) {
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: config.headers,
+              body: JSON.stringify(config.body),
+            });
 
-          const data = await response.json().catch(() => ({}));
+            const data = await response.json().catch(() => ({}));
 
-          if (
-            response.ok &&
-            (data.type === 'success' ||
-              data.status === 'success' ||
-              (data.message && /^\+?[0-9]{10,15}$/.test(String(data.message).trim()))) &&
-            !data.hasError
-          ) {
+            if (
+              response.ok &&
+              (data.type === 'success' ||
+                data.status === 'success' ||
+                (data.message && /^\+?[0-9]{10,15}$/.test(String(data.message).trim()))) &&
+              !data.hasError
+            ) {
             let rawVerifiedId =
               (typeof data.message === 'string' && /^\+?[0-9]{10,15}$/.test(data.message.trim())
                 ? data.message.trim()
@@ -501,6 +524,7 @@ export class SmsService {
         }
       }
     }
+  }
 
     this.logger.warn(`[MSG91] verifyAccessToken all candidates failed. Last error: ${lastError}`);
     return {
