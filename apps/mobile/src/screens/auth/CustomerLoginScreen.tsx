@@ -103,7 +103,11 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         result.message !== 'Widget closed' &&
         result.message !== 'cancelled'
       ) {
-        setError(result.message);
+        let msg = typeof result.message === 'string' ? result.message : '';
+        if (!msg || msg.toLowerCase().includes('verification failed') || msg.toLowerCase().includes('failed')) {
+          msg = 'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया SMS मधील नवीन OTP टाका किंवा Resend SMS वर क्लिक करा.';
+        }
+        setError(msg);
       }
     }
   };
@@ -332,10 +336,17 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
           if (
             verifyRes?.type === 'error' ||
             verifyRes?.type === 'failed' ||
-            verifyRes?.status === 'fail'
+            verifyRes?.status === 'fail' ||
+            verifyRes?.success === false ||
+            (typeof verifyRes?.message === 'string' &&
+              verifyRes.message.toLowerCase().includes('failed'))
           ) {
             let msg = verifyRes?.message;
-            if (!msg || msg.toLowerCase().includes('verification failed')) {
+            if (
+              !msg ||
+              msg.toLowerCase().includes('verification failed') ||
+              msg.toLowerCase().includes('failed')
+            ) {
               msg = 'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा किंवा Resend SMS वर क्लिक करा.';
             }
             throw new Error(msg);
@@ -355,7 +366,10 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
           let errMsg =
             sdkVerifyErr?.message ||
             'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा.';
-          if (errMsg.toLowerCase().includes('verification failed')) {
+          if (
+            errMsg.toLowerCase().includes('verification failed') ||
+            errMsg.toLowerCase().includes('failed')
+          ) {
             errMsg = 'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा किंवा Resend SMS वर क्लिक करा.';
           }
           setError(errMsg);

@@ -866,9 +866,11 @@ export class AuthService {
 
     if (!verifyResult.success || !verifyResult.identifier) {
       this.logger.warn(`[MSG91 Widget Token] Verification failed for ${expectedPhone}: ${verifyResult.error}`);
-      throw new UnauthorizedException(
-        verifyResult.error || 'Invalid or expired MSG91 verification token.',
-      );
+      let userMsg = verifyResult.error || 'Invalid or expired MSG91 verification token.';
+      if (userMsg.toLowerCase().includes('verification failed') || userMsg.toLowerCase().includes('failed')) {
+        userMsg = 'OTP verification failed or token has expired. Please request a fresh OTP.';
+      }
+      throw new UnauthorizedException(userMsg);
     }
 
     // Strict equality check between normalized phone number and MSG91 verified identifier
