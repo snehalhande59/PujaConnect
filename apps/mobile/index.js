@@ -1,21 +1,21 @@
-import { NativeModules, LogBox } from 'react-native';
+import { LogBox } from 'react-native';
 
-// Suppress and polyfill BiometricAuth warning for MSG91 SDK in Expo Go
+// Suppress non-fatal BiometricAuth warning emitted by MSG91 SDK in Expo Go
 LogBox.ignoreLogs([
   'BiometricAuth is undefined',
   'Ensure the native module is properly linked',
 ]);
 
-if (!NativeModules.BiometricAuth) {
-  NativeModules.BiometricAuth = {
-    isSensorAvailable: () => Promise.resolve({ available: false }),
-    authenticate: () => Promise.reject('Biometrics not available in Expo Go'),
-    getBiometricType: () => Promise.resolve(''),
-    simplePrompt: () => Promise.resolve({ success: false }),
-    cancelAuthentication: () => Promise.resolve(''),
-    isTruecallerInstalled: () => Promise.resolve(false),
-  };
-}
+const rawConsoleError = console.error;
+console.error = (...args) => {
+  if (
+    typeof args[0] === 'string' &&
+    args[0].includes('BiometricAuth is undefined')
+  ) {
+    return;
+  }
+  rawConsoleError.apply(console, args);
+};
 
 import { registerRootComponent } from 'expo';
 import App from './App';
