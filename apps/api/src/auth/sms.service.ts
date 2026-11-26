@@ -29,7 +29,6 @@ export class SmsService {
 
   private readonly msg91AuthKey = (
     process.env.MSG91_AUTH_KEY ||
-    process.env.MSG91_API_KEY ||
     '295404AJalkFMerGjU5d8822cb'
   ).trim();
   private readonly msg91WidgetId = (
@@ -362,7 +361,7 @@ export class SmsService {
    * Headers: { authkey: MSG91_AUTH_KEY, 'Content-Type': 'application/json' }
    * Body: { "access-token": accessToken }
    */
-  async verifyAccessToken(accessToken: string, expectedPhone?: string): Promise<{
+  async verifyAccessToken(accessToken: string): Promise<{
     success: boolean;
     identifier?: string;
     error?: string;
@@ -373,30 +372,13 @@ export class SmsService {
     }
 
     // Server-to-server verifyAccessToken strictly requires MSG91_AUTH_KEY only
-    let serverAuthKey = (
+    const serverAuthKey = (
       process.env.MSG91_AUTH_KEY ||
-      this.msg91AuthKey ||
-      ''
+      '295404AJalkFMerGjU5d8822cb'
     ).trim();
 
-    // Guard against stale Render environment variables from previous widget
-    if (!serverAuthKey || serverAuthKey.startsWith('591944')) {
-      serverAuthKey = '295404AJalkFMerGjU5d8822cb';
-    }
-
-    if (!serverAuthKey) {
-      this.logger.error(
-        '[MSG91] Cannot verify access token: MSG91_AUTH_KEY is not configured on the server.',
-      );
-      return {
-        success: false,
-        error:
-          'MSG91 master authorization key (MSG91_AUTH_KEY) is not configured on the server.',
-      };
-    }
-
     try {
-      // Official MSG91 server verification endpoint from panel
+      // Official MSG91 endpoint for widget access token verification
       const primaryUrl = 'https://control.msg91.com/api/v5/widget/verifyAccessToken';
       const fallbackUrl = 'https://api.msg91.com/api/v5/widget/verifyAccessToken';
       const body = {
@@ -404,24 +386,30 @@ export class SmsService {
         'access-token': cleanToken,
       };
 
-      const headers = {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        authkey: serverAuthKey,
-      };
-
-      let response = await fetch(primaryUrl, {
+      let response: Response | null = await fetch(primaryUrl, {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          authkey: serverAuthKey,
+        },
         body: JSON.stringify(body),
-      });
+      }).catch(() => null);
 
-      if (!response.ok && response.status >= 500) {
+      if (!response || !response.ok) {
         response = await fetch(fallbackUrl, {
           method: 'POST',
-          headers,
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            authkey: serverAuthKey,
+          },
           body: JSON.stringify(body),
-        });
+        }).catch(() => null);
+      }
+
+      if (!response) {
+        throw new Error('Failed to connect to MSG91 token verification service.');
       }
 
       const data = await response.json().catch(() => ({}));
@@ -441,45 +429,23 @@ export class SmsService {
         return { success: false, error: errorMsg };
       }
 
-      // MSG91 success response formats:
-      // Format 1: { type: "success", message: "919999999999" }
-      // Format 2: { type: "success", identifier: "919999999999", message: "..." }
-      // Format 3: { type: "success", data: { identifier / mobile: "919999999999" } }
+      // MSG91 documented success response format: { type: "success", message: "919999999999" }
+      // Verified identifier is returned in the 'message' field (or data.identifier / data.mobile)
+      // Strictly extract only if it matches a valid numeric phone string (10 to 15 digits)
       const rawVerifiedId =
-        (typeof data.identifier === 'string' && /^\+?[0-9]{10,15}$/.test(data.identifier.trim())
-          ? data.identifier.trim()
-          : undefined) ||
         (typeof data.message === 'string' && /^\+?[0-9]{10,15}$/.test(data.message.trim())
           ? data.message.trim()
-          : undefined) ||
-        (typeof data.mobile === 'string' && /^\+?[0-9]{10,15}$/.test(data.mobile.trim())
-          ? data.mobile.trim()
-          : undefined) ||
-        (typeof data.phone === 'string' && /^\+?[0-9]{10,15}$/.test(data.phone.trim())
-          ? data.phone.trim()
           : undefined) ||
         (typeof data.data?.identifier === 'string' && /^\+?[0-9]{10,15}$/.test(data.data.identifier.trim())
           ? data.data.identifier.trim()
           : undefined) ||
         (typeof data.data?.mobile === 'string' && /^\+?[0-9]{10,15}$/.test(data.data.mobile.trim())
           ? data.data.mobile.trim()
-          : undefined) ||
-        (typeof data.data?.phone === 'string' && /^\+?[0-9]{10,15}$/.test(data.data.phone.trim())
-          ? data.data.phone.trim()
           : undefined);
 
-      let verifiedPhone: string | undefined = undefined;
-
-      if (rawVerifiedId) {
-        verifiedPhone = this.normalizePhoneNumber(rawVerifiedId);
-      } else if (expectedPhone && this.isValidIndianMobile(expectedPhone)) {
-        // Access token is validly signed and confirmed by MSG91; safely bind to verified expected phone
-        verifiedPhone = expectedPhone;
-      }
-
-      if (!verifiedPhone) {
+      if (!rawVerifiedId) {
         this.logger.warn(
-          `[MSG91] verifyAccessToken returned no recognizable phone: ${JSON.stringify(data)}`,
+          '[MSG91] verifyAccessToken returned non-phone identifier or generic message',
         );
         return {
           success: false,
@@ -487,11 +453,19 @@ export class SmsService {
         };
       }
 
-      this.logger.log(`[MSG91] Access token cryptographically verified by MSG91 for ${verifiedPhone}`);
+      const normalized = this.normalizePhoneNumber(rawVerifiedId);
+      if (!this.isValidIndianMobile(normalized)) {
+        return {
+          success: false,
+          error: 'Verified number is not a valid Indian mobile number.',
+        };
+      }
+
+      this.logger.log('[MSG91] Access token cryptographically verified by MSG91');
 
       return {
         success: true,
-        identifier: verifiedPhone,
+        identifier: normalized,
       };
     } catch (err: any) {
       this.logger.error(`[MSG91] verifyAccessToken connection error: ${err.message}`);
