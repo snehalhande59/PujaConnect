@@ -176,6 +176,8 @@ export class SmsService {
     }
 
     const endpoints = [
+      'https://control.msg91.com/api/v5/widget/sendOtpMobile',
+      'https://api.msg91.com/api/v5/widget/sendOtpMobile',
       'https://control.msg91.com/api/v5/widget/sendOtp',
       'https://api.msg91.com/api/v5/widget/sendOtp',
     ];
@@ -243,6 +245,31 @@ export class SmsService {
       } catch (err: any) {
         this.logger.warn(`[MSG91 Widget] Connection error on ${url} for ${maskedPhone}: ${err.message}`);
         lastError = err.message || lastError;
+      }
+    }
+
+    // Direct MSG91 v5 OTP API fallback with server AuthKey (immune to widget IP blocks)
+    if (this.msg91AuthKey) {
+      try {
+        this.logger.log(`[MSG91 OTP Fallback] Attempting direct v5 OTP dispatch for ${maskedPhone}...`);
+        const v5Url = `https://control.msg91.com/api/v5/otp?template_id=&mobile=${mobileNumber}&authkey=${encodeURIComponent(this.msg91AuthKey)}&otp_length=4`;
+        const v5Response = await fetch(v5Url, { method: 'POST' });
+        const v5Data = await v5Response.json().catch(() => ({}));
+
+        if (v5Response.ok && (v5Data.type === 'success' || v5Data.request_id)) {
+          const reqId = v5Data.request_id || v5Data.message || 'V5_SENT';
+          this.logger.log(`[MSG91 OTP Fallback] Direct v5 OTP sent successfully to ${maskedPhone} (reqId: ${reqId})`);
+          return {
+            success: true,
+            reqId,
+            messageId: reqId,
+            provider: 'MSG91_V5_OTP',
+          };
+        } else {
+          this.logger.warn(`[MSG91 OTP Fallback] Direct v5 failed: ${v5Data.message || 'Unknown'}`);
+        }
+      } catch (v5Err: any) {
+        this.logger.warn(`[MSG91 OTP Fallback] Connection error: ${v5Err.message}`);
       }
     }
 
@@ -359,6 +386,33 @@ export class SmsService {
       } catch (err: any) {
         this.logger.warn(`[MSG91 Widget] verifyOtp connection error on ${url}: ${err.message}`);
         lastError = err.message || lastError;
+      }
+    }
+
+    // Direct MSG91 v5 OTP Verify API fallback with server AuthKey
+    if (this.msg91AuthKey && phoneNumber) {
+      try {
+        const rawDigits = phoneNumber.replace(/[^0-9]/g, '');
+        const v5VerifyUrl = `https://control.msg91.com/api/v5/otp/verify?otp=${encodeURIComponent(cleanOtp)}&mobile=${rawDigits}&authkey=${encodeURIComponent(this.msg91AuthKey)}`;
+        const v5VerifyRes = await fetch(v5VerifyUrl, { method: 'GET' });
+        const v5VerifyData = await v5VerifyRes.json().catch(() => ({}));
+
+        if (
+          v5VerifyRes.ok &&
+          (v5VerifyData.type === 'success' ||
+            (typeof v5VerifyData.message === 'string' &&
+              v5VerifyData.message.toLowerCase().includes('success')))
+        ) {
+          this.logger.log(`[MSG91 OTP Fallback] Direct v5 OTP verified successfully for ${phoneNumber}`);
+          return {
+            success: true,
+            provider: 'MSG91_V5_OTP',
+          };
+        } else if (v5VerifyData.message) {
+          lastError = v5VerifyData.message;
+        }
+      } catch (v5Err: any) {
+        this.logger.warn(`[MSG91 OTP Fallback] verify connection error: ${v5Err.message}`);
       }
     }
 

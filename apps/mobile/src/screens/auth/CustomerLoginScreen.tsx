@@ -205,8 +205,9 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
 
       // Step B: If client SDK failed or IP was blocked, automatically fall back to server-side MSG91 dispatch!
       if (!dispatched) {
+        console.log('[Auth] Client SDK blocked or failed, dispatching via server for', formattedPhone);
         const backendRes = await sendCustomerOtp(formattedPhone, 'sms');
-        if (backendRes && backendRes.success) {
+        if (backendRes && (backendRes.success || backendRes.reqId)) {
           sessionReqId = backendRes.reqId || 'BACKEND_SENT';
           dispatched = true;
         } else {
