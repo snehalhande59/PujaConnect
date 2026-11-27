@@ -279,7 +279,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         setOtpSent(true);
         setCooldown(60);
         setSuccess(
-          `A verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
+          `A 4-digit verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
         );
       } catch (sdkError: any) {
         // SDK failure stops here and reports the error. NO fallback to old REST API.
@@ -304,7 +304,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
 
     const cleanOtp = otp.trim().replace(/[^0-9]/g, '');
     if (!cleanOtp || cleanOtp.length < 4 || cleanOtp.length > 6) {
-      setError('Please enter the complete verification code.');
+      setError('कृपया ४-अंकी पडताळणी कोड टाका (Please enter 4-digit verification code).');
       return;
     }
 
@@ -337,7 +337,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             verifyRes?.type === 'error' ||
             verifyRes?.type === 'failed' ||
             verifyRes?.status === 'fail' ||
-            verifyRes?.success === false ||
+            (verifyRes as any)?.success === false ||
             (typeof verifyRes?.message === 'string' &&
               verifyRes.message.toLowerCase().includes('failed'))
           ) {
@@ -734,7 +734,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   </View>
 
                   <Input
-                    label="Enter Verification Code (4 किंवा 6-अंकी OTP) *"
+                    label="Enter 4-Digit Verification Code (४-अंकी OTP) *"
                     placeholder="• • • •"
                     value={otp}
                     onChangeText={(val) => {
@@ -742,7 +742,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                       setError(null);
                     }}
                     keyboardType="number-pad"
-                    maxLength={6}
+                    maxLength={4}
                     leftIcon="lock-closed-outline"
                     style={styles.otpInputText}
                     editable={!loading}
@@ -878,7 +878,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                   </View>
 
                   <Input
-                    label="Enter Verification Code (4 किंवा 6-अंकी OTP) *"
+                    label="Enter 4-Digit Verification Code (४-अंकी OTP) *"
                     placeholder="• • • •"
                     value={otp}
                     onChangeText={(val) => {
@@ -886,7 +886,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
                       setError(null);
                     }}
                     keyboardType="number-pad"
-                    maxLength={6}
+                    maxLength={4}
                     leftIcon="lock-closed-outline"
                     style={styles.otpInputText}
                     editable={!loading}
