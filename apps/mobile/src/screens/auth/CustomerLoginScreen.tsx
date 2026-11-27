@@ -159,82 +159,80 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
       let dispatched = false;
       let sessionReqId: string | undefined = undefined;
 
-      // Step A: Attempt dispatch via official MSG91 client SDK
+      // Step A: Primary Dispatch via Backend Server (Cloud IP - immune to Wi-Fi IP rate-limiting)
       try {
-        if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
-          await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
-        }
-
-        const sdkRes = await OTPWidget.sendOTP({
-          identifier: sdkIdentifier,
-          otp_length: 4,
-          otpLength: 4,
-        });
-
-        // Handle Invisible OTP / Direct Verification
-        const directToken =
-          sdkRes?.invisibleVerified === true
-            ? sdkRes?.['access-token'] ||
-              sdkRes?.accessToken ||
-              (typeof sdkRes?.message === 'string' ? sdkRes.message : undefined)
-            : sdkRes?.['access-token'] || sdkRes?.accessToken;
-
-        if (directToken) {
-          const res = await loginCustomerWithWidgetToken(formattedPhone, directToken);
-          setSuccess('Verification successful! Welcome to DevSutra.');
-          onLoginSuccess(res.user, Boolean(res.isNewCustomer));
-          return;
-        }
-
-        if (sdkRes?.type === 'success') {
-          sessionReqId =
-            sdkRes?.reqId ||
-            sdkRes?.data?.reqId ||
-            (typeof sdkRes?.message === 'string' && sdkRes.message.trim().length > 0
-              ? sdkRes.message.trim()
-              : undefined);
-          if (sessionReqId) {
-            dispatched = true;
-            // Force SMS channel 11 immediately so MSG91 sends SMS even if invisible verification was pending
-            try {
-              await OTPWidget.retryOTP({
-                reqId: sessionReqId,
-                retryChannel: 11,
-                otp_length: 4,
-                otpLength: 4,
-              });
-            } catch (retryE) {
-              // ignore
-            }
-          }
-        } else {
-          console.warn('[MSG91 SDK] sendOTP non-success:', sdkRes?.message || sdkRes);
-        }
-      } catch (sdkError: any) {
-        console.warn('[MSG91 SDK] sendOTP exception (falling back to server):', sdkError?.message || sdkError);
-      }
-
-      // Step B: If client SDK failed or IP was blocked, automatically fall back to server-side MSG91 dispatch!
-      if (!dispatched) {
-        console.log('[Auth] Client SDK blocked or failed, dispatching via server for', formattedPhone);
+        console.log('[Auth] Dispatching 4-digit SMS OTP via server for', formattedPhone);
         const backendRes = await sendCustomerOtp(formattedPhone, 'sms');
         if (backendRes && (backendRes.success || backendRes.reqId)) {
           sessionReqId = backendRes.reqId || 'BACKEND_SENT';
           dispatched = true;
-        } else {
-          throw new Error(
-            backendRes?.message ||
-            backendRes?.error ||
-            'SMS gateway verification code send failed. Please try again in 30 seconds.',
-          );
+          console.log('[Auth] Successfully dispatched OTP via server, reqId:', sessionReqId);
+        }
+      } catch (serverErr: any) {
+        console.warn('[Auth] Server dispatch note:', serverErr?.message || serverErr);
+      }
+
+      // Step B: Fallback to client SDK only if server dispatch did not complete
+      if (!dispatched) {
+        try {
+          if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
+            await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
+          }
+
+          const sdkRes = await OTPWidget.sendOTP({
+            identifier: sdkIdentifier,
+            otp_length: 4,
+            otpLength: 4,
+          });
+
+          // Handle Invisible OTP / Direct Verification
+          const directToken =
+            sdkRes?.invisibleVerified === true
+              ? sdkRes?.['access-token'] ||
+                sdkRes?.accessToken ||
+                (typeof sdkRes?.message === 'string' ? sdkRes.message : undefined)
+              : sdkRes?.['access-token'] || sdkRes?.accessToken;
+
+          if (directToken) {
+            const res = await loginCustomerWithWidgetToken(formattedPhone, directToken);
+            setSuccess('Verification successful! Welcome to DevSutra.');
+            onLoginSuccess(res.user, Boolean(res.isNewCustomer));
+            return;
+          }
+
+          if (sdkRes?.type === 'success') {
+            sessionReqId =
+              sdkRes?.reqId ||
+              sdkRes?.data?.reqId ||
+              (typeof sdkRes?.message === 'string' && sdkRes.message.trim().length > 0
+                ? sdkRes.message.trim()
+                : undefined);
+            if (sessionReqId) {
+              dispatched = true;
+              try {
+                await OTPWidget.retryOTP({
+                  reqId: sessionReqId,
+                  retryChannel: 11,
+                  otp_length: 4,
+                  otpLength: 4,
+                });
+              } catch (retryE) {
+                // ignore
+              }
+            }
+          } else {
+            console.warn('[MSG91 SDK] sendOTP note:', sdkRes?.message || sdkRes);
+          }
+        } catch (sdkError: any) {
+          console.warn('[MSG91 SDK] sendOTP exception:', sdkError?.message || sdkError);
         }
       }
 
-      if (!sessionReqId) {
+      if (!dispatched && !sessionReqId) {
         throw new Error('Verification session could not be established. Please try again.');
       }
 
-      setReqId(sessionReqId);
+      setReqId(sessionReqId || 'BACKEND_SENT');
       setOtpSent(true);
       setCooldown(60);
       setSuccess(
