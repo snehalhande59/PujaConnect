@@ -153,6 +153,8 @@ export const CustomerHomeScreen: React.FC<CustomerHomeScreenProps> = ({
           (b) => b.status === 'CONFIRMED' || b.status === 'PENDING'
         );
         setUpcomingBooking(active || myBookings[0]);
+      } else {
+        setUpcomingBooking(null);
       }
 
       // Fetch dynamic active promotional coupons from Admin

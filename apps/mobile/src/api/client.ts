@@ -106,6 +106,17 @@ export const storage = {
   },
 
   async setUser(user: any) {
+    // If logging in as a different user, purge prior in-memory bookings
+    if (memoryUser && user && memoryUser.id !== user.id) {
+      memoryBookings = [];
+      try {
+        if (Platform.OS !== 'web') {
+          await SecureStore.deleteItemAsync(BOOKINGS_KEY);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
     memoryUser = user;
     try {
       if (Platform.OS !== 'web') {
@@ -133,10 +144,17 @@ export const storage = {
   },
 
   async saveBooking(booking: Booking) {
-    memoryBookings = [booking, ...memoryBookings.filter((b) => b.id !== booking.id)];
+    const currentUser = await this.getUser().catch(() => null);
+    const enrichedBooking = {
+      ...booking,
+      _savedUserId: currentUser?.id,
+      _savedUserPhone: currentUser?.phoneNumber,
+    };
+    memoryBookings = [enrichedBooking, ...memoryBookings.filter((b) => b.id !== booking.id)];
     try {
       if (Platform.OS !== 'web') {
-        await SecureStore.setItemAsync(BOOKINGS_KEY, JSON.stringify(memoryBookings));
+        const key = currentUser?.id ? `${BOOKINGS_KEY}_${currentUser.id}` : BOOKINGS_KEY;
+        await SecureStore.setItemAsync(key, JSON.stringify(memoryBookings));
       }
     } catch (e) {
       // ignore
@@ -147,8 +165,10 @@ export const storage = {
     await this.getLocalBookings();
     memoryBookings = memoryBookings.map((b) => (b.id === id ? { ...b, status } : b));
     try {
+      const currentUser = await this.getUser().catch(() => null);
       if (Platform.OS !== 'web') {
-        await SecureStore.setItemAsync(BOOKINGS_KEY, JSON.stringify(memoryBookings));
+        const key = currentUser?.id ? `${BOOKINGS_KEY}_${currentUser.id}` : BOOKINGS_KEY;
+        await SecureStore.setItemAsync(key, JSON.stringify(memoryBookings));
       }
     } catch (e) {
       // ignore
@@ -156,9 +176,13 @@ export const storage = {
   },
 
   async getLocalBookings(): Promise<Booking[]> {
+    const currentUser = await this.getUser().catch(() => null);
+    if (!currentUser) return [];
+
     try {
       if (Platform.OS !== 'web') {
-        const stored = await SecureStore.getItemAsync(BOOKINGS_KEY);
+        const key = currentUser?.id ? `${BOOKINGS_KEY}_${currentUser.id}` : BOOKINGS_KEY;
+        const stored = await SecureStore.getItemAsync(key);
         if (stored) {
           memoryBookings = JSON.parse(stored);
         }
@@ -166,16 +190,37 @@ export const storage = {
     } catch (e) {
       // ignore
     }
-    return memoryBookings;
+
+    // STRICT CUSTOMER VERIFICATION: Only return bookings belonging explicitly to the active customer
+    const curPhone = currentUser?.phoneNumber ? currentUser.phoneNumber.replace(/\D/g, '') : null;
+    const curId = currentUser?.id;
+
+    return (memoryBookings || []).filter((b: any) => {
+      if (!b) return false;
+      if (b._savedUserId && curId && b._savedUserId === curId) return true;
+      const bUserId = b.customerProfile?.userId || (b.customerProfile as any)?.user?.id;
+      if (curId && bUserId && bUserId === curId) return true;
+      const bPhone = b.customerProfile?.user?.phoneNumber
+        ? b.customerProfile.user.phoneNumber.replace(/\D/g, '')
+        : (b.customerPhone ? b.customerPhone.replace(/\D/g, '') : null);
+      if (curPhone && bPhone && (curPhone.includes(bPhone) || bPhone.includes(curPhone))) return true;
+      return false;
+    });
   },
 
   async clear() {
+    const prevUserId = memoryUser?.id;
     memoryToken = null;
     memoryUser = null;
+    memoryBookings = [];
     try {
       if (Platform.OS !== 'web') {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         await SecureStore.deleteItemAsync(USER_KEY);
+        await SecureStore.deleteItemAsync(BOOKINGS_KEY);
+        if (prevUserId) {
+          await SecureStore.deleteItemAsync(`${BOOKINGS_KEY}_${prevUserId}`);
+        }
       }
     } catch (e) {
       // ignore
@@ -554,9 +599,13 @@ export const api = {
   },
 
   async getMyBookings(): Promise<Booking[]> {
+    const currentUser = await storage.getUser().catch(() => null);
+    if (!currentUser) return [];
+
     try {
       const serverBookings = await apiRequest<Booking[]>('/bookings/my');
       const localBookings = await storage.getLocalBookings();
+
       const combined = [...(localBookings || []), ...(serverBookings || [])];
       // remove duplicate ids while preserving order
       const map = new Map<string, Booking>();
