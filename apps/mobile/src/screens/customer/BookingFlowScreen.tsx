@@ -47,27 +47,27 @@ const QUICK_MINUTES = ['00', '15', '30', '45'];
 const LANGUAGES = ['Hindi', 'Sanskrit', 'Marathi', 'Gujarati', 'Telugu', 'Tamil', 'English'];
 
 const DEFAULT_VERIFIED_PANDIT: PanditProfile = {
-  id: '47e2b91a-b341-4e65-8e49-82f14083ec24',
-  userId: '1d8b899e-0c4b-4225-ac36-d7e38b994d8d',
-  fullName: 'Pt. Radheshyam Joshi',
+  id: 'b5544b34-6128-4dc8-bc1b-672bb95fd743',
+  userId: 'devendra_shastri_user_1',
+  fullName: 'Pt. Devendra Shastri',
   experienceYears: 12,
-  languages: ['Marathi', 'Hindi', 'Sanskrit', 'English'],
+  languages: ['Marathi', 'Hindi', 'Sanskrit'],
   specializations: ['Satyanarayan Mahapuja', 'Griha Pravesh', 'Ganesh Puja', 'Ganpati Hawan'],
   city: 'Pune',
   state: 'Maharashtra',
   serviceAreas: ['Pune', 'Surrounding areas'],
-  bio: 'Vedic scholar with 12 years of experience across Pune and Mumbai. Conducts pujas with clear explanations in Marathi, Hindi, and English.',
+  bio: 'Vedic scholar with deep ritual mastery across Pune and Maharashtra. Conducts authentic Vidhi in Marathi, Hindi and Sanskrit.',
   basePrice: 2100,
-  averageRating: 4.88,
+  averageRating: 4.9,
   totalReviews: 24,
   verificationStatus: 'VERIFIED',
   isAvailable: true,
   user: {
-    id: '1d8b899e-0c4b-4225-ac36-d7e38b994d8d',
-    email: 'radheshyam.joshi@devsutra.com',
+    id: 'devendra_shastri_user_1',
+    email: 'devendra@pujaconnect.in',
     role: 'PANDIT',
-    firstName: 'Radheshyam',
-    lastName: 'Joshi',
+    firstName: 'Devendra',
+    lastName: 'Shastri',
   } as any,
 };
 
@@ -170,10 +170,19 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
           }
         }
         const pandits = await api.getPandits({ city }).catch(() => []);
-        if (isMounted && pandits && pandits.length > 0) {
+        if (isMounted && Array.isArray(pandits) && pandits.length > 0) {
           setAvailablePandits(pandits);
           if (!initialPandit) {
             setSelectedPandit(pandits[0]);
+          }
+        } else {
+          // Fallback to all verified pandits if none found in city filter
+          const allPandits = await api.getPandits().catch(() => []);
+          if (isMounted && Array.isArray(allPandits) && allPandits.length > 0) {
+            setAvailablePandits(allPandits);
+            if (!initialPandit) {
+              setSelectedPandit(allPandits[0]);
+            }
           }
         }
 

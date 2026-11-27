@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Eye,
   X,
+  Plus,
 } from 'lucide-react';
 import { getClientToken } from '@/lib/auth';
 import AdminLayout from '@/components/admin/AdminLayout';
@@ -101,6 +102,27 @@ export default function AdminCalendarPage() {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [activeBookingDetail, setActiveBookingDetail] = useState<Booking | null>(null);
 
+  // Quick Schedule Ceremony Modal State
+  const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [addForm, setAddForm] = useState({
+    devoteeName: '',
+    phoneNumber: '',
+    pujaId: 'satyanarayan-mahapuja',
+    panditProfileId: '',
+    pujaDate: new Date().toISOString().split('T')[0],
+    pujaTimeSlot: '11:45 AM (Abhijit Muhurat)',
+    pujaLanguage: 'Marathi',
+    city: 'Pune',
+    venueAddress: 'Family Residence, Pune',
+    pincode: '411004',
+    totalAmount: '3500',
+    includeSamagri: true,
+    paymentStatus: 'PAID',
+    paymentMethod: 'RAZORPAY',
+  });
+  const [submittingAdd, setSubmittingAdd] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
   // Ref to auto-scroll to today's column in weekly view
   const todayColumnRef = useRef<HTMLDivElement | null>(null);
 
@@ -159,6 +181,65 @@ export default function AdminCalendarPage() {
       setRefreshing(false);
     }
   }, []);
+
+  const handleCreateCeremony = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmittingAdd(true);
+    setAddError(null);
+    const token = getClientToken();
+    try {
+      const res = await fetch(`${API_BASE_URL}/bookings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          pujaId: addForm.pujaId,
+          panditProfileId: addForm.panditProfileId || (pandits[0]?.id || 'b5544b34-6128-4dc8-bc1b-672bb95fd743'),
+          pujaDate: addForm.pujaDate,
+          pujaTimeSlot: addForm.pujaTimeSlot,
+          pujaLanguage: addForm.pujaLanguage,
+          venueAddress: addForm.venueAddress,
+          city: addForm.city,
+          pincode: addForm.pincode,
+          includeSamagri: addForm.includeSamagri,
+          totalAmount: Number(addForm.totalAmount) || 3500,
+          customerName: addForm.devoteeName || 'Devotee',
+          customerPhone: addForm.phoneNumber || '9822012345',
+          paymentMethod: addForm.paymentMethod,
+          paymentStatus: addForm.paymentStatus,
+          transactionId: 'TXN_' + Date.now(),
+        }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || 'Failed to schedule ceremony');
+      }
+      setShowAddModal(false);
+      setAddForm({
+        devoteeName: '',
+        phoneNumber: '',
+        pujaId: 'satyanarayan-mahapuja',
+        panditProfileId: pandits[0]?.id || '',
+        pujaDate: new Date().toISOString().split('T')[0],
+        pujaTimeSlot: '11:45 AM (Abhijit Muhurat)',
+        pujaLanguage: 'Marathi',
+        city: 'Pune',
+        venueAddress: 'Family Residence, Pune',
+        pincode: '411004',
+        totalAmount: '3500',
+        includeSamagri: true,
+        paymentStatus: 'PAID',
+        paymentMethod: 'RAZORPAY',
+      });
+      await fetchBookings(false);
+    } catch (err: any) {
+      setAddError(err.message || 'Error creating ceremony');
+    } finally {
+      setSubmittingAdd(false);
+    }
+  };
 
   useEffect(() => {
     fetchPandits();
@@ -221,14 +302,30 @@ export default function AdminCalendarPage() {
     });
   }, [bookings, selectedPanditId, statusFilter, searchQuery]);
 
-  // Helper: check if a date string matches a given day YYYY-MM-DD
+  // Helper: check if a date string matches a given day YYYY-MM-DD (Timezone-Independent)
   const isSameDay = (dateStr: string, targetDate: Date) => {
     if (!dateStr) return false;
-    const d = new Date(dateStr);
+    const cleanStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr.slice(0, 10);
+    const [y, m, d] = cleanStr.split('-').map(Number);
+    if (y && m && d) {
+      if (
+        y === targetDate.getFullYear() &&
+        m === targetDate.getMonth() + 1 &&
+        d === targetDate.getDate()
+      ) {
+        return true;
+      }
+    }
+
+    const dt = new Date(dateStr);
+    if (isNaN(dt.getTime())) return false;
     return (
-      d.getFullYear() === targetDate.getFullYear() &&
-      d.getMonth() === targetDate.getMonth() &&
-      d.getDate() === targetDate.getDate()
+      (dt.getFullYear() === targetDate.getFullYear() &&
+        dt.getMonth() === targetDate.getMonth() &&
+        dt.getDate() === targetDate.getDate()) ||
+      (dt.getUTCFullYear() === targetDate.getFullYear() &&
+        dt.getUTCMonth() === targetDate.getMonth() &&
+        dt.getUTCDate() === targetDate.getDate())
     );
   };
 
@@ -391,6 +488,21 @@ export default function AdminCalendarPage() {
                 Monthly
               </button>
             </div>
+
+            <button
+              onClick={() => {
+                setAddForm((prev) => ({
+                  ...prev,
+                  panditProfileId: prev.panditProfileId || (pandits[0]?.id || ''),
+                  pujaDate: selectedDate.toISOString().split('T')[0],
+                }));
+                setShowAddModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Schedule Ceremony</span>
+            </button>
 
             <button
               onClick={() => fetchBookings(false)}
@@ -1017,6 +1129,173 @@ export default function AdminCalendarPage() {
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+        {/* Quick Schedule Ceremony Modal */}
+        {showAddModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+            <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-stone-200 space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-amber-100 text-amber-800">
+                    <CalendarIcon className="w-5 h-5 text-amber-700" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-stone-900">Schedule Sacred Ceremony</h3>
+                    <p className="text-xs text-stone-500">Add live booking & ceremony directly to calendar roster</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {addError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{addError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateCeremony} className="space-y-3.5 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">Devotee Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Snehal Hande"
+                      value={addForm.devoteeName}
+                      onChange={(e) => setAddForm({ ...addForm, devoteeName: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-stone-50 border border-stone-200 text-stone-900 focus:outline-amber-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">Mobile Number *</label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="e.g. 9822012345"
+                      value={addForm.phoneNumber}
+                      onChange={(e) => setAddForm({ ...addForm, phoneNumber: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-stone-50 border border-stone-200 text-stone-900 focus:outline-amber-600"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">Vedic Ceremony / Puja *</label>
+                  <select
+                    value={addForm.pujaId}
+                    onChange={(e) => setAddForm({ ...addForm, pujaId: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-stone-50 border border-stone-200 text-stone-900 font-semibold focus:outline-amber-600"
+                  >
+                    <option value="satyanarayan-mahapuja">Satyanarayan Mahapuja & Katha (₹3,500)</option>
+                    <option value="rudrabhishek-puja">Shiva Rudrabhishek & Mahamrityunjaya (₹4,100)</option>
+                    <option value="griha-pravesh-puja">Griha Pravesh & Vastu Shanti (₹5,100)</option>
+                    <option value="ganesh-puja">Ganesh Sthapana & Hawan (₹2,500)</option>
+                    <option value="navgraha-shanti">Navgraha Shanti & Homa (₹4,500)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">Assigned Vedic Pandit *</label>
+                  <select
+                    value={addForm.panditProfileId}
+                    onChange={(e) => setAddForm({ ...addForm, panditProfileId: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-stone-50 border border-stone-200 text-stone-900 font-semibold focus:outline-amber-600"
+                  >
+                    {pandits.length === 0 && (
+                      <option value="b5544b34-6128-4dc8-bc1b-672bb95fd743">Pt. Devendra Shastri (Pune)</option>
+                    )}
+                    {pandits.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.fullName || 'Vedic Pandit'} ({p.city || 'Maharashtra'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">Ceremony Date *</label>
+                    <input
+                      type="date"
+                      required
+                      value={addForm.pujaDate}
+                      onChange={(e) => setAddForm({ ...addForm, pujaDate: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-stone-50 border border-stone-200 text-stone-900 focus:outline-amber-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">Time Slot / Muhurat *</label>
+                    <select
+                      value={addForm.pujaTimeSlot}
+                      onChange={(e) => setAddForm({ ...addForm, pujaTimeSlot: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-stone-50 border border-stone-200 text-stone-900 focus:outline-amber-600"
+                    >
+                      <option value="06:30 AM (Brahma Muhurat)">06:30 AM (Brahma Muhurat)</option>
+                      <option value="08:30 AM (Shubh Choghadiya)">08:30 AM (Shubh Choghadiya)</option>
+                      <option value="10:00 AM (Amrit Choghadiya)">10:00 AM (Amrit Choghadiya)</option>
+                      <option value="11:45 AM (Abhijit Muhurat)">11:45 AM (Abhijit Muhurat)</option>
+                      <option value="02:30 PM (Labh Choghadiya)">02:30 PM (Labh Choghadiya)</option>
+                      <option value="05:30 PM (Sandhya Godhuli)">05:30 PM (Sandhya Godhuli)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">City</label>
+                    <input
+                      type="text"
+                      value={addForm.city}
+                      onChange={(e) => setAddForm({ ...addForm, city: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-stone-50 border border-stone-200 text-stone-900 focus:outline-amber-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">Dakshina Amount (₹)</label>
+                    <input
+                      type="number"
+                      value={addForm.totalAmount}
+                      onChange={(e) => setAddForm({ ...addForm, totalAmount: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-stone-50 border border-stone-200 text-stone-900 font-bold focus:outline-amber-600"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 mb-1">Venue Address</label>
+                  <input
+                    type="text"
+                    value={addForm.venueAddress}
+                    onChange={(e) => setAddForm({ ...addForm, venueAddress: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-stone-50 border border-stone-200 text-stone-900 focus:outline-amber-600"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-stone-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="px-4 py-2 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-100 transition font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingAdd}
+                    className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold transition shadow-xs disabled:opacity-50"
+                  >
+                    {submittingAdd ? 'Saving Ceremony...' : 'Confirm & Add to Calendar'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
