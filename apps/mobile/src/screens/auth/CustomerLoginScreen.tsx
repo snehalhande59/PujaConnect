@@ -195,6 +195,17 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
               : undefined);
           if (sessionReqId) {
             dispatched = true;
+            // Force SMS channel 11 immediately so MSG91 sends SMS even if invisible verification was pending
+            try {
+              await OTPWidget.retryOTP({
+                reqId: sessionReqId,
+                retryChannel: 11,
+                otp_length: 4,
+                otpLength: 4,
+              });
+            } catch (retryE) {
+              // ignore
+            }
           }
         } else {
           console.warn('[MSG91 SDK] sendOTP non-success:', sdkRes?.message || sdkRes);

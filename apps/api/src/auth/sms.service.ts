@@ -234,7 +234,36 @@ export class SmsService {
             ? data.message.trim()
             : undefined);
 
-        this.logger.log(`[MSG91 Widget] OTP sent to ${maskedPhone} via ${url} (reqId: ${reqId || 'OK'})`);
+        this.logger.log(`[MSG91 Widget] OTP session created for ${maskedPhone} via ${url} (reqId: ${reqId || 'OK'})`);
+
+        // Force SMS dispatch via retryChannel 11 to guarantee SMS delivery even if widget has invisible verification enabled
+        if (reqId && reqId.length >= 10) {
+          try {
+            const retryEndpoints = [
+              'https://control.msg91.com/api/v5/widget/retryOtp',
+              'https://api.msg91.com/api/v5/widget/retryOtp',
+            ];
+            for (const rUrl of retryEndpoints) {
+              const retryRes = await fetch(rUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  widgetId: this.msg91WidgetId,
+                  tokenAuth: this.msg91WidgetTokenAuth,
+                  reqId,
+                  retryChannel: 11,
+                }),
+              });
+              const retryData = await retryRes.json().catch(() => ({}));
+              if (retryRes.ok && retryData.type === 'success') {
+                this.logger.log(`[MSG91 Widget] SMS dispatched via retryChannel 11 for ${maskedPhone}`);
+                break;
+              }
+            }
+          } catch (rErr: any) {
+            this.logger.warn(`[MSG91 Widget] retryChannel 11 trigger note: ${rErr.message}`);
+          }
+        }
 
         return {
           success: true,
