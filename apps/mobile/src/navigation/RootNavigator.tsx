@@ -334,33 +334,19 @@ export const RootNavigator: React.FC = () => {
 
   // --- CUSTOMER PORTAL ---
   if (role === 'CUSTOMER') {
-    // Registration flow steps (Post-OTP)
-    if (registrationStep === 'personal') {
+    // Unified Profile Setup (Post-OTP: Name, Age, Gender, Address)
+    if (registrationStep === 'personal' || registrationStep === 'address') {
       return (
         <CustomerPersonalDetailsScreen
-          userEmail={user.email}
           initialFullName={
             user.firstName && user.firstName.toLowerCase() !== 'devotee'
               ? `${user.firstName} ${user.lastName || ''}`.trim()
               : ''
           }
           initialPhoneNumber={user.phoneNumber || ''}
-          onNext={(details) => {
-            setRegistrationPending(details);
-            setRegistrationStep('address');
-          }}
-        />
-      );
-    }
-
-    if (registrationStep === 'address') {
-      return (
-        <CustomerAddressDetailsScreen
-          personalDetails={registrationPending}
-          userEmail={user.email}
-          onBack={() => setRegistrationStep('personal')}
           onComplete={() => {
             setRegistrationStep('none');
+            setCustomerTab('home');
           }}
         />
       );

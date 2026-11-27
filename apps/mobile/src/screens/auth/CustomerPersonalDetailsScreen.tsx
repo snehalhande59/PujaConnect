@@ -14,23 +14,30 @@ import { colors } from '../../theme/colors';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { DevSutraLogo } from '../../components/common/DevSutraLogo';
+import { api } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 
 interface CustomerPersonalDetailsScreenProps {
   initialFullName?: string;
   initialPhoneNumber?: string;
-  userEmail?: string;
-  onNext: (details: { fullName: string; phoneNumber: string }) => void;
+  onComplete: () => void;
   onBack?: () => void;
 }
+
+export type GenderType = 'Male' | 'Female' | 'Other';
 
 export const CustomerPersonalDetailsScreen: React.FC<CustomerPersonalDetailsScreenProps> = ({
   initialFullName = '',
   initialPhoneNumber = '',
-  userEmail = '',
-  onNext,
+  onComplete,
   onBack,
 }) => {
+  const { refreshProfile } = useAuth();
+
+  // Personal Fields
   const [fullName, setFullName] = useState(initialFullName);
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState<GenderType>('Male');
   const [phoneNumber, setPhoneNumber] = useState(() => {
     const digits = (initialPhoneNumber || '').replace(/[^0-9]/g, '');
     if (digits.length > 10 && digits.startsWith('91')) {
@@ -38,35 +45,106 @@ export const CustomerPersonalDetailsScreen: React.FC<CustomerPersonalDetailsScre
     }
     return digits;
   });
+
+  // Address Fields
+  const [house, setHouse] = useState('');
+  const [street, setStreet] = useState('');
+  const [city, setCity] = useState('Pune');
+  const [state, setState] = useState('Maharashtra');
+  const [pincode, setPincode] = useState('');
+
+  // UI state
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleNext = () => {
+  const handleSubmit = async () => {
     setError(null);
+
     const trimmedName = fullName.trim();
-    let cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
-    if (cleanPhone.length > 10 && cleanPhone.startsWith('91')) {
-      cleanPhone = cleanPhone.slice(2);
-    }
+    const trimmedAge = age.trim();
+    const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+    const trimmedHouse = house.trim();
+    const trimmedStreet = street.trim();
+    const trimmedCity = city.trim();
+    const trimmedState = state.trim();
+    const cleanPin = pincode.replace(/[^0-9]/g, '');
 
+    // 1. Validate Personal
     if (!trimmedName || trimmedName.length < 2) {
-      setError('Please enter your full name (minimum 2 characters).');
+      setError('कृपया तुमचे पूर्ण नाव प्रविष्ट करा (Please enter your full name).');
       return;
     }
 
-    if (!cleanPhone) {
-      setError('Mobile number is required for booking updates & priest coordination.');
+    const ageNum = parseInt(trimmedAge, 10);
+    if (!trimmedAge || isNaN(ageNum) || ageNum < 5 || ageNum > 120) {
+      setError('कृपया वैध वय प्रविष्ट करा (Please enter a valid age between 5 and 120).');
       return;
     }
 
-    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
-      setError('Please enter a valid 10-digit Indian mobile number (e.g. 9876543210).');
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      setError('कृपया वैध १०-अंकी मोबाईल नंबर प्रविष्ट करा.');
       return;
     }
 
-    onNext({
-      fullName: trimmedName,
-      phoneNumber: cleanPhone,
-    });
+    // 2. Validate Address
+    if (!trimmedHouse) {
+      setError('घर क्र. / इमारत नाव प्रविष्ट करा (Flat / House No. is required).');
+      return;
+    }
+
+    if (!trimmedStreet) {
+      setError('परिसर / रस्ता प्रविष्ट करा (Street / Area / Landmark is required).');
+      return;
+    }
+
+    if (!trimmedCity) {
+      setError('शहर निवडा किंवा प्रविष्ट करा (City is required).');
+      return;
+    }
+
+    if (!cleanPin || cleanPin.length !== 6) {
+      setError('कृपया ६-अंकी पिनकोड प्रविष्ट करा (Please enter a valid 6-digit PIN code).');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Split Name into First & Last
+      const parts = trimmedName.split(/\s+/);
+      const firstName = parts[0] || 'Devotee';
+      const lastName = parts.slice(1).join(' ') || '';
+
+      // 1. Update Customer Profile on Backend
+      await api.updateCustomerProfile({
+        firstName,
+        lastName,
+        city: trimmedCity,
+        state: trimmedState,
+      });
+
+      // 2. Add Customer Address on Backend
+      await api.addAddress({
+        fullName: trimmedName,
+        phoneNumber: cleanPhone,
+        addressLine1: trimmedHouse,
+        addressLine2: trimmedStreet,
+        city: trimmedCity,
+        state: trimmedState,
+        pincode: cleanPin,
+        isDefault: true,
+      });
+
+      // 3. Refresh user profile in Auth context
+      await refreshProfile();
+
+      // 4. Proceed directly to DevSutra Homepage!
+      onComplete();
+    } catch (err: any) {
+      setError(err?.message || 'माहिती जतन करताना त्रुटी आली. कृपया पुन्हा प्रयत्न करा.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -84,7 +162,7 @@ export const CustomerPersonalDetailsScreen: React.FC<CustomerPersonalDetailsScre
           ) : (
             <View style={{ width: 36 }} />
           )}
-          <Text style={styles.topBarTitle}>Devotee Registration</Text>
+          <Text style={styles.topBarTitle}>Devotee Profile Setup</Text>
           <View style={{ width: 36 }} />
         </View>
 
@@ -97,33 +175,11 @@ export const CustomerPersonalDetailsScreen: React.FC<CustomerPersonalDetailsScre
           <View style={styles.header}>
             <DevSutraLogo variant="vertical" size="md" />
             <Text style={styles.mantraText}>॥ ॐ श्री गणेशाय नमः ॥</Text>
-            <Text style={styles.title}>Tell Us About Yourself</Text>
+            <Text style={styles.title}>Welcome to DevSutra</Text>
             <Text style={styles.subtitle}>
-              Your name and mobile number ensure authentic ritual coordination with verified Vedic priests.
+              कृपया तुमची माहिती भरा जेणेकरून वैदिक पूजेची व गुरुजींची व्यवस्था सहज होईल.
             </Text>
           </View>
-
-          {/* Stepper Indicator */}
-          <View style={styles.stepperContainer}>
-            <View style={styles.stepBadgeActive}>
-              <Text style={styles.stepBadgeTextActive}>1</Text>
-            </View>
-            <View style={styles.stepperLine} />
-            <View style={styles.stepBadgeInactive}>
-              <Text style={styles.stepBadgeTextInactive}>2</Text>
-            </View>
-          </View>
-          <Text style={styles.stepperLabel}>Step 1 of 2: Personal Details</Text>
-
-          {/* Verified Email Banner */}
-          {userEmail ? (
-            <View style={styles.verifiedBox}>
-              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-              <Text style={styles.verifiedBoxText}>
-                Verified Email: <Text style={{ fontWeight: '700' }}>{userEmail}</Text>
-              </Text>
-            </View>
-          ) : null}
 
           {/* Error Message */}
           {error && (
@@ -135,9 +191,14 @@ export const CustomerPersonalDetailsScreen: React.FC<CustomerPersonalDetailsScre
 
           {/* Form Card */}
           <View style={styles.formCard}>
+            {/* Section 1: Personal Details */}
+            <Text style={styles.sectionHeader}>
+              <Ionicons name="person" size={15} color={colors.primary} /> वैयक्तिक माहिती (Personal Details)
+            </Text>
+
             <Input
-              label="Full Name *"
-              placeholder="e.g. Aarav Sharma"
+              label="Full Name (पूर्ण नाव) *"
+              placeholder="उदा. राहुल सचिन जोशी"
               value={fullName}
               onChangeText={(val) => {
                 setFullName(val);
@@ -145,32 +206,137 @@ export const CustomerPersonalDetailsScreen: React.FC<CustomerPersonalDetailsScre
               }}
               leftIcon="person-outline"
               autoCapitalize="words"
-              autoCorrect={false}
+              editable={!loading}
             />
 
-            <View style={{ marginTop: 4 }}>
+            {/* Age & Gender Row */}
+            <View style={styles.row}>
+              <View style={{ flex: 1, marginRight: 10 }}>
+                <Input
+                  label="Age (वय) *"
+                  placeholder="उदा. 28"
+                  value={age}
+                  onChangeText={(val) => {
+                    setAge(val.replace(/[^0-9]/g, ''));
+                    setError(null);
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={3}
+                  leftIcon="calendar-outline"
+                  editable={!loading}
+                />
+              </View>
+
+              <View style={{ flex: 1.5 }}>
+                <Text style={styles.genderLabel}>Gender (लिंग) *</Text>
+                <View style={styles.genderChipsRow}>
+                  {(['Male', 'Female', 'Other'] as GenderType[]).map((g) => {
+                    const isSelected = gender === g;
+                    return (
+                      <TouchableOpacity
+                        key={g}
+                        onPress={() => setGender(g)}
+                        style={[styles.genderChip, isSelected && styles.genderChipActive]}
+                        activeOpacity={0.8}
+                        disabled={loading}
+                      >
+                        <Text
+                          style={[
+                            styles.genderChipText,
+                            isSelected && styles.genderChipTextActive,
+                          ]}
+                        >
+                          {g === 'Male' ? 'पुरुष' : g === 'Female' ? 'स्त्री' : 'इतर'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+
+            {/* Mobile Number (Read-only / verified) */}
+            <View style={{ marginTop: 6, marginBottom: 14 }}>
               <Input
-                label="Mobile Number (India) *"
+                label="Verified Mobile Number (पडताळलेला नंबर) *"
                 placeholder="9876543210"
                 value={phoneNumber}
-                onChangeText={(val) => {
-                  setPhoneNumber(val.replace(/[^0-9]/g, ''));
-                  setError(null);
-                }}
+                onChangeText={(val) => setPhoneNumber(val.replace(/[^0-9]/g, ''))}
                 keyboardType="phone-pad"
                 maxLength={10}
                 leftIcon="call-outline"
+                editable={false}
               />
-              <Text style={styles.helperText}>
-                We will only use this number for Muhurat coordination and priest arrival updates.
-              </Text>
+            </View>
+
+            {/* Section 2: Address Details */}
+            <Text style={[styles.sectionHeader, { marginTop: 12 }]}>
+              <Ionicons name="home" size={15} color={colors.primary} /> पूजेचा पत्ता (Puja Address)
+            </Text>
+
+            <Input
+              label="Flat / House / Building (घर क्र. / इमारत) *"
+              placeholder="उदा. फ्लॅट ४०२, शिवनेरी हाइट्स"
+              value={house}
+              onChangeText={(val) => {
+                setHouse(val);
+                setError(null);
+              }}
+              leftIcon="home-outline"
+              editable={!loading}
+            />
+
+            <Input
+              label="Area / Street / Landmark (परिसर / रस्ता) *"
+              placeholder="उदा. गणपती मंदिरा जवळ, कोथरूड"
+              value={street}
+              onChangeText={(val) => {
+                setStreet(val);
+                setError(null);
+              }}
+              leftIcon="location-outline"
+              editable={!loading}
+            />
+
+            {/* City & Pincode Row */}
+            <View style={styles.row}>
+              <View style={{ flex: 1, marginRight: 10 }}>
+                <Input
+                  label="City (शहर) *"
+                  placeholder="Pune"
+                  value={city}
+                  onChangeText={(val) => {
+                    setCity(val);
+                    setError(null);
+                  }}
+                  leftIcon="business-outline"
+                  editable={!loading}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Input
+                  label="PIN Code (पिनकोड) *"
+                  placeholder="411038"
+                  value={pincode}
+                  onChangeText={(val) => {
+                    setPincode(val.replace(/[^0-9]/g, ''));
+                    setError(null);
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  leftIcon="pin-outline"
+                  editable={!loading}
+                />
+              </View>
             </View>
 
             <Button
-              title="Continue to Address Details"
+              title="Save & Enter DevSutra (माहिती जतन करा)"
               variant="primary"
               size="lg"
-              onPress={handleNext}
+              loading={loading}
+              disabled={loading}
+              onPress={handleSubmit}
               icon={<Ionicons name="arrow-forward" size={18} color={colors.textWhite} />}
               style={{ marginTop: 20 }}
             />
@@ -180,7 +346,7 @@ export const CustomerPersonalDetailsScreen: React.FC<CustomerPersonalDetailsScre
           <View style={styles.securityNote}>
             <Ionicons name="lock-closed-outline" size={14} color={colors.goldDark} />
             <Text style={styles.securityNoteText}>
-              Your information is stored safely and never shared with third parties.
+              तुमची माहिती सुरक्षित ठेवली जाते आणि फक्त पूजा समन्वयासाठी वापरली जाते.
             </Text>
           </View>
         </ScrollView>
@@ -201,16 +367,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderLight,
     backgroundColor: colors.card,
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.background,
   },
   topBarTitle: {
     fontSize: 16,
@@ -223,128 +389,108 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   mantraText: {
     fontSize: 13,
+    color: colors.goldDark,
     fontWeight: '700',
-    color: colors.gold,
     marginTop: 8,
-    marginBottom: 4,
+    letterSpacing: 0.5,
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
     color: colors.text,
+    marginTop: 6,
     textAlign: 'center',
-    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: colors.textLight,
     textAlign: 'center',
+    marginTop: 6,
     lineHeight: 18,
-    maxWidth: 320,
-  },
-  stepperContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  stepBadgeActive: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBadgeTextActive: {
-    color: colors.textWhite,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  stepperLine: {
-    width: 48,
-    height: 2,
-    backgroundColor: colors.border,
-    marginHorizontal: 8,
-  },
-  stepBadgeInactive: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBadgeTextInactive: {
-    color: colors.textLight,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  stepperLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.primary,
-    textAlign: 'center',
-    marginBottom: 16,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  verifiedBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 16,
-  },
-  verifiedBoxText: {
-    fontSize: 12,
-    color: '#065F46',
+    paddingHorizontal: 12,
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.errorLight,
-    borderWidth: 1,
-    borderColor: colors.error,
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: '#FDE8E8',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
     marginBottom: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#F8B4B4',
   },
   errorBoxText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 12.5,
     color: colors.error,
     fontWeight: '600',
+    lineHeight: 18,
   },
   formCard: {
     backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 16,
+    padding: 18,
     borderWidth: 1,
     borderColor: colors.border,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  helperText: {
-    fontSize: 11,
-    color: colors.textLight,
-    marginTop: -8,
+  sectionHeader: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: colors.primary,
     marginBottom: 12,
-    lineHeight: 15,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0ECE4',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  genderLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  genderChipsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingTop: 4,
+  },
+  genderChip: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: '#FAFAF8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genderChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  genderChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textLight,
+  },
+  genderChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
   securityNote: {
     flexDirection: 'row',
@@ -352,6 +498,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     marginTop: 20,
+    paddingHorizontal: 16,
   },
   securityNoteText: {
     fontSize: 11,
