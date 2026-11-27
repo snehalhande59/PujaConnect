@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import {
   PaymentGatewayModal,
   PaymentSuccessDetails,
 } from '../../components/common/PaymentGatewayModal';
+import { generateMonthWeeks, getAuspiciousDaysForMonth } from '../../utils/muhurathUtils';
 
 interface BookingFlowScreenProps {
   initialPuja?: Puja;
@@ -29,26 +30,6 @@ interface BookingFlowScreenProps {
   onBack: () => void;
   onBookingSuccess: (booking: Booking) => void;
 }
-
-const NOVEMBER_2026_WEEKS = [
-  { weekNum: 44, days: [null, null, null, null, null, null, 1] },
-  { weekNum: 45, days: [2, 3, 4, 5, 6, 7, 8] },
-  { weekNum: 46, days: [9, 10, 11, 12, 13, 14, 15] },
-  { weekNum: 47, days: [16, 17, 18, 19, 20, 21, 22] },
-  { weekNum: 48, days: [23, 24, 25, 26, 27, 28, 29] },
-  { weekNum: 49, days: [30, null, null, null, null, null, null] },
-];
-
-const DECEMBER_2026_WEEKS = [
-  { weekNum: 49, days: [null, 1, 2, 3, 4, 5, 6] },
-  { weekNum: 50, days: [7, 8, 9, 10, 11, 12, 13] },
-  { weekNum: 51, days: [14, 15, 16, 17, 18, 19, 20] },
-  { weekNum: 52, days: [21, 22, 23, 24, 25, 26, 27] },
-  { weekNum: 53, days: [28, 29, 30, 31, null, null, null] },
-];
-
-const MUHURAT_DAYS_NOV = [5, 8, 12, 18, 19, 20, 21, 23, 24, 26, 28];
-const MUHURAT_DAYS_DEC = [2, 5, 9, 11, 15, 19, 23, 27, 30];
 
 const VEDIC_MUHURAT_SLOTS = [
   { id: 'BRAHMA', label: 'Brahma Muhurat (06:00 AM - 07:30 AM)', time: '06:30 AM', desc: 'Brahma oblation, Hawan & Gayatri' },
@@ -109,31 +90,49 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
   const [availablePujas, setAvailablePujas] = useState<Puja[]>([]);
   const [availablePandits, setAvailablePandits] = useState<PanditProfile[]>([initialPandit || DEFAULT_VERIFIED_PANDIT]);
 
-  // Step 2: Interactive Vedic Calendar & Time State
-  const today = new Date();
-  const currentCalMonth = today.getMonth() === 11 ? 1 : 0;
-  const currentCalDay = today.getDate();
-  const currentCalMonthStr = (today.getMonth() + 1).toString().padStart(2, '0');
-  const currentCalDayStr = currentCalDay.toString().padStart(2, '0');
-  const currentCalYear = today.getFullYear();
-
-  const [currentMonthIndex, setCurrentMonthIndex] = useState<0 | 1>(currentCalMonth);
-  const [selectedDay, setSelectedDay] = useState<number>(currentCalDay);
-  const [selectedDate, setSelectedDate] = useState<string>(`${currentCalYear}-${currentCalMonthStr}-${currentCalDayStr}`);
+  // Step 2: Interactive Dynamic Vedic Calendar & Time State
+  const today = useMemo(() => new Date(), []);
+  const [calYear, setCalYear] = useState<number>(today.getFullYear());
+  const [calMonth, setCalMonth] = useState<number>(today.getMonth());
+  const [selectedDay, setSelectedDay] = useState<number>(today.getDate());
+  const [selectedDate, setSelectedDate] = useState<string>(
+    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  );
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>('09:30 AM (Shubh Choghadiya)');
+
+  const calWeeks = useMemo(() => generateMonthWeeks(calYear, calMonth), [calYear, calMonth]);
+  const calMuhuratDays = useMemo(() => getAuspiciousDaysForMonth(calYear, calMonth), [calYear, calMonth]);
+
+  const handlePrevCalMonth = () => {
+    if (calMonth === 0) {
+      setCalMonth(11);
+      setCalYear((prev) => prev - 1);
+    } else {
+      setCalMonth((prev) => prev - 1);
+    }
+  };
+
+  const handleNextCalMonth = () => {
+    if (calMonth === 11) {
+      setCalMonth(0);
+      setCalYear((prev) => prev + 1);
+    } else {
+      setCalMonth((prev) => prev + 1);
+    }
+  };
+
+  const handleSelectCalendarDay = (day: number) => {
+    setSelectedDay(day);
+    const mStr = String(calMonth + 1).padStart(2, '0');
+    const dStr = String(day).padStart(2, '0');
+    setSelectedDate(`${calYear}-${mStr}-${dStr}`);
+  };
 
   // Custom Time Selector State
   const [useCustomTime, setUseCustomTime] = useState(false);
   const [customHour, setCustomHour] = useState('09');
   const [customMinute, setCustomMinute] = useState('30');
   const [customAmPm, setCustomAmPm] = useState<'AM' | 'PM'>('AM');
-
-  const handleSelectCalendarDay = (day: number) => {
-    setSelectedDay(day);
-    const mStr = currentMonthIndex === 0 ? '11' : '12';
-    const dStr = day < 10 ? `0${day}` : `${day}`;
-    setSelectedDate(`${currentCalYear}-${mStr}-${dStr}`);
-  };
 
   const handleApplyCustomTime = (h: string, m: string, ampm: 'AM' | 'PM') => {
     setCustomHour(h);
@@ -534,20 +533,18 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
               {/* Month Navigation */}
               <View style={styles.calMonthHeader}>
                 <TouchableOpacity
-                  onPress={() => setCurrentMonthIndex(0)}
-                  disabled={currentMonthIndex === 0}
-                  style={[styles.calArrowBtn, currentMonthIndex === 0 && { opacity: 0.4 }]}
+                  onPress={handlePrevCalMonth}
+                  style={styles.calArrowBtn}
                   activeOpacity={0.7}
                 >
                   <Ionicons name="chevron-back" size={18} color={colors.primary} />
                 </TouchableOpacity>
                 <Text style={styles.calMonthTitle}>
-                  {currentMonthIndex === 0 ? '2026 November' : '2026 December'}
+                  {new Date(calYear, calMonth, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </Text>
                 <TouchableOpacity
-                  onPress={() => setCurrentMonthIndex(1)}
-                  disabled={currentMonthIndex === 1}
-                  style={[styles.calArrowBtn, currentMonthIndex === 1 && { opacity: 0.4 }]}
+                  onPress={handleNextCalMonth}
+                  style={styles.calArrowBtn}
                   activeOpacity={0.7}
                 >
                   <Ionicons name="chevron-forward" size={18} color={colors.primary} />
@@ -562,16 +559,19 @@ export const BookingFlowScreen: React.FC<BookingFlowScreenProps> = ({
               </View>
 
               {/* Weeks Grid */}
-              {(currentMonthIndex === 0 ? NOVEMBER_2026_WEEKS : DECEMBER_2026_WEEKS).map((week, wIdx) => (
+              {calWeeks.map((week, wIdx) => (
                 <View key={`week-${wIdx}`} style={styles.calWeekRow}>
                   {week.days.map((day, dIdx) => {
                     if (day === null) {
                       return <View key={`empty-${dIdx}`} style={styles.calDayCell} />;
                     }
 
-                    const isMuhurat = (currentMonthIndex === 0 ? MUHURAT_DAYS_NOV : MUHURAT_DAYS_DEC).includes(day);
+                    const isMuhurat = calMuhuratDays.includes(day);
                     const isSelected = selectedDay === day;
-                    const isToday = currentMonthIndex === currentCalMonth && day === currentCalDay;
+                    const isToday =
+                      calYear === today.getFullYear() &&
+                      calMonth === today.getMonth() &&
+                      day === today.getDate();
 
                     return (
                       <TouchableOpacity

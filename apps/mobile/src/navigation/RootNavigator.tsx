@@ -459,7 +459,12 @@ export const RootNavigator: React.FC = () => {
 
     if (customerDetailView.type === 'notification') {
       return (
-        <NotificationScreen onBack={() => setCustomerDetailView({ type: 'none' })} />
+        <NotificationScreen
+          onBack={() => setCustomerDetailView({ type: 'none' })}
+          onNotificationPress={() => {
+            setCustomerDetailView({ type: 'bookings' });
+          }}
+        />
       );
     }
 
