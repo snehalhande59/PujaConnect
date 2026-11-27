@@ -275,10 +275,6 @@ export const RootNavigator: React.FC = () => {
           <CustomerLoginScreen
             onBack={() => setAuthRoute('welcome')}
             onLoginSuccess={(loggedUser, isNew) => {
-              if (loggedUser?.role === 'PANDIT') {
-                setRegistrationStep('none');
-                return;
-              }
               const isDevoteeDefault =
                 !loggedUser?.firstName ||
                 loggedUser.firstName.toLowerCase() === 'devotee';
