@@ -253,7 +253,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     }
   };
 
-  // 2. Verify OTP Request (Supports both MSG91 client SDK & server fallback)
+  // 2. Verify OTP Request (Supports server-first verification with client SDK fallback)
   const handleVerifyOtp = async () => {
     if (loading) return;
     setError(null);
@@ -276,10 +276,32 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     try {
       setLoading(true);
 
-      let accessToken: string | undefined = undefined;
+      // Step A: Primary Verification directly through backend server (Render Cloud IP - immune to Wi-Fi blocks)
+      let backendSuccess = false;
+      try {
+        console.log('[Auth] Verifying OTP via server for', cleanPhone, 'reqId:', reqId);
+        const res = await loginCustomerWithOtp(cleanPhone, cleanOtp, undefined, reqId);
+        if (res && res.user) {
+          backendSuccess = true;
+          setSuccess('Verification successful! Welcome to DevSutra.');
+          onLoginSuccess(res.user, Boolean(res.isNewCustomer));
+          return;
+        }
+      } catch (serverVerifyErr: any) {
+        console.warn('[Auth] Server verification note:', serverVerifyErr?.message || serverVerifyErr);
+        const errMsg = serverVerifyErr?.message || '';
+        if (
+          errMsg.includes('Invalid') ||
+          errMsg.includes('expired') ||
+          errMsg.includes('अवैध') ||
+          errMsg.includes('चुकीचा')
+        ) {
+          throw serverVerifyErr;
+        }
+      }
 
-      // Attempt verification through client SDK if reqId was issued by client SDK
-      if (reqId !== 'BACKEND_SENT') {
+      // Step B: Fallback verification through client SDK if server verification did not complete
+      if (!backendSuccess && reqId !== 'BACKEND_SENT') {
         try {
           if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
             await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
@@ -290,41 +312,29 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             otp: cleanOtp,
           });
 
-          if (
-            verifyRes &&
-            verifyRes.type !== 'error' &&
-            verifyRes.type !== 'failed' &&
-            verifyRes.status !== 'fail' &&
-            (verifyRes as any).success !== false
-          ) {
-            accessToken =
-              verifyRes?.['access-token'] ||
-              verifyRes?.accessToken ||
-              verifyRes?.data?.['access-token'] ||
-              verifyRes?.data?.accessToken ||
-              (verifyRes?.type === 'success' &&
-              typeof verifyRes?.message === 'string' &&
-              verifyRes.message.trim().length > 0
-                ? verifyRes.message.trim()
-                : undefined);
+          let accessToken =
+            verifyRes?.['access-token'] ||
+            verifyRes?.accessToken ||
+            verifyRes?.data?.['access-token'] ||
+            verifyRes?.data?.accessToken ||
+            (verifyRes?.type === 'success' &&
+            typeof verifyRes?.message === 'string' &&
+            verifyRes.message.trim().length > 0
+              ? verifyRes.message.trim()
+              : undefined);
+
+          if (accessToken) {
+            const res = await loginCustomerWithWidgetToken(cleanPhone, accessToken);
+            setSuccess('Verification successful! Welcome to DevSutra.');
+            onLoginSuccess(res.user, Boolean(res.isNewCustomer));
+            return;
           }
         } catch (sdkVerifyErr: any) {
-          console.warn('[MSG91 SDK] verifyOTP exception (falling back to backend):', sdkVerifyErr?.message);
+          console.warn('[MSG91 SDK] verifyOTP exception:', sdkVerifyErr?.message || sdkVerifyErr);
         }
       }
 
-      // If client SDK returned an access token, verify with backend verifyCustomerWidgetToken
-      if (accessToken) {
-        const res = await loginCustomerWithWidgetToken(cleanPhone, accessToken);
-        setSuccess('Verification successful! Welcome to DevSutra.');
-        onLoginSuccess(res.user, Boolean(res.isNewCustomer));
-        return;
-      }
-
-      // Fallback: Verify OTP directly with backend Render endpoint
-      const res = await loginCustomerWithOtp(cleanPhone, cleanOtp, undefined, reqId);
-      setSuccess('Verification successful! Welcome to DevSutra.');
-      onLoginSuccess(res.user, Boolean(res.isNewCustomer));
+      throw new Error('चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा किंवा Resend SMS वर क्लिक करा.');
     } catch (e: any) {
       let msg = e.message || 'पडताळणी अयशस्वी झाली. कृपया पुन्हा प्रयत्न करा.';
       const lower = msg.toLowerCase();
@@ -343,7 +353,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     }
   };
 
-  // 3. Resend OTP Request (Supports both client retry and backend dispatch fallback)
+  // 3. Resend OTP Request (Supports server-first resend with client retry fallback)
   const handleResendOtp = async () => {
     if (loading || cooldown > 0) return;
     setError(null);
@@ -357,7 +367,20 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
       let resent = false;
       let newReqId: string | undefined = undefined;
 
-      if (reqId && reqId !== 'BACKEND_SENT') {
+      // Step A: Primary resend via Backend Server (Render Cloud IP)
+      try {
+        console.log('[Auth] Resending 4-digit SMS OTP via server for', formattedPhone);
+        const backendRes = await sendCustomerOtp(formattedPhone, 'sms');
+        if (backendRes && (backendRes.success || backendRes.reqId)) {
+          newReqId = backendRes.reqId || 'BACKEND_SENT';
+          resent = true;
+        }
+      } catch (serverResendErr: any) {
+        console.warn('[Auth] Server resend note:', serverResendErr?.message);
+      }
+
+      // Step B: Fallback client SDK retry
+      if (!resent && reqId && reqId !== 'BACKEND_SENT') {
         try {
           if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
             await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
@@ -380,18 +403,12 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             resent = true;
           }
         } catch (sdkRetryErr: any) {
-          console.warn('[MSG91 SDK] retryOTP failed (falling back to backend):', sdkRetryErr?.message);
+          console.warn('[MSG91 SDK] retryOTP failed:', sdkRetryErr?.message);
         }
       }
 
-      if (!resent) {
-        const backendRes = await sendCustomerOtp(formattedPhone, 'sms');
-        if (backendRes && backendRes.success) {
-          newReqId = backendRes.reqId || 'BACKEND_SENT';
-          resent = true;
-        } else {
-          throw new Error(backendRes?.message || 'Failed to resend SMS verification code.');
-        }
+      if (!resent && !newReqId) {
+        throw new Error('Failed to resend SMS verification code. Please wait a moment and try again.');
       }
 
       if (newReqId) {
