@@ -33,32 +33,14 @@ interface CustomerLoginScreenProps {
   onNavigateForgotPassword?: () => void;
 }
 
-export type CustomerLoginMethod = 'email_otp' | 'mobile_otp' | 'password';
-
 export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
   onBack,
   onLoginSuccess,
-  onNavigateForgotPassword,
 }) => {
-  const {
-    sendCustomerOtp,
-    loginCustomerWithOtp,
-    loginCustomerWithWidgetToken,
-    loginCustomer,
-  } = useAuth();
+  const { loginCustomerWithWidgetToken } = useAuth();
 
-  // Three primary login methods clearly visible at the top:
-  // 1. Email OTP
-  // 2. Mobile OTP
-  // 3. Password
-  const [method, setMethod] = useState<CustomerLoginMethod>('email_otp');
-
-  // Input States
-  const [email, setEmail] = useState('');
+  // Mobile OTP States
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-
-  // OTP Verification States
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -70,7 +52,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Handle completion from official MSG91 DefaultWidget
+  // Handle completion from official MSG91 DefaultWidget modal
   const handleVerificationComplete = async (result: any) => {
     setShowWidget(false);
     if (!result) return;
@@ -104,7 +86,11 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
         result.message !== 'cancelled'
       ) {
         let msg = typeof result.message === 'string' ? result.message : '';
-        if (!msg || msg.toLowerCase().includes('verification failed') || msg.toLowerCase().includes('failed')) {
+        if (
+          !msg ||
+          msg.toLowerCase().includes('verification failed') ||
+          msg.toLowerCase().includes('failed')
+        ) {
           msg = 'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया SMS मधील नवीन OTP टाका किंवा Resend SMS वर क्लिक करा.';
         }
         setError(msg);
@@ -112,7 +98,7 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     }
   };
 
-  // Initialize official MSG91 React Native SDK
+  // Initialize official MSG91 React Native SDK on mount
   useEffect(() => {
     try {
       if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
@@ -132,14 +118,6 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     return () => clearInterval(interval);
   }, [cooldown]);
 
-  // Mask email for display (e.g. s***e@gmail.com)
-  const maskEmail = (val: string) => {
-    if (!val || !val.includes('@')) return val;
-    const [local, domain] = val.split('@');
-    if (local.length <= 2) return `${local[0]}***@${domain}`;
-    return `${local[0]}***${local[local.length - 1]}@${domain}`;
-  };
-
   // Mask phone for display (e.g. +91 98******45)
   const maskPhone = (val: string) => {
     const digits = val.replace(/[^0-9]/g, '');
@@ -150,149 +128,103 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
     return val;
   };
 
-  // Switch between the 3 methods
-  const handleSelectMethod = (selected: CustomerLoginMethod) => {
-    if (loading) return;
-    setMethod(selected);
-    setOtpSent(false);
-    setOtp('');
-    setReqId(undefined);
-    setError(null);
-    setSuccess(null);
-  };
-
-  // 1. Send OTP Request (Email OTP or Mobile OTP)
+  // 1. Send OTP Request (Mobile OTP with explicit 4-digit parameter)
   const handleSendOtp = async () => {
     if (loading) return;
     setError(null);
     setSuccess(null);
 
-    if (method === 'email_otp') {
-      const trimmed = email.trim();
-      if (!trimmed) {
-        setError('Please enter your email address.');
-        return;
+    const cleaned = phone.trim().replace(/[^0-9]/g, '');
+    if (!cleaned) {
+      setError('Please enter your 10-digit mobile number.');
+      return;
+    }
+
+    if (cleaned.length !== 10) {
+      setError('Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+
+    if (!/^[6-9]\d{9}$/.test(cleaned)) {
+      setError('Please enter a valid mobile number starting with 6, 7, 8, or 9.');
+      return;
+    }
+
+    const sdkIdentifier = `91${cleaned}`;
+    const formattedPhone = `+91${cleaned}`;
+
+    if (!MSG91_TOKEN_AUTH) {
+      setError('SMS authentication is not configured. Please restart the app.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Ensure widget is initialized
+      if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
+        await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
       }
 
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(trimmed)) {
-        setError('Please enter a valid email address (e.g. devotee@example.com).');
-        return;
-      }
+      // Send OTP using official MSG91 React Native SDK with explicit 4-digit requirement
+      const sdkRes = await OTPWidget.sendOTP({
+        identifier: sdkIdentifier,
+        otp_length: 4,
+        otpLength: 4,
+      });
 
-      try {
-        setLoading(true);
-        const res = await sendCustomerOtp(trimmed, 'email');
-        setOtpSent(true);
-        setCooldown(res?.cooldownSeconds || 60);
-        setSuccess(
-          res?.message || `A verification code has been sent to ${maskEmail(trimmed)}.`,
+      if (sdkRes?.type !== 'success') {
+        throw new Error(
+          sdkRes?.message || 'Failed to dispatch SMS verification code.',
         );
-      } catch (e: any) {
-        setError(
-          e.message ||
-            'Failed to deliver email verification code. Please check your email and try again.',
-        );
-      } finally {
-        setLoading(false);
       }
-    } else if (method === 'mobile_otp') {
-      // Mobile SMS OTP via official MSG91 React Native SDK ONLY
-      const cleaned = phone.trim().replace(/[^0-9]/g, '');
-      if (!cleaned) {
-        setError('Please enter your 10-digit mobile number.');
+
+      // Handle Invisible OTP / Direct Verification (if silent network auth succeeded)
+      const directToken =
+        sdkRes?.invisibleVerified === true
+          ? sdkRes?.['access-token'] ||
+            sdkRes?.accessToken ||
+            (typeof sdkRes?.message === 'string' ? sdkRes.message : undefined)
+          : sdkRes?.['access-token'] || sdkRes?.accessToken;
+
+      if (directToken) {
+        const res = await loginCustomerWithWidgetToken(formattedPhone, directToken);
+        if (res.user?.role === 'PANDIT') {
+          setSuccess(`Namaste Pt. ${res.user.firstName || ''}! Redirecting to Pandit Portal...`);
+        } else {
+          setSuccess('Verification successful! Welcome to DevSutra.');
+        }
+        onLoginSuccess(res.user, Boolean(res.isNewCustomer));
         return;
       }
 
-      if (cleaned.length !== 10) {
-        setError('Please enter a valid 10-digit Indian mobile number.');
-        return;
+      const extractedReqId =
+        sdkRes?.reqId ||
+        sdkRes?.data?.reqId ||
+        (typeof sdkRes?.message === 'string' && sdkRes.message.trim().length > 0
+          ? sdkRes.message.trim()
+          : undefined);
+
+      if (!extractedReqId) {
+        throw new Error('Verification session could not be established. Please try again.');
       }
 
-      if (!/^[6-9]\d{9}$/.test(cleaned)) {
-        setError('Please enter a valid mobile number starting with 6, 7, 8, or 9.');
-        return;
+      setReqId(extractedReqId);
+      setOtpSent(true);
+      setCooldown(60);
+      setSuccess(
+        `A 4-digit verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
+      );
+    } catch (sdkError: any) {
+      let errMsg =
+        sdkError?.message ||
+        'Failed to dispatch SMS verification code. Please check your mobile number and try again.';
+      if (errMsg === 'AuthenticationFailure' || errMsg.includes('AuthenticationFailure')) {
+        errMsg = 'SMS gateway authentication error. Please retry in a moment.';
       }
-
-      const sdkIdentifier = `91${cleaned}`;
-      const formattedPhone = `+91${cleaned}`;
-
-      if (!MSG91_TOKEN_AUTH) {
-        setError(
-          'SMS authentication is not configured. Please sign in using Email OTP or restart the app.',
-        );
-        return;
-      }
-
-      try {
-        setLoading(true);
-
-        // Ensure widget is initialized
-        if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
-          await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
-        }
-
-        // Send OTP using official MSG91 React Native SDK
-        const sdkRes = await OTPWidget.sendOTP({ identifier: sdkIdentifier });
-
-        if (sdkRes?.type !== 'success') {
-          throw new Error(
-            sdkRes?.message || 'Failed to dispatch SMS verification code.',
-          );
-        }
-
-        // Handle Invisible OTP / Direct Verification (if silent network auth succeeded)
-        const directToken =
-          sdkRes?.invisibleVerified === true
-            ? sdkRes?.['access-token'] ||
-              sdkRes?.accessToken ||
-              (typeof sdkRes?.message === 'string' ? sdkRes.message : undefined)
-            : sdkRes?.['access-token'] || sdkRes?.accessToken;
-
-        if (directToken) {
-          const res = await loginCustomerWithWidgetToken(formattedPhone, directToken);
-          if (res.user?.role === 'PANDIT') {
-            setSuccess(`Namaste Pt. ${res.user.firstName || ''}! Redirecting to Pandit Portal...`);
-          } else {
-            setSuccess('Verification successful!');
-          }
-          onLoginSuccess(res.user, Boolean(res.isNewCustomer));
-          return;
-        }
-
-        // As documented in official SDK Readme (line 113) and DefaultWidget/services/otpService.ts:
-        // sendOTP returns { type: 'success', message: '<reqId>' }
-        const extractedReqId =
-          sdkRes?.reqId ||
-          sdkRes?.data?.reqId ||
-          (typeof sdkRes?.message === 'string' && sdkRes.message.trim().length > 0
-            ? sdkRes.message.trim()
-            : undefined);
-
-        if (!extractedReqId) {
-          throw new Error(
-            'Verification session could not be established. Please try again.',
-          );
-        }
-
-        setReqId(extractedReqId);
-        setOtpSent(true);
-        setCooldown(60);
-        setSuccess(
-          `A 4-digit verification code has been sent via SMS to ${maskPhone(formattedPhone)}.`,
-        );
-      } catch (sdkError: any) {
-        // SDK failure stops here and reports the error. NO fallback to old REST API.
-        let errMsg =
-          sdkError?.message ||
-          'Failed to dispatch SMS verification code. Please check your mobile number and try again.';
-        if (errMsg === 'AuthenticationFailure' || errMsg.includes('AuthenticationFailure')) {
-          errMsg = 'SMS gateway authentication error. Please retry in a moment or sign in using Email OTP.';
-        }
-        setError(errMsg);
-      } finally {
-        setLoading(false);
-      }
+      setError(errMsg);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -308,211 +240,155 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
       return;
     }
 
-    if (method === 'mobile_otp') {
-      const cleanPhone = `+91${phone.trim().replace(/[^0-9]/g, '')}`;
+    const cleanPhone = `+91${phone.trim().replace(/[^0-9]/g, '')}`;
 
-      // Never call verifyOTP with an empty reqId
-      if (!reqId) {
-        setError('Verification session expired or missing. Please request a new verification code.');
-        setOtpSent(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-
-        // 1. Verify OTP strictly through official MSG91 React Native SDK
-        let accessToken: string | undefined = undefined;
-        try {
-          if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
-            await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
-          }
-
-          const verifyRes = await OTPWidget.verifyOTP({
-            reqId,
-            otp: cleanOtp,
-          });
-
-          if (
-            verifyRes?.type === 'error' ||
-            verifyRes?.type === 'failed' ||
-            verifyRes?.status === 'fail' ||
-            (verifyRes as any)?.success === false ||
-            (typeof verifyRes?.message === 'string' &&
-              verifyRes.message.toLowerCase().includes('failed'))
-          ) {
-            let msg = verifyRes?.message;
-            if (
-              !msg ||
-              msg.toLowerCase().includes('verification failed') ||
-              msg.toLowerCase().includes('failed')
-            ) {
-              msg = 'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा किंवा Resend SMS वर क्लिक करा.';
-            }
-            throw new Error(msg);
-          }
-
-          accessToken =
-            verifyRes?.['access-token'] ||
-            verifyRes?.accessToken ||
-            verifyRes?.data?.['access-token'] ||
-            verifyRes?.data?.accessToken ||
-            (verifyRes?.type === 'success' &&
-            typeof verifyRes?.message === 'string' &&
-            verifyRes.message.trim().length > 0
-              ? verifyRes.message.trim()
-              : undefined);
-        } catch (sdkVerifyErr: any) {
-          let errMsg =
-            sdkVerifyErr?.message ||
-            'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा.';
-          if (
-            errMsg.toLowerCase().includes('verification failed') ||
-            errMsg.toLowerCase().includes('failed')
-          ) {
-            errMsg = 'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा किंवा Resend SMS वर क्लिक करा.';
-          }
-          setError(errMsg);
-          setLoading(false);
-          return;
-        }
-
-        // 2. Validate that an Access Token was returned by MSG91
-        if (!accessToken) {
-          setError('चुकीचा OTP पडताळणी कोड (Invalid OTP). कृपया पुन्हा तपासा किंवा Resend SMS करा.');
-          setLoading(false);
-          return;
-        }
-
-        // 3. Cryptographically validate token with NestJS backend
-        // Never trust client-side OTP success alone! Never fallback to loginCustomerWithOtp!
-        const res = await loginCustomerWithWidgetToken(cleanPhone, accessToken);
-
-        if (res.user?.role === 'PANDIT') {
-          setSuccess(`Namaste Pt. ${res.user.firstName || ''}! Redirecting to Pandit Portal...`);
-        } else {
-          setSuccess('Verification successful! Welcome to DevSutra.');
-        }
-        onLoginSuccess(res.user, Boolean(res.isNewCustomer));
-      } catch (e: any) {
-        let msg = e.message || 'पडताळणी अयशस्वी झाली. कृपया पुन्हा प्रयत्न करा.';
-        const lower = msg.toLowerCase();
-        if (
-          lower.includes('verification failed') ||
-          lower.includes('authentication') ||
-          lower.includes('unauthorized') ||
-          lower.includes('invalid')
-        ) {
-          msg = 'पडताळणी अयशस्वी झाली किंवा कोड कालबाह्य झाला आहे. कृपया Resend SMS वर क्लिक करून नवीन कोडने प्रयत्न करा.';
-        }
-        setError(msg);
-      } finally {
-        setLoading(false);
-      }
+    if (!reqId) {
+      setError('Verification session expired or missing. Please request a new verification code.');
+      setOtpSent(false);
       return;
     }
 
-    // Email OTP Flow
-    const identifier = email.trim();
-
     try {
       setLoading(true);
-      const res = await loginCustomerWithOtp(identifier, cleanOtp, undefined, reqId);
+
+      // 1. Verify OTP strictly through official MSG91 React Native SDK
+      let accessToken: string | undefined = undefined;
+      try {
+        if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
+          await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
+        }
+
+        const verifyRes = await OTPWidget.verifyOTP({
+          reqId,
+          otp: cleanOtp,
+        });
+
+        if (
+          verifyRes?.type === 'error' ||
+          verifyRes?.type === 'failed' ||
+          verifyRes?.status === 'fail' ||
+          (verifyRes as any)?.success === false ||
+          (typeof verifyRes?.message === 'string' &&
+            verifyRes.message.toLowerCase().includes('failed'))
+        ) {
+          let msg = verifyRes?.message;
+          if (
+            !msg ||
+            msg.toLowerCase().includes('verification failed') ||
+            msg.toLowerCase().includes('failed')
+          ) {
+            msg = 'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा किंवा Resend SMS वर क्लिक करा.';
+          }
+          throw new Error(msg);
+        }
+
+        accessToken =
+          verifyRes?.['access-token'] ||
+          verifyRes?.accessToken ||
+          verifyRes?.data?.['access-token'] ||
+          verifyRes?.data?.accessToken ||
+          (verifyRes?.type === 'success' &&
+          typeof verifyRes?.message === 'string' &&
+          verifyRes.message.trim().length > 0
+            ? verifyRes.message.trim()
+            : undefined);
+      } catch (sdkVerifyErr: any) {
+        let errMsg =
+          sdkVerifyErr?.message ||
+          'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा.';
+        if (
+          errMsg.toLowerCase().includes('verification failed') ||
+          errMsg.toLowerCase().includes('failed')
+        ) {
+          errMsg = 'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा किंवा Resend SMS वर क्लिक करा.';
+        }
+        setError(errMsg);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Validate that an Access Token was returned by MSG91
+      if (!accessToken) {
+        setError('चुकीचा OTP पडताळणी कोड (Invalid OTP). कृपया पुन्हा तपासा किंवा Resend SMS करा.');
+        setLoading(false);
+        return;
+      }
+
+      // 3. Cryptographically validate token with NestJS backend
+      const res = await loginCustomerWithWidgetToken(cleanPhone, accessToken);
+
       if (res.user?.role === 'PANDIT') {
         setSuccess(`Namaste Pt. ${res.user.firstName || ''}! Redirecting to Pandit Portal...`);
       } else {
-        setSuccess('Verification successful!');
+        setSuccess('Verification successful! Welcome to DevSutra.');
       }
       onLoginSuccess(res.user, Boolean(res.isNewCustomer));
     } catch (e: any) {
-      setError(e.message || 'Invalid or expired verification code. Please try again.');
+      let msg = e.message || 'पडताळणी अयशस्वी झाली. कृपया पुन्हा प्रयत्न करा.';
+      const lower = msg.toLowerCase();
+      if (
+        lower.includes('verification failed') ||
+        lower.includes('authentication') ||
+        lower.includes('unauthorized') ||
+        lower.includes('invalid')
+      ) {
+        msg = 'पडताळणी अयशस्वी झाली किंवा कोड कालबाह्य झाला आहे. कृपया Resend SMS वर क्लिक करून नवीन कोडने प्रयत्न करा.';
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  // 3. Resend OTP Request (Email OTP via backend, Mobile OTP via SDK retryOTP)
+  // 3. Resend OTP Request (Official SDK retryOTP with SMS channel 11)
   const handleResendOtp = async () => {
     if (loading || cooldown > 0) return;
     setError(null);
     setSuccess(null);
 
-    if (method === 'email_otp') {
-      // Email OTP resend continues using existing backend flow
-      return handleSendOtp();
-    }
-
-    if (method === 'mobile_otp') {
-      if (!reqId) {
-        setError('No active verification session found. Please send a new OTP first.');
-        return;
-      }
-
-      try {
-        setLoading(true);
-
-        if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
-          await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
-        }
-
-        // Official SDK retryOTP with SMS channel 11
-        const retryRes = await OTPWidget.retryOTP({
-          reqId,
-          retryChannel: 11,
-        });
-
-        // Do not show resend success unless the SDK explicitly confirms success (type === 'success')
-        if (retryRes?.type !== 'success') {
-          throw new Error(
-            retryRes?.message || 'Failed to resend SMS verification code.',
-          );
-        }
-
-        // As documented in DefaultWidget/services/otpService.ts:
-        // const newReqId = response.reqId || response.message;
-        // If a new reqId is returned, update state; otherwise retain the existing reqId
-        const newReqId =
-          retryRes?.reqId ||
-          retryRes?.data?.reqId ||
-          (typeof retryRes?.message === 'string' && retryRes.message.trim().length > 0
-            ? retryRes.message.trim()
-            : undefined);
-
-        if (newReqId) {
-          setReqId(newReqId);
-        }
-
-        setCooldown(60);
-        setSuccess('Verification code resent via SMS.');
-      } catch (retryErr: any) {
-        const errorMsg =
-          retryErr?.message ||
-          'Failed to resend SMS code. Please wait and try again.';
-        setError(errorMsg);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  // 3. Password Login
-  const handlePasswordLogin = async () => {
-    if (loading) return;
-    setError(null);
-    setSuccess(null);
-
-    const trimmed = email.trim();
-    if (!trimmed || !password) {
-      setError('Please enter your email and password.');
+    if (!reqId) {
+      setError('No active verification session found. Please send a new OTP first.');
       return;
     }
 
     try {
       setLoading(true);
-      const res = await loginCustomer(trimmed, password);
-      onLoginSuccess(res.user, false);
-    } catch (e: any) {
-      setError(e.message || 'Login failed. Please check your credentials.');
+
+      if (MSG91_WIDGET_ID && MSG91_TOKEN_AUTH) {
+        await OTPWidget.initializeWidget(MSG91_WIDGET_ID, MSG91_TOKEN_AUTH);
+      }
+
+      const retryRes = await OTPWidget.retryOTP({
+        reqId,
+        retryChannel: 11,
+        otp_length: 4,
+        otpLength: 4,
+      });
+
+      if (retryRes?.type !== 'success') {
+        throw new Error(
+          retryRes?.message || 'Failed to resend SMS verification code.',
+        );
+      }
+
+      const newReqId =
+        retryRes?.reqId ||
+        retryRes?.data?.reqId ||
+        (typeof retryRes?.message === 'string' && retryRes.message.trim().length > 0
+          ? retryRes.message.trim()
+          : undefined);
+
+      if (newReqId) {
+        setReqId(newReqId);
+      }
+
+      setCooldown(60);
+      setSuccess('A 4-digit verification code has been resent via SMS.');
+    } catch (retryErr: any) {
+      const errorMsg =
+        retryErr?.message ||
+        'Failed to resend SMS code. Please wait and try again.';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -544,86 +420,8 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             <Text style={styles.mantraText}>॥ ॐ श्री गणेशाय नमः ॥</Text>
             <Text style={styles.title}>Welcome to DevSutra</Text>
             <Text style={styles.subtitle}>
-              Sign in to book certified Vedic priests, sacred rituals & pure samagri for your family.
+              Sign in with your mobile number to book certified Vedic priests, sacred rituals & pure samagri.
             </Text>
-          </View>
-
-          {/* THREE VISIBLE LOGIN METHODS: EMAIL OTP | MOBILE OTP | PASSWORD */}
-          <View style={styles.tabContainer}>
-            <TouchableOpacity
-              onPress={() => handleSelectMethod('email_otp')}
-              style={[
-                styles.tabButton,
-                method === 'email_otp' && styles.tabButtonActive,
-              ]}
-              disabled={loading}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="mail-outline"
-                size={15}
-                color={method === 'email_otp' ? colors.card : colors.textLight}
-              />
-              <Text
-                style={[
-                  styles.tabButtonText,
-                  method === 'email_otp' && styles.tabButtonTextActive,
-                ]}
-                numberOfLines={1}
-              >
-                Email OTP
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => handleSelectMethod('mobile_otp')}
-              style={[
-                styles.tabButton,
-                method === 'mobile_otp' && styles.tabButtonActive,
-              ]}
-              disabled={loading}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="phone-portrait-outline"
-                size={15}
-                color={method === 'mobile_otp' ? colors.card : colors.textLight}
-              />
-              <Text
-                style={[
-                  styles.tabButtonText,
-                  method === 'mobile_otp' && styles.tabButtonTextActive,
-                ]}
-                numberOfLines={1}
-              >
-                Mobile OTP
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => handleSelectMethod('password')}
-              style={[
-                styles.tabButton,
-                method === 'password' && styles.tabButtonActive,
-              ]}
-              disabled={loading}
-              activeOpacity={0.85}
-            >
-              <Ionicons
-                name="key-outline"
-                size={15}
-                color={method === 'password' ? colors.card : colors.textLight}
-              />
-              <Text
-                style={[
-                  styles.tabButtonText,
-                  method === 'password' && styles.tabButtonTextActive,
-                ]}
-                numberOfLines={1}
-              >
-                Password
-              </Text>
-            </TouchableOpacity>
           </View>
 
           {/* Error Message Box */}
@@ -642,332 +440,147 @@ export const CustomerLoginScreen: React.FC<CustomerLoginScreenProps> = ({
             </View>
           )}
 
-          {/* Main Login Card */}
+          {/* Main Mobile OTP Card */}
           <View style={styles.formCard}>
-            {method === 'email_otp' ? (
-              // ==========================================
-              // 1. EMAIL OTP FLOW
-              // ==========================================
-              !otpSent ? (
-                // Step 1: Email Input + Send OTP
-                <View>
-                  <Input
-                    label="Email Address *"
-                    placeholder="devotee@example.com"
-                    value={email}
-                    onChangeText={(val) => {
-                      setEmail(val);
-                      setError(null);
-                    }}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    leftIcon="mail-outline"
-                    editable={!loading}
-                  />
-
-                  <View style={styles.infoRow}>
-                    <Ionicons
-                      name="shield-checkmark-outline"
-                      size={15}
-                      color={colors.goldDark}
-                    />
-                    <Text style={styles.infoRowText}>
-                      We will email you a verification code. No password required!
-                    </Text>
-                  </View>
-
-                  <Button
-                    title="Verify via Mobile OTP"
-                    variant="primary"
-                    size="lg"
-                    loading={loading}
-                    disabled={loading}
-                    onPress={() => {
-                      setError(null);
-                      setShowWidget(true);
-                    }}
-                    icon={
-                      <Ionicons
-                        name="shield-checkmark-outline"
-                        size={18}
-                        color={colors.textWhite}
-                      />
-                    }
-                    style={{ marginTop: 16 }}
-                  />
-
-                  <TouchableOpacity
-                    onPress={handleSendOtp}
-                    disabled={loading}
-                    activeOpacity={0.7}
-                    style={{ marginTop: 14, alignItems: 'center', paddingVertical: 4 }}
-                  >
-                    <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }}>
-                      Or send SMS verification code directly
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                // Step 2: 6-Digit Email OTP Verification
-                <View>
-                  <View style={styles.verifyTargetBox}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.verifyTargetLabel}>Verification code sent to:</Text>
-                      <Text style={styles.verifyTargetEmail}>{maskEmail(email)}</Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => {
-                        if (loading) return;
-                        setOtpSent(false);
-                        setOtp('');
-                        setReqId(undefined);
-                        setError(null);
-                        setSuccess(null);
-                      }}
-                      style={styles.editTargetBtn}
-                      disabled={loading}
-                    >
-                      <Ionicons name="pencil" size={13} color={colors.primary} />
-                      <Text style={styles.editTargetBtnText}>Change</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <Input
-                    label="Enter 4-Digit Verification Code (४-अंकी OTP) *"
-                    placeholder="• • • •"
-                    value={otp}
-                    onChangeText={(val) => {
-                      setOtp(val.replace(/[^0-9]/g, ''));
-                      setError(null);
-                    }}
-                    keyboardType="number-pad"
-                    maxLength={4}
-                    leftIcon="lock-closed-outline"
-                    style={styles.otpInputText}
-                    editable={!loading}
-                  />
-
-                  <Button
-                    title="Verify OTP"
-                    variant="primary"
-                    size="lg"
-                    loading={loading}
-                    disabled={loading}
-                    onPress={handleVerifyOtp}
-                    icon={<Ionicons name="arrow-forward" size={18} color={colors.textWhite} />}
-                    style={{ marginTop: 12 }}
-                  />
-
-                  {/* Resend Action Row */}
-                  <View style={styles.otpActionsRow}>
-                    {cooldown > 0 ? (
-                      <View style={styles.cooldownWrap}>
-                        <Ionicons name="time-outline" size={14} color={colors.textLight} />
-                        <Text style={styles.cooldownText}>Resend code in {cooldown}s</Text>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        onPress={handleResendOtp}
-                        disabled={loading}
-                        style={styles.resendBtn}
-                      >
-                        <Ionicons name="refresh" size={14} color={colors.primary} />
-                        <Text style={styles.resendLink}>Resend Code</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              )
-            ) : method === 'mobile_otp' ? (
-              // ==========================================
-              // 2. MOBILE OTP FLOW (SMS VIA MSG91)
-              // ==========================================
-              !otpSent ? (
-                // Step 1: Mobile Input with +91 + Send OTP
-                <View>
-                  <View style={styles.phoneInputGroup}>
-                    <Text style={styles.phoneLabel}>Mobile Number *</Text>
-                    <View style={styles.phoneInputRow}>
-                      <View style={styles.countryCodeBadge}>
-                        <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
-                      </View>
-                      <TextInput
-                        style={styles.phoneNumberInput}
-                        placeholder="98220 12345"
-                        placeholderTextColor={colors.textMuted}
-                        value={phone}
-                        onChangeText={(val) => {
-                          const cleaned = val.replace(/[^0-9]/g, '').slice(0, 10);
-                          setPhone(cleaned);
-                          setError(null);
-                        }}
-                        keyboardType="phone-pad"
-                        maxLength={10}
-                        editable={!loading}
-                        autoFocus={method === 'mobile_otp'}
-                      />
-                    </View>
-                  </View>
-
-                  <View style={styles.infoRow}>
-                    <Ionicons
-                      name="chatbox-ellipses-outline"
-                      size={15}
-                      color={colors.goldDark}
-                    />
-                    <Text style={styles.infoRowText}>
-                      We will send an SMS verification code to your Indian mobile number via MSG91.
-                    </Text>
-                  </View>
-
-                  <Button
-                    title="Verify via Mobile OTP"
-                    variant="primary"
-                    size="lg"
-                    loading={loading}
-                    disabled={loading}
-                    onPress={() => {
-                      setError(null);
-                      setShowWidget(true);
-                    }}
-                    icon={
-                      <Ionicons
-                        name="shield-checkmark-outline"
-                        size={18}
-                        color={colors.textWhite}
-                      />
-                    }
-                    style={{ marginTop: 16 }}
-                  />
-
-                  <TouchableOpacity
-                    onPress={handleSendOtp}
-                    disabled={loading}
-                    activeOpacity={0.7}
-                    style={{ marginTop: 14, alignItems: 'center', paddingVertical: 4 }}
-                  >
-                    <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }}>
-                      Or send SMS verification code directly
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                // Step 2: 6-Digit Mobile SMS OTP Verification
-                <View>
-                  <View style={styles.verifyTargetBox}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.verifyTargetLabel}>SMS verification code sent to:</Text>
-                      <Text style={styles.verifyTargetEmail}>{maskPhone(`+91${phone}`)}</Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => {
-                        if (loading) return;
-                        setOtpSent(false);
-                        setOtp('');
-                        setReqId(undefined);
-                        setError(null);
-                        setSuccess(null);
-                      }}
-                      style={styles.editTargetBtn}
-                      disabled={loading}
-                    >
-                      <Ionicons name="pencil" size={13} color={colors.primary} />
-                      <Text style={styles.editTargetBtnText}>Change</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <Input
-                    label="Enter 4-Digit Verification Code (४-अंकी OTP) *"
-                    placeholder="• • • •"
-                    value={otp}
-                    onChangeText={(val) => {
-                      setOtp(val.replace(/[^0-9]/g, ''));
-                      setError(null);
-                    }}
-                    keyboardType="number-pad"
-                    maxLength={4}
-                    leftIcon="lock-closed-outline"
-                    style={styles.otpInputText}
-                    editable={!loading}
-                  />
-
-                  <Button
-                    title="Verify OTP"
-                    variant="primary"
-                    size="lg"
-                    loading={loading}
-                    disabled={loading}
-                    onPress={handleVerifyOtp}
-                    icon={<Ionicons name="arrow-forward" size={18} color={colors.textWhite} />}
-                    style={{ marginTop: 12 }}
-                  />
-
-                  {/* Resend Action Row */}
-                  <View style={styles.otpActionsRow}>
-                    {cooldown > 0 ? (
-                      <View style={styles.cooldownWrap}>
-                        <Ionicons name="time-outline" size={14} color={colors.textLight} />
-                        <Text style={styles.cooldownText}>Resend SMS in {cooldown}s</Text>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        onPress={handleResendOtp}
-                        disabled={loading}
-                        style={styles.resendBtn}
-                      >
-                        <Ionicons name="refresh" size={14} color={colors.primary} />
-                        <Text style={styles.resendLink}>Resend SMS Code</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              )
-            ) : (
-              // ==========================================
-              // 3. PASSWORD LOGIN FLOW
-              // ==========================================
+            {!otpSent ? (
+              // Step 1: Mobile Number Input + Send OTP
               <View>
-                <Input
-                  label="Email Address *"
-                  placeholder="devotee@example.com"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  leftIcon="mail-outline"
-                  editable={!loading}
-                />
+                <View style={styles.phoneInputGroup}>
+                  <Text style={styles.phoneLabel}>Mobile Number *</Text>
+                  <View style={styles.phoneInputRow}>
+                    <View style={styles.countryCodeBadge}>
+                      <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
+                    </View>
+                    <TextInput
+                      style={styles.phoneNumberInput}
+                      placeholder="98220 12345"
+                      placeholderTextColor={colors.textMuted}
+                      value={phone}
+                      onChangeText={(val) => {
+                        const cleaned = val.replace(/[^0-9]/g, '').slice(0, 10);
+                        setPhone(cleaned);
+                        setError(null);
+                      }}
+                      keyboardType="phone-pad"
+                      maxLength={10}
+                      editable={!loading}
+                      autoFocus
+                    />
+                  </View>
+                </View>
 
-                <Input
-                  label="Password *"
-                  placeholder="••••••••••••"
-                  value={password}
-                  onChangeText={setPassword}
-                  isPassword
-                  leftIcon="lock-closed-outline"
-                  editable={!loading}
-                />
-
-                {onNavigateForgotPassword && (
-                  <TouchableOpacity
-                    onPress={onNavigateForgotPassword}
-                    style={styles.forgotBtn}
-                    disabled={loading}
-                  >
-                    <Text style={styles.forgotText}>Forgot Password?</Text>
-                  </TouchableOpacity>
-                )}
+                <View style={styles.infoRow}>
+                  <Ionicons
+                    name="chatbox-ellipses-outline"
+                    size={15}
+                    color={colors.goldDark}
+                  />
+                  <Text style={styles.infoRowText}>
+                    We will send a 4-digit SMS verification code to your Indian mobile number via MSG91.
+                  </Text>
+                </View>
 
                 <Button
-                  title="Sign In with Password"
+                  title="Send 4-Digit OTP"
                   variant="primary"
                   size="lg"
                   loading={loading}
                   disabled={loading}
-                  onPress={handlePasswordLogin}
-                  style={{ marginTop: 8 }}
+                  onPress={handleSendOtp}
+                  icon={
+                    <Ionicons
+                      name="paper-plane-outline"
+                      size={18}
+                      color={colors.textWhite}
+                    />
+                  }
+                  style={{ marginTop: 16 }}
                 />
+
+                <TouchableOpacity
+                  onPress={() => {
+                    setError(null);
+                    setShowWidget(true);
+                  }}
+                  disabled={loading}
+                  activeOpacity={0.7}
+                  style={{ marginTop: 14, alignItems: 'center', paddingVertical: 4 }}
+                >
+                  <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }}>
+                    Or verify via Official MSG91 Widget
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              // Step 2: 4-Digit Mobile SMS OTP Verification
+              <View>
+                <View style={styles.verifyTargetBox}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.verifyTargetLabel}>SMS verification code sent to:</Text>
+                    <Text style={styles.verifyTargetEmail}>{maskPhone(`+91${phone}`)}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (loading) return;
+                      setOtpSent(false);
+                      setOtp('');
+                      setReqId(undefined);
+                      setError(null);
+                      setSuccess(null);
+                    }}
+                    style={styles.editTargetBtn}
+                    disabled={loading}
+                  >
+                    <Ionicons name="pencil" size={13} color={colors.primary} />
+                    <Text style={styles.editTargetBtnText}>Change</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Input
+                  label="Enter 4-Digit Verification Code (४-अंकी OTP) *"
+                  placeholder="• • • •"
+                  value={otp}
+                  onChangeText={(val) => {
+                    setOtp(val.replace(/[^0-9]/g, ''));
+                    setError(null);
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  leftIcon="lock-closed-outline"
+                  style={styles.otpInputText}
+                  editable={!loading}
+                  autoFocus
+                />
+
+                <Button
+                  title="Verify OTP"
+                  variant="primary"
+                  size="lg"
+                  loading={loading}
+                  disabled={loading}
+                  onPress={handleVerifyOtp}
+                  icon={<Ionicons name="arrow-forward" size={18} color={colors.textWhite} />}
+                  style={{ marginTop: 12 }}
+                />
+
+                {/* Resend Action Row */}
+                <View style={styles.otpActionsRow}>
+                  {cooldown > 0 ? (
+                    <View style={styles.cooldownWrap}>
+                      <Ionicons name="time-outline" size={14} color={colors.textLight} />
+                      <Text style={styles.cooldownText}>Resend SMS in {cooldown}s</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={handleResendOtp}
+                      disabled={loading}
+                      style={styles.resendBtn}
+                    >
+                      <Ionicons name="refresh" size={14} color={colors.primary} />
+                      <Text style={styles.resendLink}>Resend SMS Code</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             )}
           </View>
@@ -1011,16 +624,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderLight,
     backgroundColor: colors.card,
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.background,
   },
   topBarTitle: {
     fontSize: 16,
@@ -1033,67 +646,85 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   mantraText: {
     fontSize: 13,
+    color: colors.goldDark,
     fontWeight: '700',
-    color: colors.gold,
     marginTop: 8,
-    marginBottom: 4,
+    letterSpacing: 0.5,
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
     color: colors.text,
+    marginTop: 6,
     textAlign: 'center',
-    marginBottom: 6,
   },
   subtitle: {
     fontSize: 13,
     color: colors.textLight,
     textAlign: 'center',
-    lineHeight: 18,
-    maxWidth: 320,
+    marginTop: 6,
+    lineHeight: 19,
+    paddingHorizontal: 12,
   },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(128, 0, 32, 0.06)',
-    borderRadius: 14,
-    padding: 4,
-    marginBottom: 16,
-  },
-  tabButton: {
-    flex: 1,
+  errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 11,
-    paddingHorizontal: 2,
+    backgroundColor: '#FDE8E8',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 10,
+    marginBottom: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#F8B4B4',
   },
-  tabButtonActive: {
-    backgroundColor: colors.primary,
-    shadowColor: colors.primary,
+  errorBoxText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: colors.error,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  successBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DEF7EC',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#BCF0DA',
+  },
+  successBoxText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: colors.success,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  formCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
     elevation: 2,
   },
-  tabButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textLight,
-  },
-  tabButtonTextActive: {
-    color: colors.card,
-  },
   phoneInputGroup: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   phoneLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: colors.text,
     marginBottom: 6,
@@ -1101,87 +732,43 @@ const styles = StyleSheet.create({
   phoneInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 14,
-    height: 50,
+    borderRadius: 10,
+    backgroundColor: '#FAFAF8',
     overflow: 'hidden',
   },
   countryCodeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(128, 0, 32, 0.06)',
     paddingHorizontal: 12,
-    height: '100%',
+    paddingVertical: 13,
+    backgroundColor: '#F0ECE4',
     borderRightWidth: 1,
     borderRightColor: colors.border,
   },
   countryCodeText: {
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '700',
     color: colors.text,
   },
   phoneNumberInput: {
     flex: 1,
-    height: '100%',
     paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.errorLight,
-    borderWidth: 1,
-    borderColor: colors.error,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-  },
-  errorBoxText: {
-    flex: 1,
-    fontSize: 12,
-    color: colors.error,
-    fontWeight: '600',
-  },
-  successBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-  },
-  successBoxText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#065F46',
-    fontWeight: '600',
-  },
-  formCard: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    elevation: 3,
+    letterSpacing: 1,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
+    gap: 8,
+    backgroundColor: '#FFF9F0',
+    padding: 10,
+    borderRadius: 8,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#FEEBC8',
   },
   infoRowText: {
     flex: 1,
@@ -1193,30 +780,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.background,
-    borderRadius: 12,
+    backgroundColor: '#FFF9F0',
     padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: 10,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FEEBC8',
   },
   verifyTargetLabel: {
     fontSize: 11,
     color: colors.textLight,
+    marginBottom: 2,
   },
   verifyTargetEmail: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: colors.text,
-    marginTop: 2,
+    color: colors.primary,
   },
   editTargetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: 10,
     paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 8,
   },
   editTargetBtnText: {
@@ -1227,7 +816,7 @@ const styles = StyleSheet.create({
   otpInputText: {
     fontSize: 22,
     fontWeight: '800',
-    letterSpacing: 6,
+    letterSpacing: 8,
     textAlign: 'center',
     color: colors.primary,
   },
@@ -1257,16 +846,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: colors.primary,
-  },
-  forgotBtn: {
-    alignSelf: 'flex-end',
-    marginBottom: 16,
-    marginTop: -4,
-  },
-  forgotText: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '600',
   },
   footerTrust: {
     flexDirection: 'row',

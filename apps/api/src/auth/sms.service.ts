@@ -181,6 +181,8 @@ export class SmsService {
         widgetId: this.msg91WidgetId,
         tokenAuth: this.msg91WidgetTokenAuth,
         identifier: mobileNumber,
+        otp_length: 4,
+        otpLength: 4,
       };
 
       const headers: Record<string, string> = {
@@ -380,15 +382,12 @@ export class SmsService {
       new Set(
         [
           '295404AJalkFMerGjU5d8822cb',
-          this.msg91WidgetTokenAuth,
           process.env.MSG91_AUTH_KEY && !process.env.MSG91_AUTH_KEY.startsWith('591944')
             ? process.env.MSG91_AUTH_KEY.trim()
             : undefined,
           process.env.MSG91_MASTER_AUTH_KEY && !process.env.MSG91_MASTER_AUTH_KEY.startsWith('591944')
             ? process.env.MSG91_MASTER_AUTH_KEY.trim()
             : undefined,
-          process.env.MSG91_WIDGET_TOKEN_AUTH?.trim(),
-          process.env.MSG91_TOKEN_AUTH?.trim(),
         ].filter((k): k is string => Boolean(k && k.trim())),
       ),
     );
