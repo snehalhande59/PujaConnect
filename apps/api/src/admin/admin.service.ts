@@ -934,6 +934,11 @@ export class AdminService {
               updatedAt: true,
             },
           },
+          addresses: {
+            select: { fullName: true, city: true, state: true, pincode: true },
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+          },
           _count: {
             select: { bookings: true, orders: true },
           },
@@ -972,7 +977,7 @@ export class AdminService {
       }
     }
 
-    const customersWithLogin = customers.map((c) => {
+    const customersWithLogin = customers.map((c: any) => {
       const login =
         (c.user?.email && loginMap.get(c.user.email)) ||
         (c.user?.phoneNumber && loginMap.get(c.user.phoneNumber)) ||
@@ -981,8 +986,27 @@ export class AdminService {
       const fallbackTime = c.user?.updatedAt || c.user?.createdAt || c.createdAt;
       const fallbackMethod = c.user?.phoneNumber ? 'MOBILE_OTP' : 'EMAIL_OTP';
 
+      const addressName = c.addresses?.[0]?.fullName?.trim();
+      const rawFirst = (c.firstName || '').trim();
+      const rawLast = (c.lastName || '').trim();
+      const isDefaultDevotee = !rawFirst || rawFirst.toLowerCase() === 'devotee';
+
+      let resolvedFirstName = rawFirst;
+      let resolvedLastName = rawLast;
+
+      if (isDefaultDevotee && addressName) {
+        const parts = addressName.split(/\s+/);
+        resolvedFirstName = parts[0] || 'Devotee';
+        resolvedLastName = parts.slice(1).join(' ') || '';
+      }
+
       return {
         ...c,
+        firstName: resolvedFirstName,
+        lastName: resolvedLastName,
+        city: c.city || c.addresses?.[0]?.city || null,
+        state: c.state || c.addresses?.[0]?.state || null,
+        pincode: c.pincode || c.addresses?.[0]?.pincode || null,
         lastLoginAt: login ? login.lastLoginAt : fallbackTime,
         lastLoginMethod: login ? login.method : fallbackMethod,
       };

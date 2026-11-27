@@ -95,13 +95,28 @@ export default function AdminCustomersPage() {
     setSelectedCustomerId(customer.id);
     setActiveTab('details');
     setCustomerDetails(null);
+
+    const addressFullName = customer.addresses?.[0]?.fullName?.trim();
+    const rawFirst = (customer.firstName || '').trim();
+    const isDefaultDevotee = !rawFirst || rawFirst.toLowerCase() === 'devotee';
+
+    let initFirst = rawFirst;
+    let initLast = customer.lastName || '';
+    if (isDefaultDevotee && addressFullName) {
+      const parts = addressFullName.split(/\s+/);
+      initFirst = parts[0] || '';
+      initLast = parts.slice(1).join(' ') || '';
+    } else if (isDefaultDevotee) {
+      initFirst = '';
+    }
+
     setEditForm({
-      firstName: customer.firstName || '',
-      lastName: customer.lastName || '',
+      firstName: initFirst,
+      lastName: initLast,
       phoneNumber: customer.user?.phoneNumber || '',
-      city: customer.city || '',
-      state: customer.state || '',
-      pincode: customer.pincode || '',
+      city: customer.city || customer.addresses?.[0]?.city || '',
+      state: customer.state || customer.addresses?.[0]?.state || '',
+      pincode: customer.pincode || customer.addresses?.[0]?.pincode || '',
       isActive: customer.user?.isActive !== false,
     });
 
@@ -113,7 +128,24 @@ export default function AdminCustomersPage() {
       });
       if (res.ok) {
         const json = await res.json();
-        setCustomerDetails(json.data || json);
+        const details = json.data || json;
+        setCustomerDetails(details);
+
+        const addrName = details.addresses?.[0]?.fullName?.trim();
+        const dFirst = (details.firstName || '').trim();
+        const dIsDefault = !dFirst || dFirst.toLowerCase() === 'devotee';
+
+        if (dIsDefault && addrName) {
+          const parts = addrName.split(/\s+/);
+          setEditForm((prev) => ({
+            ...prev,
+            firstName: prev.firstName || parts[0] || '',
+            lastName: prev.lastName || parts.slice(1).join(' ') || '',
+            city: details.city || details.addresses?.[0]?.city || prev.city,
+            state: details.state || details.addresses?.[0]?.state || prev.state,
+            pincode: details.pincode || details.addresses?.[0]?.pincode || prev.pincode,
+          }));
+        }
       }
     } catch (e) {
       console.error('Failed to load customer details:', e);
@@ -355,59 +387,95 @@ export default function AdminCustomersPage() {
               <p className="text-stone-400 mt-1">Try another search or filter.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-stone-700">
+            <div className="overflow-x-auto relative">
+              <table className="w-full text-left text-xs text-stone-700 table-fixed">
                 <thead className="bg-stone-50 text-stone-500 uppercase text-[10px] font-bold border-b border-stone-200 tracking-wider">
                   <tr>
-                    <th className="p-4">Devotee Name</th>
-                    <th className="p-4">Registered Email</th>
-                    <th className="p-4">Phone Number</th>
-                    <th className="p-4">City</th>
-                    <th className="p-4">Account Status</th>
-                    <th className="p-4">Total Bookings</th>
-                    <th className="p-4">Registered Date</th>
-                    <th className="p-4">Last Login Activity</th>
-                    <th className="p-4 text-right">Actions</th>
+                    <th className="p-3.5 pl-4 w-[36%]">Devotee & Contact Information</th>
+                    <th className="p-3.5 w-[14%]">City / State</th>
+                    <th className="p-3.5 w-[12%]">Status</th>
+                    <th className="p-3.5 w-[12%]">Bookings</th>
+                    <th className="p-3.5 w-[14%]">Last Activity</th>
+                    <th className="p-3.5 pr-4 text-right sticky right-0 bg-stone-50 z-20 border-l border-stone-200/80 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.08)] w-[12%] min-w-[110px]">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
                   {filteredCustomers.map((c) => {
-                    const name = `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Devotee';
+                    const addressName = c.addresses?.[0]?.fullName?.trim();
+                    const rawName = `${c.firstName || ''} ${c.lastName || ''}`.trim();
+                    const isGenericDevotee = !rawName || rawName.toLowerCase() === 'devotee';
+                    const realName = !isGenericDevotee
+                      ? rawName
+                      : addressName
+                      ? addressName
+                      : c.user?.phoneNumber
+                      ? `User (+91 ${c.user.phoneNumber.replace(/[^0-9]/g, '').slice(-10)})`
+                      : 'Devotee';
+
                     const email = c.user?.email || 'N/A';
+                    const isSystemEmail = email.startsWith('devotee.') && email.includes('@devsutra.in');
                     const phone = c.user?.phoneNumber || 'N/A';
-                    const city = c.city || 'India';
+                    const city = c.city || c.addresses?.[0]?.city || 'India';
+                    const state = c.state || c.addresses?.[0]?.state || '';
                     const isActive = c.user?.isActive !== false;
                     const bookingCount = c._count?.bookings || 0;
                     const regDate = c.createdAt ? new Date(c.createdAt).toLocaleDateString() : 'N/A';
                     const hasLogin = Boolean(c.lastLoginAt);
 
                     return (
-                      <tr key={c.id} className="hover:bg-stone-50/80 transition">
-                        <td className="p-4 font-bold text-stone-900 flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-amber-50 text-amber-700 font-bold flex items-center justify-center text-xs border border-amber-200 shrink-0">
-                            {name.charAt(0).toUpperCase()}
+                      <tr key={c.id} className="group hover:bg-amber-50/30 transition">
+                        {/* 1. Devotee & Contact Information */}
+                        <td className="p-3.5 pl-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-xs border border-amber-300 shrink-0">
+                              {realName.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-stone-900 text-xs truncate">
+                                  {realName}
+                                </span>
+                                {isGenericDevotee && !addressName && (
+                                  <span className="text-[9px] px-1.5 py-0.2 bg-stone-100 text-stone-500 rounded font-medium">
+                                    New
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-stone-600 font-mono">
+                                {phone !== 'N/A' && (
+                                  <span className="inline-flex items-center gap-1 text-stone-900 font-semibold">
+                                    <Phone className="w-3 h-3 text-emerald-600" />
+                                    {phone}
+                                  </span>
+                                )}
+                              </div>
+                              {!isSystemEmail ? (
+                                <span className="block text-[10px] text-stone-400 font-mono truncate">
+                                  {email}
+                                </span>
+                              ) : (
+                                <span className="block text-[9.5px] text-stone-400 font-mono truncate">
+                                  ID: {c.id.slice(0, 13)}...
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <span className="block">{name}</span>
-                            <span className="text-[10px] font-mono text-stone-400 font-normal">
-                              {c.id.slice(0, 8)}...
+                        </td>
+
+                        {/* 2. City */}
+                        <td className="p-3.5 text-stone-600">
+                          <div className="flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span className="font-medium text-stone-800 truncate">
+                              {city}{state ? `, ${state}` : ''}
                             </span>
                           </div>
                         </td>
 
-                        <td className="p-4">
-                          <span className="font-mono text-stone-800 text-[11px]">{email}</span>
-                        </td>
-
-                        <td className="p-4">
-                          <span className="font-mono text-stone-800 text-[11px]">{phone}</span>
-                        </td>
-
-                        <td className="p-4 text-stone-600">
-                          <span>{city}</span>
-                        </td>
-
-                        <td className="p-4">
+                        {/* 3. Account Status */}
+                        <td className="p-3.5">
                           {isActive ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                               <CheckCircle className="w-3 h-3 text-emerald-600" />
@@ -421,49 +489,50 @@ export default function AdminCustomersPage() {
                           )}
                         </td>
 
-                        <td className="p-4">
-                          <span className="px-2.5 py-1 rounded-lg bg-stone-100 text-amber-800 font-bold text-xs border border-stone-200">
+                        {/* 4. Total Bookings */}
+                        <td className="p-3.5">
+                          <span className="px-2 py-0.5 rounded-lg bg-stone-100 text-amber-900 font-bold text-xs border border-stone-200 inline-block">
                             {bookingCount} {bookingCount === 1 ? 'Booking' : 'Bookings'}
                           </span>
                         </td>
 
-                        <td className="p-4 text-stone-500 font-mono text-[11px]">{regDate}</td>
-
-                        <td className="p-4">
+                        {/* 5. Last Activity */}
+                        <td className="p-3.5">
                           {hasLogin ? (
                             <div>
                               <span className="block font-semibold text-stone-800 text-[11px]">
                                 {new Date(c.lastLoginAt).toLocaleDateString()}
                               </span>
-                              <div className="flex items-center gap-1 text-[10px] text-stone-400 font-mono">
+                              <div className="flex items-center gap-1 text-[10px] text-stone-400 font-mono mt-0.5">
                                 <span>
                                   {new Date(c.lastLoginAt).toLocaleTimeString([], {
                                     hour: '2-digit',
                                     minute: '2-digit',
                                   })}
                                 </span>
-                                <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 font-bold text-[9px] border border-amber-200">
+                                <span className="px-1.5 py-0.2 rounded-md bg-amber-50 text-amber-800 font-bold text-[9px] border border-amber-200">
                                   {c.lastLoginMethod === 'MOBILE_OTP'
-                                    ? '📱 Mobile OTP'
+                                    ? '📱 Mobile'
                                     : c.lastLoginMethod === 'EMAIL_OTP'
-                                    ? '✉️ Email OTP'
-                                    : c.lastLoginMethod === 'PASSWORD'
-                                    ? '🔑 Password'
-                                    : c.lastLoginMethod || '📱 Mobile OTP'}
+                                    ? '✉️ Email'
+                                    : '📱 OTP'}
                                 </span>
                               </div>
                             </div>
                           ) : (
-                            <span className="text-stone-400 text-[11px] italic">No login recorded</span>
+                            <span className="text-stone-400 text-[10.5px] font-mono">
+                              Reg: {regDate}
+                            </span>
                           )}
                         </td>
 
-                        <td className="p-4 text-right">
+                        {/* 6. Sticky Actions (ALWAYS VISIBLE WITHOUT SCROLLING!) */}
+                        <td className="p-3.5 pr-4 text-right sticky right-0 bg-white group-hover:bg-amber-50/50 transition z-10 border-l border-stone-200/80 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.08)]">
                           <button
                             onClick={() => openCustomerModal(c)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 rounded-xl text-xs font-semibold transition cursor-pointer shadow-2xs"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs active:scale-95"
                           >
-                            <Eye className="w-3.5 h-3.5 text-stone-500" />
+                            <Edit className="w-3.5 h-3.5" />
                             <span>View / Edit</span>
                           </button>
                         </td>
