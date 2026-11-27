@@ -126,8 +126,9 @@ export class SmsService {
   }
 
   /**
-   * Send actual SMS OTP through MSG91 OTP Widget API
-   * Supports both control.msg91.com and api.msg91.com
+   * Send actual SMS OTP through MSG91 API
+   * Prioritizes Direct v5 OTP with server AuthKey for guaranteed SMS delivery,
+   * then falls back to Widget or Twilio.
    */
   async sendOtpSms(phoneNumber: string): Promise<SendSmsResult> {
     const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
@@ -136,6 +137,37 @@ export class SmsService {
     // Indian mobile format without '+' (e.g. 919822012345)
     const mobileNumber = normalizedPhone.replace(/[^0-9]/g, '');
 
+    // 1. Direct official MSG91 v5 OTP API with server AuthKey (Guaranteed 4-digit SMS OTP delivery)
+    if (this.msg91AuthKey) {
+      try {
+        const endpoints = [
+          `https://control.msg91.com/api/v5/otp?mobile=${encodeURIComponent(mobileNumber)}&authkey=${encodeURIComponent(this.msg91AuthKey)}&otp_length=4`,
+          `https://api.msg91.com/api/v5/otp?mobile=${encodeURIComponent(mobileNumber)}&authkey=${encodeURIComponent(this.msg91AuthKey)}&otp_length=4`,
+        ];
+
+        for (const url of endpoints) {
+          const response = await fetch(url, { method: 'POST' });
+          const data = await response.json().catch(() => ({}));
+
+          if (response.ok && (data.type === 'success' || data.request_id)) {
+            const reqId = data.request_id || (typeof data.message === 'string' && data.message.length > 10 ? data.message : 'V5_SENT');
+            this.logger.log(`[MSG91 Direct OTP] 4-digit SMS OTP dispatched successfully to ${maskedPhone} (reqId: ${reqId})`);
+            return {
+              success: true,
+              reqId,
+              messageId: reqId,
+              provider: 'MSG91_V5_OTP',
+            };
+          } else {
+            this.logger.warn(`[MSG91 Direct OTP] Response on ${url}: ${JSON.stringify(data)}`);
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`[MSG91 Direct OTP] Connection error: ${err.message}`);
+      }
+    }
+
+    // 2. Widget Fallback
     if (this.isWidgetConfigured()) {
       return this.sendOtpWidget(mobileNumber, maskedPhone);
     }
@@ -146,7 +178,7 @@ export class SmsService {
     }
 
     this.logger.warn(
-      `MSG91 OTP Widget credentials (MSG91_WIDGET_ID, MSG91_WIDGET_TOKEN_AUTH) are not configured for ${maskedPhone}.`,
+      `MSG91 OTP credentials are not configured for ${maskedPhone}.`,
     );
 
     return {
@@ -319,6 +351,59 @@ export class SmsService {
     reqId?: string,
     phoneNumber?: string,
   ): Promise<VerifyOtpResult> {
+    const cleanOtp = otp?.trim();
+    if (!cleanOtp) {
+      return {
+        success: false,
+        provider: 'MSG91_OTP',
+        error: 'Verification code (OTP) is required.',
+      };
+    }
+
+    // 1. Prioritize Direct official MSG91 v5 OTP Verify API (Direct server-to-server check with MSG91)
+    if (this.msg91AuthKey && phoneNumber) {
+      try {
+        const rawDigits = phoneNumber.replace(/[^0-9]/g, '');
+        const v5VerifyEndpoints = [
+          `https://control.msg91.com/api/v5/otp/verify?otp=${encodeURIComponent(cleanOtp)}&mobile=${rawDigits}&authkey=${encodeURIComponent(this.msg91AuthKey)}`,
+          `https://api.msg91.com/api/v5/otp/verify?otp=${encodeURIComponent(cleanOtp)}&mobile=${rawDigits}&authkey=${encodeURIComponent(this.msg91AuthKey)}`,
+        ];
+
+        for (const vUrl of v5VerifyEndpoints) {
+          const v5VerifyRes = await fetch(vUrl, { method: 'GET' });
+          const v5VerifyData = await v5VerifyRes.json().catch(() => ({}));
+
+          if (
+            v5VerifyRes.ok &&
+            (v5VerifyData.type === 'success' ||
+              (typeof v5VerifyData.message === 'string' &&
+                v5VerifyData.message.toLowerCase().includes('success')))
+          ) {
+            this.logger.log(`[MSG91 Direct OTP] Direct v5 OTP verified successfully for ${phoneNumber}`);
+            return {
+              success: true,
+              provider: 'MSG91_V5_OTP',
+            };
+          } else if (
+            v5VerifyData.message &&
+            (v5VerifyData.message.toLowerCase().includes('not match') ||
+             v5VerifyData.message.toLowerCase().includes('expired') ||
+             v5VerifyData.message.toLowerCase().includes('invalid'))
+          ) {
+            this.logger.warn(`[MSG91 Direct OTP] Verification rejected: ${v5VerifyData.message}`);
+            return {
+              success: false,
+              provider: 'MSG91_V5_OTP',
+              error: 'चुकीचा किंवा कालबाह्य OTP (Incorrect or expired verification code). कृपया पुन्हा तपासा किंवा Resend SMS वर क्लिक करा.',
+            };
+          }
+        }
+      } catch (v5Err: any) {
+        this.logger.warn(`[MSG91 Direct OTP] Verify error: ${v5Err.message}`);
+      }
+    }
+
+    // 2. Widget Fallback
     if (!this.isWidgetConfigured()) {
       return {
         success: false,
@@ -334,15 +419,6 @@ export class SmsService {
         success: false,
         provider: 'MSG91_WIDGET',
         error: 'Request ID (reqId) is required for MSG91 OTP verification.',
-      };
-    }
-
-    const cleanOtp = otp?.trim();
-    if (!cleanOtp) {
-      return {
-        success: false,
-        provider: 'MSG91_WIDGET',
-        error: 'Verification code (OTP) is required.',
       };
     }
 
